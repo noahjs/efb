@@ -5,7 +5,9 @@ import 'map_view.dart' show mapboxAccessToken;
 
 /// Native (iOS/Android) implementation using mapbox_maps_flutter SDK.
 class PlatformMapView extends StatefulWidget {
-  const PlatformMapView({super.key});
+  final String baseLayer;
+
+  const PlatformMapView({super.key, required this.baseLayer});
 
   @override
   State<PlatformMapView> createState() => _PlatformMapViewState();
@@ -14,10 +16,36 @@ class PlatformMapView extends StatefulWidget {
 class _PlatformMapViewState extends State<PlatformMapView> {
   MapboxMap? _mapboxMap;
 
+  static String _styleForLayer(String layer) {
+    switch (layer) {
+      case 'street':
+        return MapboxStyles.MAPBOX_STREETS;
+      case 'vfr':
+      case 'satellite':
+      default:
+        return MapboxStyles.SATELLITE_STREETS;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     MapboxOptions.setAccessToken(mapboxAccessToken);
+  }
+
+  @override
+  void didUpdateWidget(covariant PlatformMapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.baseLayer != widget.baseLayer && _mapboxMap != null) {
+      _switchStyle();
+    }
+  }
+
+  Future<void> _switchStyle() async {
+    final map = _mapboxMap!;
+    final styleUri = _styleForLayer(widget.baseLayer);
+    await map.loadStyleURI(styleUri);
+    // Style load will trigger _onStyleLoaded which re-adds layers
   }
 
   void _onMapCreated(MapboxMap mapboxMap) {
@@ -26,8 +54,37 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
   void _onStyleLoaded(StyleLoadedEventData data) async {
     if (_mapboxMap == null) return;
+    if (widget.baseLayer == 'vfr') {
+      await _addVfrTiles(_mapboxMap!);
+    }
     await _addAirportMarkers(_mapboxMap!);
     await _addRouteLine(_mapboxMap!);
+  }
+
+  Future<void> _addVfrTiles(MapboxMap map) async {
+    const charts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
+    try {
+      for (final chart in charts) {
+        await map.style.addSource(RasterSource(
+          id: 'vfr-$chart',
+          tiles: [
+            'http://localhost:3001/api/tiles/vfr-sectional/$chart/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          minzoom: 5,
+          maxzoom: 11,
+          attribution: 'FAA VFR Sectional: $chart',
+        ));
+
+        await map.style.addLayer(RasterLayer(
+          id: 'vfr-layer-$chart',
+          sourceId: 'vfr-$chart',
+          rasterOpacity: 0.85,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Failed to add VFR tiles: $e');
+    }
   }
 
   Future<void> _addAirportMarkers(MapboxMap map) async {
@@ -104,7 +161,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   Widget build(BuildContext context) {
     return MapWidget(
       key: const ValueKey('efb-mapbox'),
-      styleUri: MapboxStyles.SATELLITE_STREETS,
+      styleUri: _styleForLayer(widget.baseLayer),
       cameraOptions: CameraOptions(
         center: Point(coordinates: Position(-104.8493, 39.5701)),
         zoom: 8.5,

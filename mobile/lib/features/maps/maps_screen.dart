@@ -36,7 +36,10 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   }
 
   void _onBaseLayerChanged(String layer) {
-    setState(() => _selectedBaseLayer = layer);
+    setState(() {
+      _selectedBaseLayer = layer;
+      _showLayerPicker = false;
+    });
   }
 
   @override
@@ -45,8 +48,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       body: Stack(
         children: [
           // Map fills the entire screen
-          const Positioned.fill(
-            child: EfbMapView(),
+          Positioned.fill(
+            child: EfbMapView(baseLayer: _selectedBaseLayer),
           ),
 
           // Top toolbar

@@ -6,10 +6,12 @@ const String mapboxAccessToken =
     'pk.eyJ1Ijoibm9haGpzIiwiYSI6ImNtbGQzbzF5dTBmMWszZnB4aDgzbDZzczUifQ.yv1FBDKs9T1RllaF7h_WxA';
 
 class EfbMapView extends StatelessWidget {
-  const EfbMapView({super.key});
+  final String baseLayer;
+
+  const EfbMapView({super.key, required this.baseLayer});
 
   @override
   Widget build(BuildContext context) {
-    return const platform_map.PlatformMapView();
+    return platform_map.PlatformMapView(baseLayer: baseLayer);
   }
 }

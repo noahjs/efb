@@ -5,20 +5,37 @@ import 'map_view.dart' show mapboxAccessToken;
 
 /// Web implementation using Mapbox GL JS directly via HtmlElementView.
 class PlatformMapView extends StatefulWidget {
-  const PlatformMapView({super.key});
+  final String baseLayer;
+
+  const PlatformMapView({super.key, required this.baseLayer});
 
   @override
   State<PlatformMapView> createState() => _PlatformMapViewState();
 }
 
 class _PlatformMapViewState extends State<PlatformMapView> {
-  final String _viewType = 'efb-mapbox-${DateTime.now().millisecondsSinceEpoch}';
+  final String _viewType =
+      'efb-mapbox-${DateTime.now().millisecondsSinceEpoch}';
+  late final String _mapVar;
+
+  static String _styleForLayer(String layer) {
+    switch (layer) {
+      case 'street':
+        return 'mapbox://styles/mapbox/streets-v12';
+      case 'vfr':
+      case 'satellite':
+      default:
+        return 'mapbox://styles/mapbox/satellite-streets-v12';
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _mapVar = 'efbMap_${DateTime.now().millisecondsSinceEpoch}';
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
-      final container = web.document.createElement('div') as web.HTMLDivElement;
+      final container =
+          web.document.createElement('div') as web.HTMLDivElement;
       container.id = 'mapbox-container-$viewId';
       container.style
         ..width = '100%'
@@ -34,7 +51,35 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     });
   }
 
+  @override
+  void didUpdateWidget(covariant PlatformMapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.baseLayer != widget.baseLayer) {
+      _switchStyle();
+    }
+  }
+
+  void _switchStyle() {
+    final style = _styleForLayer(widget.baseLayer);
+    final addVfr = widget.baseLayer == 'vfr';
+    final script = '''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) return;
+        map.setStyle('$style');
+        map.once('style.load', function() {
+          ${addVfr ? _vfrTilesJs() : ''}
+          ${_airportMarkersJs()}
+          ${_routeLineJs()}
+        });
+      })();
+    ''';
+    _evalJs(script);
+  }
+
   void _initMapboxJs(String containerId) {
+    final style = _styleForLayer(widget.baseLayer);
+    final addVfr = widget.baseLayer == 'vfr';
     final script = '''
       (function() {
         if (typeof mapboxgl === 'undefined') {
@@ -45,14 +90,29 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
         var map = new mapboxgl.Map({
           container: '$containerId',
-          style: 'mapbox://styles/mapbox/satellite-streets-v12',
+          style: '$style',
           center: [-104.8493, 39.5701],
           zoom: 8.5
         });
 
+        window.$_mapVar = map;
+
         map.on('load', function() {
-          // VFR Sectional chart tiles — load all installed charts
-          // The tile server returns transparent PNGs for areas outside each chart
+          ${addVfr ? _vfrTilesJs() : ''}
+          ${_airportMarkersJs()}
+          ${_routeLineJs()}
+
+          // Navigation controls
+          map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+        });
+      })();
+    ''';
+
+    _evalJs(script);
+  }
+
+  static String _vfrTilesJs() {
+    return '''
           var vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
           vfrCharts.forEach(function(chart) {
             map.addSource('vfr-' + chart, {
@@ -73,8 +133,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               }
             });
           });
+    ''';
+  }
 
-          // Airport markers
+  static String _airportMarkersJs() {
+    return '''
           map.addSource('airports', {
             type: 'geojson',
             data: {
@@ -94,7 +157,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             }
           });
 
-          // Flight category dots
           map.addLayer({
             id: 'airport-dots',
             type: 'circle',
@@ -114,7 +176,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             }
           });
 
-          // Airport labels
           map.addLayer({
             id: 'airport-labels',
             type: 'symbol',
@@ -131,8 +192,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'text-halo-width': 1.5
             }
           });
+    ''';
+  }
 
-          // Route line (KAPA -> waypoint -> KDWX direction)
+  static String _routeLineJs() {
+    return '''
           map.addSource('route', {
             type: 'geojson',
             data: {
@@ -158,14 +222,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'line-opacity': 0.9
             }
           });
-
-          // Navigation controls
-          map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
-        });
-      })();
     ''';
-
-    _evalJs(script);
   }
 
   void _evalJs(String script) {

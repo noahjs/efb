@@ -21,16 +21,13 @@ class _LayerPickerState extends State<LayerPicker> {
   final Set<String> _activeOverlays = {'flight_category'};
 
   static const baseLayers = [
-    ('aeronautical', 'Aeronautical'),
-    ('street', 'Street Map'),
-    ('aerial', 'Aerial Map'),
-    ('vfr_sectional', 'U.S. VFR sectional'),
-    ('ifr_low', 'U.S. IFR (low)'),
-    ('ifr_high', 'U.S. IFR (high)'),
-    ('vfr_flyway', 'U.S. VFR (flyway)'),
+    ('vfr', 'VFR Sectional'),
+    ('satellite', 'Satellite'),
+    ('street', 'Street'),
   ];
 
   static const overlayLayers = [
+    ('aeronautical', 'Aeronautical'),
     ('radar', 'Radar'),
     ('radar_classic', 'Radar (Classic)'),
     ('radar_lowest', 'Radar (Lowest Tilt)'),
@@ -91,7 +88,10 @@ class _LayerPickerState extends State<LayerPicker> {
                   return _LayerRow(
                     label: label,
                     isActive: isSelected,
-                    onTap: () => widget.onBaseLayerChanged(id),
+                    onTap: () {
+                      widget.onBaseLayerChanged(id);
+                      widget.onClose();
+                    },
                   );
                 },
               ),
