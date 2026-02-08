@@ -29,6 +29,7 @@ class EfbMapView extends StatelessWidget {
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
+  final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final List<Map<String, dynamic>> airports;
   final EfbMapController? controller;
 
@@ -47,6 +48,7 @@ class EfbMapView extends StatelessWidget {
     this.interactive = true,
     this.onAirportTapped,
     this.onBoundsChanged,
+    this.onMapLongPressed,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
@@ -63,6 +65,7 @@ class EfbMapView extends StatelessWidget {
       interactive: interactive,
       onAirportTapped: onAirportTapped,
       onBoundsChanged: onBoundsChanged,
+      onMapLongPressed: onMapLongPressed,
       airports: airports,
       routeCoordinates: routeCoordinates,
       controller: controller,

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/flight.dart';
+import '../../../services/api_client.dart';
 import '../../../services/flight_providers.dart';
 import '../../../services/aircraft_providers.dart';
 import '../../../services/map_flight_provider.dart';
@@ -27,12 +28,34 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     setState(() => _saving = true);
 
     try {
-      final service = ref.read(flightServiceProvider);
-      final isNew = updated.id == null;
-      final saved = isNew
-          ? await service.createFlight(updated.toJson())
-          : await service.updateFlight(updated.id!, updated.toJson());
-      ref.read(activeFlightProvider.notifier).set(saved);
+      if (updated.id != null) {
+        // Saved flight — update on server
+        final service = ref.read(flightServiceProvider);
+        final saved =
+            await service.updateFlight(updated.id!, updated.toJson());
+        ref.read(activeFlightProvider.notifier).set(saved);
+      } else {
+        // Unsaved flight — compute stats without persisting
+        final api = ref.read(apiClientProvider);
+        final result = await api.calculateFlight(
+          departureIdentifier: updated.departureIdentifier,
+          destinationIdentifier: updated.destinationIdentifier,
+          routeString: updated.routeString,
+          cruiseAltitude: updated.cruiseAltitude,
+          trueAirspeed: updated.trueAirspeed,
+          fuelBurnRate: updated.fuelBurnRate,
+          etd: updated.etd,
+          performanceProfileId: updated.performanceProfileId,
+        );
+        ref.read(activeFlightProvider.notifier).set(updated.copyWith(
+              distanceNm: (result['distance_nm'] as num?)?.toDouble(),
+              eteMinutes: result['ete_minutes'] as int?,
+              flightFuelGallons:
+                  (result['flight_fuel_gallons'] as num?)?.toDouble(),
+              eta: result['eta'] as String?,
+              calculatedAt: result['calculated_at'] as String?,
+            ));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -514,27 +537,30 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
                                 child: child,
                               );
                             },
-                            buildDefaultDragHandles: true,
+                            buildDefaultDragHandles: false,
                             itemCount: waypoints.length,
                             itemBuilder: (context, i) => Padding(
                               key: ValueKey('wp_${waypoints[i]}_$i'),
                               padding: const EdgeInsets.only(right: 6),
-                              child: GestureDetector(
-                                onTap: () => _editWaypoint(flight!, i),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      waypoints[i],
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
+                              child: ReorderableDelayedDragStartListener(
+                                index: i,
+                                child: GestureDetector(
+                                  onTap: () => _editWaypoint(flight!, i),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        waypoints[i],
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
                                   ),

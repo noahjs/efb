@@ -3,6 +3,7 @@ import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
+import '../../../core/config/app_config.dart';
 import 'map_view.dart' show EfbMapController, MapBounds, mapboxAccessToken;
 
 /// Web implementation using Mapbox GL JS directly via HtmlElementView.
@@ -12,6 +13,7 @@ class PlatformMapView extends StatefulWidget {
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
+  final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
@@ -26,6 +28,7 @@ class PlatformMapView extends StatefulWidget {
     this.interactive = true,
     this.onAirportTapped,
     this.onBoundsChanged,
+    this.onMapLongPressed,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
@@ -43,6 +46,9 @@ external set _onAirportTapJs(JSFunction? fn);
 
 @JS('_efbOnBoundsChanged')
 external set _onBoundsChangedJs(JSFunction? fn);
+
+@JS('_efbOnMapLongPress')
+external set _onMapLongPressJs(JSFunction? fn);
 
 class _PlatformMapViewState extends State<PlatformMapView> {
   final String _viewType =
@@ -110,6 +116,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     widget.controller?.onZoomOut = null;
     _onAirportTapJs = null;
     _onBoundsChangedJs = null;
+    _onMapLongPressJs = null;
     // Remove the Mapbox map instance
     _evalJs('''
       (function() {
@@ -139,6 +146,32 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         minLng: minLng.toDartDouble,
         maxLng: maxLng.toDartDouble,
       ));
+    }).toJS;
+
+    _onMapLongPressJs =
+        ((JSNumber lat, JSNumber lng, JSString propsJson, JSString layersJson) {
+      final propsList = (jsonDecode(propsJson.toDart) as List)
+          .map((s) => Map<String, dynamic>.from(jsonDecode(s as String) as Map))
+          .toList();
+      final layersList =
+          (jsonDecode(layersJson.toDart) as List).cast<String>();
+
+      const layerTypeMap = {
+        'airspace-fill': 'airspace',
+        'artcc-lines': 'artcc',
+        'airway-lines': 'airway',
+      };
+
+      for (var i = 0; i < propsList.length; i++) {
+        propsList[i]['_layerType'] =
+            layerTypeMap[layersList[i]] ?? layersList[i];
+      }
+
+      widget.onMapLongPressed?.call(
+        lat.toDartDouble,
+        lng.toDartDouble,
+        propsList,
+      );
     }).toJS;
   }
 
@@ -271,6 +304,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             ${_airportLayersJs(widget.showFlightCategory)}
             ${_routeLayerJs()}
             ${_airportClickHandlersJs()}
+            ${_longPressHandlerJs()}
             ${_boundsHandlerJs()}
           });
         })();
@@ -326,6 +360,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           ${_airportLayersJs(widget.showFlightCategory)}
           ${_routeLayerJs()}
           ${_airportClickHandlersJs()}
+          ${_longPressHandlerJs()}
           ${_boundsHandlerJs()}
 
           // Navigation controls
@@ -353,7 +388,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           vfrCharts.forEach(function(chart) {
             map.addSource('vfr-' + chart, {
               type: 'raster',
-              tiles: ['http://localhost:3001/api/tiles/vfr-sectional/' + chart + '/{z}/{x}/{y}.png'],
+              tiles: ['${AppConfig.apiBaseUrl}/api/tiles/vfr-sectional/' + chart + '/{z}/{x}/{y}.png'],
               tileSize: 256,
               minzoom: 5,
               maxzoom: 11,
@@ -432,13 +467,37 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           });
 
           map.addLayer({
-            id: 'route-line',
+            id: 'route-line-border',
             type: 'line',
             source: 'route',
             paint: {
-              'line-color': '#00FFFF',
+              'line-color': '#000000',
+              'line-width': 5,
+              'line-opacity': 0.4
+            }
+          });
+
+          map.addLayer({
+            id: 'route-line',
+            type: 'line',
+            source: 'route',
+            filter: ['!=', ['get', 'leg'], 'first'],
+            paint: {
+              'line-color': '#66FFFF',
               'line-width': 3,
-              'line-opacity': 0.9
+              'line-opacity': 0.85
+            }
+          });
+
+          map.addLayer({
+            id: 'route-line-first',
+            type: 'line',
+            source: 'route',
+            filter: ['==', ['get', 'leg'], 'first'],
+            paint: {
+              'line-color': '#FF00FF',
+              'line-width': 3,
+              'line-opacity': 0.85
             }
           });
     ''';
@@ -464,18 +523,30 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (coords.length < 2) {
       return '{"type":"FeatureCollection","features":[]}';
     }
+    final features = <Map<String, dynamic>>[];
+    // First leg (magenta)
+    features.add({
+      'type': 'Feature',
+      'geometry': {
+        'type': 'LineString',
+        'coordinates': [coords[0], coords[1]],
+      },
+      'properties': {'leg': 'first'},
+    });
+    // Remaining legs (cyan)
+    if (coords.length > 2) {
+      features.add({
+        'type': 'Feature',
+        'geometry': {
+          'type': 'LineString',
+          'coordinates': coords.sublist(1),
+        },
+        'properties': {'leg': 'rest'},
+      });
+    }
     return jsonEncode({
       'type': 'FeatureCollection',
-      'features': [
-        {
-          'type': 'Feature',
-          'geometry': {
-            'type': 'LineString',
-            'coordinates': coords,
-          },
-          'properties': {},
-        }
-      ],
+      'features': features,
     });
   }
 
@@ -574,6 +645,26 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
           map.on('mouseleave', 'airport-dots', function() {
             map.getCanvas().style.cursor = '';
+          });
+    ''';
+  }
+
+  static String _longPressHandlerJs() {
+    return '''
+          map.on('contextmenu', function(e) {
+            var layers = ['airspace-fill', 'artcc-lines', 'airway-lines'];
+            var existingLayers = layers.filter(function(l) { return map.getLayer(l); });
+            var features = existingLayers.length > 0
+              ? map.queryRenderedFeatures(e.point, { layers: existingLayers })
+              : [];
+            var props = features.map(function(f) { return JSON.stringify(f.properties); });
+            var layerIds = features.map(function(f) { return f.layer.id; });
+            if (window._efbOnMapLongPress) {
+              window._efbOnMapLongPress(
+                e.lngLat.lat, e.lngLat.lng,
+                JSON.stringify(props), JSON.stringify(layerIds)
+              );
+            }
           });
     ''';
   }

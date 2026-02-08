@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/flight.dart';
+import '../../services/api_client.dart';
 import '../../services/flight_providers.dart';
 import 'widgets/flight_stats_bar.dart';
 import 'widgets/flight_quick_actions.dart';
@@ -148,7 +149,11 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
       ),
       body: Column(
         children: [
-          const FlightStatsBar(),
+          FlightStatsBar(
+            flight: _flight,
+            onRecalculate: () => _saveField(_flight),
+            apiClient: ref.read(apiClientProvider),
+          ),
           Expanded(
             child: ListView(
               children: [
@@ -185,6 +190,30 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                   onDelete: _handleDelete,
                   onAddNext: () => context.go('/flights/new'),
                 ),
+                if (_flight.id != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: GestureDetector(
+                      onTap: () => _showCalculationDebug(),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.bug_report,
+                              size: 14, color: AppColors.textMuted),
+                          const SizedBox(width: 6),
+                          Text(
+                            'View Calculation Debug',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 24),
               ],
             ),
           ),
@@ -193,6 +222,14 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
       bottomNavigationBar: FlightFilingBar(
         filingStatus: _flight.filingStatus,
       ),
+    );
+  }
+
+  void _showCalculationDebug() {
+    showCalculationDebugSheet(
+      context,
+      _flight.id!,
+      ref.read(apiClientProvider),
     );
   }
 

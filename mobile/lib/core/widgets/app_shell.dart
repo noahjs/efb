@@ -12,7 +12,7 @@ class AppShell extends StatelessWidget {
     if (location.startsWith('/airports')) return 0;
     if (location.startsWith('/maps')) return 1;
     if (location.startsWith('/flights')) return 2;
-    if (location.startsWith('/aircraft')) return 3;
+    if (location.startsWith('/scratchpads')) return 3;
     if (location.startsWith('/more')) return 4;
     return 1;
   }
@@ -29,7 +29,7 @@ class AppShell extends StatelessWidget {
         context.go('/flights');
         break;
       case 3:
-        context.go('/aircraft');
+        context.go('/scratchpads');
         break;
       case 4:
         context.go('/more');
@@ -67,9 +67,9 @@ class AppShell extends StatelessWidget {
               label: 'Flights',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.flight_outlined),
-              activeIcon: Icon(Icons.flight),
-              label: 'Aircraft',
+              icon: Icon(Icons.edit_note),
+              activeIcon: Icon(Icons.edit_note),
+              label: 'ScratchPads',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.menu),

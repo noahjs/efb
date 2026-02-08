@@ -15,6 +15,7 @@ import 'widgets/map_settings_panel.dart';
 import 'widgets/aeronautical_settings_panel.dart';
 import 'widgets/map_view.dart';
 import 'widgets/airport_bottom_sheet.dart';
+import 'widgets/map_long_press_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
 
 class MapsScreen extends ConsumerStatefulWidget {
@@ -30,13 +31,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   bool _showFlightPlan = false;
   String _selectedBaseLayer = 'satellite';
   final Set<String> _activeOverlays = {'flight_category'};
-  bool _airportsOnly = true;
-  bool _showAirspaces = true;
-  bool _showClassE = true;
-  bool _showAirways = true;
-  bool _showLowAirways = true;
-  bool _showHighAirways = true;
-  bool _showArtcc = true;
+  AeroSettings _aero = const AeroSettings();
+  bool _showAeroSettings = false;
   final _mapController = EfbMapController();
 
   MapBounds? _currentBounds;
@@ -95,6 +91,18 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     });
   }
 
+  void _onMapLongPressed(
+      double lat, double lng, List<Map<String, dynamic>> features) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => PointerInterceptor(
+        child: MapLongPressSheet(lat: lat, lng: lng, aeroFeatures: features),
+      ),
+    );
+  }
+
   void _onAirportTapped(String id) {
     showModalBottomSheet(
       context: context,
@@ -116,48 +124,29 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   }
 
   void _showAeroSettingsPanel() {
+    setState(() => _showAeroSettings = true);
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => AeronauticalSettingsPanel(
-        onClose: () => Navigator.of(context).pop(),
-        showAirspaces: _showAirspaces,
-        onAirspacesChanged: (v) {
-          setState(() => _showAirspaces = v);
-        },
-        showClassE: _showClassE,
-        onClassEChanged: (v) {
-          setState(() => _showClassE = v);
-        },
-        showAirways: _showAirways,
-        onAirwaysChanged: (v) {
-          setState(() => _showAirways = v);
-        },
-        showLowAirways: _showLowAirways,
-        onLowAirwaysChanged: (v) {
-          setState(() => _showLowAirways = v);
-        },
-        showHighAirways: _showHighAirways,
-        onHighAirwaysChanged: (v) {
-          setState(() => _showHighAirways = v);
-        },
-        showArtcc: _showArtcc,
-        onArtccChanged: (v) {
-          setState(() => _showArtcc = v);
-        },
-        airportsOnly: _airportsOnly,
-        onAirportsOnlyChanged: (v) {
-          setState(() => _airportsOnly = v);
-        },
+      builder: (_) => PointerInterceptor(
+        child: _AeroSettingsSheet(
+          settings: _aero,
+          onChanged: (newSettings) {
+            setState(() => _aero = newSettings);
+          },
+          onClose: () => Navigator.of(context).pop(),
+        ),
       ),
-    );
+    ).whenComplete(() {
+      if (mounted) setState(() => _showAeroSettings = false);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final toolbarBottom = MediaQuery.of(context).padding.top + 90;
-    final showOverlay = _showLayerPicker || _showSettings;
+    final showOverlay = _showLayerPicker || _showSettings || _showAeroSettings;
     final showFlightCategory = _activeOverlays.contains('flight_category');
 
     // Always fetch airports for current map bounds
@@ -170,7 +159,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         [];
 
     // Filter to fixed-wing airports only when enabled
-    if (_airportsOnly) {
+    if (_aero.airportsOnly) {
       airports =
           airports.where((a) => a['facility_type'] == 'A').toList();
     }
@@ -207,15 +196,40 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     Map<String, dynamic>? airwayGeoJson;
     Map<String, dynamic>? artccGeoJson;
     if (showAeronautical && _currentBounds != null) {
-      if (_showAirspaces) {
-        airspaceGeoJson =
-            ref.watch(mapAirspacesProvider(_currentBounds!)).value;
+      if (_aero.showAirspaces) {
+        // Build airspace class filter from sub-toggles
+        final classes = <String>['B', 'C', 'D'];
+        if (_aero.showClassE) classes.add('E');
+        final classesStr = classes.join(',');
+
+        airspaceGeoJson = ref
+            .watch(mapAirspacesProvider((
+              minLat: _currentBounds!.minLat,
+              maxLat: _currentBounds!.maxLat,
+              minLng: _currentBounds!.minLng,
+              maxLng: _currentBounds!.maxLng,
+              classes: classesStr,
+            )))
+            .value;
       }
-      if (_showAirways) {
-        airwayGeoJson =
-            ref.watch(mapAirwaysProvider(_currentBounds!)).value;
+      if (_aero.showAirways) {
+        // Build airway type filter from sub-toggles
+        final types = <String>[];
+        if (_aero.showLowAirways) types.addAll(['V', 'T']);
+        if (_aero.showHighAirways) types.addAll(['J', 'Q']);
+        final typesStr = types.isNotEmpty ? types.join(',') : null;
+
+        airwayGeoJson = ref
+            .watch(mapAirwaysProvider((
+              minLat: _currentBounds!.minLat,
+              maxLat: _currentBounds!.maxLat,
+              minLng: _currentBounds!.minLng,
+              maxLng: _currentBounds!.maxLng,
+              types: typesStr,
+            )))
+            .value;
       }
-      if (_showArtcc) {
+      if (_aero.showArtcc) {
         artccGeoJson =
             ref.watch(mapArtccProvider(_currentBounds!)).value;
       }
@@ -258,6 +272,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               interactive: !showOverlay,
               onAirportTapped: _onAirportTapped,
               onBoundsChanged: _onBoundsChanged,
+              onMapLongPressed: _onMapLongPressed,
               airports: airports,
               routeCoordinates: routeCoordinates,
               controller: _mapController,
@@ -363,6 +378,45 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Stateful wrapper so the bottom sheet rebuilds on toggle changes
+/// while also syncing state back to [MapsScreen].
+class _AeroSettingsSheet extends StatefulWidget {
+  final AeroSettings settings;
+  final ValueChanged<AeroSettings> onChanged;
+  final VoidCallback onClose;
+
+  const _AeroSettingsSheet({
+    required this.settings,
+    required this.onChanged,
+    required this.onClose,
+  });
+
+  @override
+  State<_AeroSettingsSheet> createState() => _AeroSettingsSheetState();
+}
+
+class _AeroSettingsSheetState extends State<_AeroSettingsSheet> {
+  late AeroSettings _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = widget.settings;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AeronauticalSettingsPanel(
+      onClose: widget.onClose,
+      settings: _settings,
+      onChanged: (newSettings) {
+        setState(() => _settings = newSettings);
+        widget.onChanged(newSettings);
+      },
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import '../../../core/config/app_config.dart';
 import 'map_view.dart' show EfbMapController, MapBounds, mapboxAccessToken;
 
 /// Native (iOS/Android) implementation using mapbox_maps_flutter SDK.
@@ -11,6 +12,7 @@ class PlatformMapView extends StatefulWidget {
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
+  final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
@@ -25,6 +27,7 @@ class PlatformMapView extends StatefulWidget {
     this.interactive = true,
     this.onAirportTapped,
     this.onBoundsChanged,
+    this.onMapLongPressed,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
@@ -172,6 +175,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     // Register tap listener for airport markers
     mapboxMap.setOnMapTapListener(_onMapTap);
 
+    // Register long-press listener for aeronautical feature inspection
+    mapboxMap.setOnMapLongTapListener(_onMapLongTap);
+
     // Bind zoom controller
     widget.controller?.onZoomIn = () async {
       final cam = await mapboxMap.getCameraState();
@@ -242,6 +248,47 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
+  Future<void> _onMapLongTap(MapContentGestureContext context) async {
+    final map = _mapboxMap;
+    if (map == null || widget.onMapLongPressed == null) return;
+
+    final coords = context.point.coordinates;
+    final lat = coords.lat.toDouble();
+    final lng = coords.lng.toDouble();
+    final point = context.touchPosition;
+    final screenCoord = ScreenCoordinate(x: point.x, y: point.y);
+
+    final layerMap = {
+      'airspace-fill': 'airspace',
+      'artcc-lines': 'artcc',
+      'airway-lines': 'airway',
+    };
+
+    final allFeatures = <Map<String, dynamic>>[];
+
+    try {
+      for (final entry in layerMap.entries) {
+        final results = await map.queryRenderedFeatures(
+          RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
+          RenderedQueryOptions(layerIds: [entry.key]),
+        );
+        for (final result in results) {
+          if (result == null) continue;
+          final props = result.queriedFeature.feature['properties'];
+          if (props is Map) {
+            final featureMap = Map<String, dynamic>.from(props);
+            featureMap['_layerType'] = entry.value;
+            allFeatures.add(featureMap);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to query aero features on long-press: $e');
+    }
+
+    widget.onMapLongPressed?.call(lat, lng, allFeatures);
+  }
+
   void _onStyleLoaded(StyleLoadedEventData data) async {
     if (_mapboxMap == null) return;
     await _addVfrTiles(_mapboxMap!);
@@ -307,7 +354,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         await map.style.addSource(RasterSource(
           id: 'vfr-$chart',
           tiles: [
-            'http://localhost:3001/api/tiles/vfr-sectional/$chart/{z}/{x}/{y}.png'
+            '${AppConfig.apiBaseUrl}/api/tiles/vfr-sectional/$chart/{z}/{x}/{y}.png'
           ],
           tileSize: 256,
           minzoom: 5,
@@ -364,19 +411,41 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
-  /// Creates the route GeoJSON source and a cyan LineLayer.
+  /// Creates the route GeoJSON source and line layers.
+  /// Border (faint black), first leg (magenta), remaining legs (lighter cyan).
   Future<void> _addRouteLayer(MapboxMap map) async {
     const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
     try {
       await map.style
           .addSource(GeoJsonSource(id: 'route', data: emptyGeoJson));
 
+      // Black border behind all route lines
+      await map.style.addLayer(LineLayer(
+        id: 'route-line-border',
+        sourceId: 'route',
+        lineColor: const Color(0xFF000000).toARGB32(),
+        lineWidth: 5.0,
+        lineOpacity: 0.4,
+      ));
+
+      // Remaining legs — lighter cyan
       await map.style.addLayer(LineLayer(
         id: 'route-line',
         sourceId: 'route',
-        lineColor: const Color(0xFF00FFFF).toARGB32(),
+        lineColor: const Color(0xFF66FFFF).toARGB32(),
         lineWidth: 3.0,
-        lineOpacity: 0.9,
+        lineOpacity: 0.85,
+        filter: ['!=', ['get', 'leg'], 'first'],
+      ));
+
+      // First leg — magenta
+      await map.style.addLayer(LineLayer(
+        id: 'route-line-first',
+        sourceId: 'route',
+        lineColor: const Color(0xFFFF00FF).toARGB32(),
+        lineWidth: 3.0,
+        lineOpacity: 0.85,
+        filter: ['==', ['get', 'leg'], 'first'],
       ));
 
       _routeSourceReady = true;
@@ -389,18 +458,31 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (widget.routeCoordinates.length < 2) {
       return '{"type":"FeatureCollection","features":[]}';
     }
+    final coords = widget.routeCoordinates;
+    final features = <Map<String, dynamic>>[];
+    // First leg (magenta)
+    features.add({
+      'type': 'Feature',
+      'geometry': {
+        'type': 'LineString',
+        'coordinates': [coords[0], coords[1]],
+      },
+      'properties': {'leg': 'first'},
+    });
+    // Remaining legs (cyan)
+    if (coords.length > 2) {
+      features.add({
+        'type': 'Feature',
+        'geometry': {
+          'type': 'LineString',
+          'coordinates': coords.sublist(1),
+        },
+        'properties': {'leg': 'rest'},
+      });
+    }
     return jsonEncode({
       'type': 'FeatureCollection',
-      'features': [
-        {
-          'type': 'Feature',
-          'geometry': {
-            'type': 'LineString',
-            'coordinates': widget.routeCoordinates,
-          },
-          'properties': {},
-        }
-      ],
+      'features': features,
     });
   }
 

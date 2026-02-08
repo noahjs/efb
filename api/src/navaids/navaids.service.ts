@@ -105,6 +105,23 @@ export class NavaidsService {
       };
     }
 
+    // ICAO fallback: if 4-char code starting with K, try the 3-letter FAA code
+    const upper = id.toUpperCase();
+    if (upper.length === 4 && upper.startsWith('K')) {
+      const faaId = upper.substring(1);
+      const faaAirport = await this.airportRepo.findOne({
+        where: { identifier: ILike(faaId) },
+      });
+      if (faaAirport?.latitude != null && faaAirport?.longitude != null) {
+        return {
+          identifier: faaAirport.identifier,
+          latitude: faaAirport.latitude,
+          longitude: faaAirport.longitude,
+          type: 'airport',
+        };
+      }
+    }
+
     // Try navaid — case-insensitive
     const navaid = await this.navaidRepo.findOne({
       where: { identifier: ILike(id) },

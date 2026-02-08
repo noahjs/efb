@@ -31,6 +31,7 @@ import { AirspacesModule } from './airspaces/airspaces.module';
 import { Airspace } from './airspaces/entities/airspace.entity';
 import { AirwaySegment } from './airspaces/entities/airway-segment.entity';
 import { ArtccBoundary } from './airspaces/entities/artcc-boundary.entity';
+import { CalculateModule } from './calculate/calculate.module';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -71,6 +72,7 @@ import { dbConfig } from './db.config';
     UsersModule,
     AircraftModule,
     AirspacesModule,
+    CalculateModule,
   ],
 })
 export class AppModule {}

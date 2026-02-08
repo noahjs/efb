@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/config/app_config.dart';
+
 /// Base API client for the NestJS backend
 class ApiClient {
   final Dio _dio;
@@ -8,7 +10,7 @@ class ApiClient {
   ApiClient({String? baseUrl})
       : _dio = Dio(
           BaseOptions(
-            baseUrl: baseUrl ?? 'http://localhost:3001/api',
+            baseUrl: baseUrl ?? '${AppConfig.apiBaseUrl}/api',
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 10),
           ),
@@ -220,8 +222,41 @@ class ApiClient {
     await _dio.delete('/flights/$id');
   }
 
+  Future<Map<String, dynamic>> getFlightCalculationDebug(int id) async {
+    final response = await _dio.get('/flights/$id/calculate-debug');
+    return response.data;
+  }
+
   Future<Map<String, dynamic>> copyFlight(int id) async {
     final response = await _dio.post('/flights/$id/copy');
+    return response.data;
+  }
+
+  // --- Calculate ---
+
+  Future<Map<String, dynamic>> calculateFlight({
+    String? departureIdentifier,
+    String? destinationIdentifier,
+    String? routeString,
+    int? cruiseAltitude,
+    int? trueAirspeed,
+    double? fuelBurnRate,
+    String? etd,
+    int? performanceProfileId,
+  }) async {
+    final response = await _dio.post('/calculate', data: {
+      if (departureIdentifier != null)
+        'departure_identifier': departureIdentifier,
+      if (destinationIdentifier != null)
+        'destination_identifier': destinationIdentifier,
+      if (routeString != null) 'route_string': routeString,
+      if (cruiseAltitude != null) 'cruise_altitude': cruiseAltitude,
+      if (trueAirspeed != null) 'true_airspeed': trueAirspeed,
+      if (fuelBurnRate != null) 'fuel_burn_rate': fuelBurnRate,
+      if (etd != null) 'etd': etd,
+      if (performanceProfileId != null)
+        'performance_profile_id': performanceProfileId,
+    });
     return response.data;
   }
 

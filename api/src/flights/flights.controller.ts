@@ -53,6 +53,11 @@ export class FlightsController {
     return this.flightsService.remove(id);
   }
 
+  @Get(':id/calculate-debug')
+  async calculateDebug(@Param('id', ParseIntPipe) id: number) {
+    return this.flightsService.calculateDebug(id);
+  }
+
   @Post(':id/copy')
   async copy(@Param('id', ParseIntPipe) id: number) {
     return this.flightsService.copy(id);

@@ -6,6 +6,8 @@ import '../../features/airports/screens/airports_screen.dart';
 import '../../features/airports/screens/airport_detail_screen.dart';
 import '../../features/flights/flights_screen.dart';
 import '../../features/flights/flight_detail_screen.dart';
+import '../../features/scratchpads/scratchpads_screen.dart';
+import '../../features/scratchpads/scratchpad_editor_screen.dart';
 import '../../features/aircraft/aircraft_screen.dart';
 import '../../features/aircraft/screens/aircraft_detail_screen.dart';
 import '../../features/aircraft/screens/aircraft_create_screen.dart';
@@ -67,6 +69,22 @@ final appRouter = GoRouter(
               builder: (context, state) {
                 final id = int.parse(state.pathParameters['id']!);
                 return FlightDetailScreen(flightId: id);
+              },
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/scratchpads',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: ScratchPadsScreen(),
+          ),
+          routes: [
+            GoRoute(
+              path: ':id',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final padId = state.pathParameters['id']!;
+                return ScratchPadEditorScreen(padId: padId);
               },
             ),
           ],

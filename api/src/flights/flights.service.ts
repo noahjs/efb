@@ -4,12 +4,14 @@ import { Repository } from 'typeorm';
 import { Flight } from './entities/flight.entity';
 import { CreateFlightDto } from './dto/create-flight.dto';
 import { UpdateFlightDto } from './dto/update-flight.dto';
+import { CalculateService } from '../calculate/calculate.service';
 
 @Injectable()
 export class FlightsService {
   constructor(
     @InjectRepository(Flight)
     private flightRepo: Repository<Flight>,
+    private calculateService: CalculateService,
   ) {}
 
   async findAll(query?: string, limit = 50, offset = 0) {
@@ -42,13 +44,55 @@ export class FlightsService {
 
   async create(dto: CreateFlightDto) {
     const flight = this.flightRepo.create(dto);
+    await this.calculate(flight);
     return this.flightRepo.save(flight);
   }
 
   async update(id: number, dto: UpdateFlightDto) {
     const flight = await this.findById(id);
     Object.assign(flight, dto);
+    await this.calculate(flight);
     return this.flightRepo.save(flight);
+  }
+
+  /**
+   * Compute distance_nm, ete_minutes, eta, and flight_fuel_gallons from
+   * the flight's route_string, true_airspeed, etd, and fuel_burn_rate.
+   */
+  private async calculate(flight: Flight) {
+    const result = await this.calculateService.calculate({
+      departure_identifier: flight.departure_identifier,
+      destination_identifier: flight.destination_identifier,
+      route_string: flight.route_string,
+      cruise_altitude: flight.cruise_altitude,
+      true_airspeed: flight.true_airspeed,
+      fuel_burn_rate: flight.fuel_burn_rate,
+      etd: flight.etd,
+      performance_profile_id: flight.performance_profile_id,
+    });
+
+    (flight as any).distance_nm = result.distance_nm;
+    (flight as any).ete_minutes = result.ete_minutes;
+    (flight as any).flight_fuel_gallons = result.flight_fuel_gallons;
+    (flight as any).eta = result.eta;
+    flight.calculated_at = result.calculated_at;
+  }
+
+  /**
+   * Return a step-by-step breakdown of the calculation for debugging.
+   */
+  async calculateDebug(id: number) {
+    const flight = await this.findById(id);
+    return this.calculateService.calculateDebug({
+      departure_identifier: flight.departure_identifier,
+      destination_identifier: flight.destination_identifier,
+      route_string: flight.route_string,
+      cruise_altitude: flight.cruise_altitude,
+      true_airspeed: flight.true_airspeed,
+      fuel_burn_rate: flight.fuel_burn_rate,
+      etd: flight.etd,
+      performance_profile_id: flight.performance_profile_id,
+    });
   }
 
   async remove(id: number) {
@@ -78,7 +122,9 @@ export class FlightsService {
       reserve_fuel_gallons: source.reserve_fuel_gallons,
       fuel_burn_rate: source.fuel_burn_rate,
       filing_status: 'not_filed',
+      performance_profile_id: source.performance_profile_id,
     });
+    await this.calculate(copy);
     return this.flightRepo.save(copy);
   }
 }

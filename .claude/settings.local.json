@@ -16,7 +16,9 @@
       "Bash(nslookup:*)",
       "Bash(tr:*)",
       "Bash(npm run lint)",
-      "Bash(cut:*)"
+      "Bash(cut:*)",
+      "Bash(lsof:*)",
+      "Bash(flutter clean:*)"
     ]
   }
 }
