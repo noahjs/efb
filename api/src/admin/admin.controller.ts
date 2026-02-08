@@ -60,6 +60,32 @@ export class AdminController {
   }
 
   /**
+   * Trigger navigation data seed (navaids + fixes from FAA NASR)
+   */
+  @Post('seed/navaids')
+  @HttpCode(200)
+  async seedNavaids() {
+    return this.adminService.runSeedNavaids();
+  }
+
+  /**
+   * Trigger d-TPP procedure data seed
+   */
+  @Post('seed/procedures')
+  @HttpCode(200)
+  async seedProcedures() {
+    return this.adminService.runSeedProcedures();
+  }
+
+  /**
+   * Clear cached procedure PDFs
+   */
+  @Delete('procedures/pdf-cache')
+  async clearPdfCache() {
+    return this.adminService.clearPdfCache();
+  }
+
+  /**
    * Trigger VFR sectional chart download + tile generation
    */
   @Post('charts/process/:chart')

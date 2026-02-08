@@ -1,54 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/solar.dart';
+import '../../../services/airport_providers.dart';
 import '../widgets/airport_info_tab.dart';
 import '../widgets/airport_weather_tab.dart';
 import '../widgets/airport_runway_tab.dart';
 import '../widgets/airport_procedure_tab.dart';
 import '../widgets/airport_notam_tab.dart';
 
-class AirportDetailScreen extends StatelessWidget {
+class AirportDetailScreen extends ConsumerWidget {
   final String airportId;
 
   const AirportDetailScreen({super.key, required this.airportId});
 
-  // Mock airport data lookup
-  Map<String, String> get _airportData {
-    final airports = {
-      'KBJC': {
-        'name': 'Rocky Mountain Metro',
-        'city': 'Denver, Colorado, US',
-        'elevation': '5,673\'',
-        'sunrise': '7:01 AM',
-        'sunset': '5:27 PM MST',
-      },
-      'KAPA': {
-        'name': 'Centennial',
-        'city': 'Denver, Colorado, US',
-        'elevation': '5,885\'',
-        'sunrise': '7:01 AM',
-        'sunset': '5:27 PM MST',
-      },
-      'KDEN': {
-        'name': 'Denver International',
-        'city': 'Denver, Colorado, US',
-        'elevation': '5,431\'',
-        'sunrise': '7:01 AM',
-        'sunset': '5:27 PM MST',
-      },
-    };
-    return airports[airportId] ??
-        {
-          'name': airportId,
-          'city': 'Unknown',
-          'elevation': '---',
-          'sunrise': '---',
-          'sunset': '---',
-        };
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final data = _airportData;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final airportAsync = ref.watch(airportDetailProvider(airportId));
 
     return DefaultTabController(
       length: 5,
@@ -76,95 +46,24 @@ class AirportDetailScreen extends StatelessWidget {
             Container(
               color: AppColors.surface,
               padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Airport diagram thumbnail
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: AppColors.divider, width: 0.5),
-                        ),
-                        child: const Icon(Icons.map_outlined,
-                            color: AppColors.textMuted, size: 28),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              data['name']!,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${data['city']}\nElevation: ${data['elevation']}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(Icons.wb_sunny_outlined,
-                                    size: 14,
-                                    color: Colors.amber.shade300),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${data['sunrise']}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(Icons.nightlight_outlined,
-                                    size: 14,
-                                    color: Colors.blue.shade300),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${data['sunset']}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const Icon(Icons.chevron_right,
-                                    size: 16,
-                                    color: AppColors.textMuted),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+              child: airportAsync.when(
+                loading: () => const SizedBox(
+                  height: 80,
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (_, _) => SizedBox(
+                  height: 80,
+                  child: Center(
+                    child: Text(
+                      'Unable to load airport data',
+                      style: const TextStyle(color: AppColors.textSecondary),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  // Quick action buttons
-                  Row(
-                    children: [
-                      _QuickAction(label: '3D View', onTap: () {}),
-                      const SizedBox(width: 8),
-                      _QuickAction(label: 'Taxiways', onTap: () {}),
-                      const SizedBox(width: 8),
-                      _QuickAction(label: 'FBOs', onTap: () {}),
-                      const SizedBox(width: 8),
-                      _QuickAction(label: 'Comments', onTap: () {}),
-                    ],
-                  ),
-                ],
+                ),
+                data: (airport) => _AirportHeader(
+                  airportId: airportId,
+                  airport: airport,
+                ),
               ),
             ),
 
@@ -180,8 +79,8 @@ class AirportDetailScreen extends StatelessWidget {
                   Tab(text: 'NOTAM'),
                 ],
                 isScrollable: false,
-                labelStyle: TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600),
+                labelStyle:
+                    TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                 unselectedLabelStyle: TextStyle(fontSize: 13),
                 indicatorSize: TabBarIndicatorSize.tab,
               ),
@@ -202,6 +101,138 @@ class AirportDetailScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AirportHeader extends StatelessWidget {
+  final String airportId;
+  final Map<String, dynamic>? airport;
+
+  const _AirportHeader({required this.airportId, required this.airport});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = airport?['name'] ?? airportId;
+    final city = airport?['city'] ?? '';
+    final state = airport?['state'] ?? '';
+    final elevation = airport?['elevation'];
+    final lat = airport?['latitude'] as double?;
+    final lng = airport?['longitude'] as double?;
+
+    final location = [city, state].where((s) => s.isNotEmpty).join(', ');
+
+    final elevationStr = elevation != null
+        ? '${NumberFormat('#,##0').format((elevation as num).round())}\''
+        : '---';
+
+    // Compute sunrise/sunset from lat/lng
+    String sunriseStr = '---';
+    String sunsetStr = '---';
+    if (lat != null && lng != null) {
+      final now = DateTime.now();
+      final solar = SolarTimes.forDate(
+        date: now,
+        latitude: lat,
+        longitude: lng,
+      );
+      if (solar != null) {
+        final localSunrise = solar.sunrise.toLocal();
+        final localSunset = solar.sunset.toLocal();
+        final timeFmt = DateFormat('h:mm a');
+        sunriseStr = timeFmt.format(localSunrise);
+        sunsetStr = timeFmt.format(localSunset);
+      }
+    }
+
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Airport diagram thumbnail
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.divider, width: 0.5),
+              ),
+              child: const Icon(Icons.map_outlined,
+                  color: AppColors.textMuted, size: 28),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (location.isNotEmpty) location,
+                      'Elevation: $elevationStr',
+                    ].join('\n'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.wb_sunny_outlined,
+                          size: 14, color: Colors.amber.shade300),
+                      const SizedBox(width: 4),
+                      Text(
+                        sunriseStr,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.nightlight_outlined,
+                          size: 14, color: Colors.blue.shade300),
+                      const SizedBox(width: 4),
+                      Text(
+                        sunsetStr,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right,
+                          size: 16, color: AppColors.textMuted),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Quick action buttons
+        Row(
+          children: [
+            _QuickAction(label: '3D View', onTap: () {}),
+            const SizedBox(width: 8),
+            _QuickAction(label: 'Taxiways', onTap: () {}),
+            const SizedBox(width: 8),
+            _QuickAction(label: 'FBOs', onTap: () {}),
+            const SizedBox(width: 8),
+            _QuickAction(label: 'Comments', onTap: () {}),
+          ],
+        ),
+      ],
     );
   }
 }

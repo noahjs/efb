@@ -3,13 +3,17 @@ import '../../../core/theme/app_theme.dart';
 
 class LayerPicker extends StatefulWidget {
   final String selectedBaseLayer;
+  final Set<String> activeOverlays;
   final ValueChanged<String> onBaseLayerChanged;
+  final ValueChanged<String> onOverlayToggled;
   final VoidCallback onClose;
 
   const LayerPicker({
     super.key,
     required this.selectedBaseLayer,
+    required this.activeOverlays,
     required this.onBaseLayerChanged,
+    required this.onOverlayToggled,
     required this.onClose,
   });
 
@@ -18,7 +22,6 @@ class LayerPicker extends StatefulWidget {
 }
 
 class _LayerPickerState extends State<LayerPicker> {
-  final Set<String> _activeOverlays = {'flight_category'};
 
   static const baseLayers = [
     ('vfr', 'VFR Sectional'),
@@ -88,10 +91,7 @@ class _LayerPickerState extends State<LayerPicker> {
                   return _LayerRow(
                     label: label,
                     isActive: isSelected,
-                    onTap: () {
-                      widget.onBaseLayerChanged(id);
-                      widget.onClose();
-                    },
+                    onTap: () => widget.onBaseLayerChanged(id),
                   );
                 },
               ),
@@ -108,19 +108,11 @@ class _LayerPickerState extends State<LayerPicker> {
                 itemCount: overlayLayers.length,
                 itemBuilder: (context, index) {
                   final (id, label) = overlayLayers[index];
-                  final isActive = _activeOverlays.contains(id);
+                  final isActive = widget.activeOverlays.contains(id);
                   return _LayerRow(
                     label: label,
                     isActive: isActive,
-                    onTap: () {
-                      setState(() {
-                        if (isActive) {
-                          _activeOverlays.remove(id);
-                        } else {
-                          _activeOverlays.add(id);
-                        }
-                      });
-                    },
+                    onTap: () => widget.onOverlayToggled(id),
                   );
                 },
               ),

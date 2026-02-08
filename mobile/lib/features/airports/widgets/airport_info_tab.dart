@@ -1,99 +1,94 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../services/airport_providers.dart';
 
-class AirportInfoTab extends StatelessWidget {
+class AirportInfoTab extends ConsumerWidget {
   final String airportId;
   const AirportInfoTab({super.key, required this.airportId});
 
+  /// Map backend frequency type codes to display section titles
+  static const _typeSections = {
+    'ATIS': 'WEATHER AND ADVISORY',
+    'AWOS': 'WEATHER AND ADVISORY',
+    'ASOS': 'WEATHER AND ADVISORY',
+    'CD': 'CLEARANCE',
+    'GND': 'GROUND',
+    'TWR': 'TOWER',
+    'APP': 'APPROACH / DEPARTURE',
+    'DEP': 'APPROACH / DEPARTURE',
+    'CTAF': 'UNICOM / CTAF',
+    'UNIC': 'UNICOM / CTAF',
+  };
+
+  /// Ordering for sections
+  static const _sectionOrder = [
+    'WEATHER AND ADVISORY',
+    'CLEARANCE',
+    'GROUND',
+    'TOWER',
+    'APPROACH / DEPARTURE',
+    'UNICOM / CTAF',
+  ];
+
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        // Cameras section
-        _FrequencySection(
-          title: 'CAMERAS',
-          items: [
-            _FrequencyItem(name: 'Airport Cameras', trailing: '>'),
-          ],
-        ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final freqAsync = ref.watch(airportFrequenciesProvider(airportId));
 
-        // Weather and Advisory
-        _FrequencySection(
-          title: 'WEATHER AND ADVISORY',
-          items: [
-            _FrequencyItem(
-              name: 'ATIS',
-              phone: '(303) 466-8744',
-              frequency: '126.25',
-            ),
-            _FrequencyItem(
-              name: 'AWOS-3',
-              phone: '(720) 887-8067',
-            ),
-          ],
+    return freqAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => const Center(
+        child: Text(
+          'Failed to load frequencies',
+          style: TextStyle(color: AppColors.textMuted),
         ),
+      ),
+      data: (frequencies) {
+        if (frequencies.isEmpty) {
+          return const Center(
+            child: Text(
+              'No frequency data available',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          );
+        }
 
-        // Clearance
-        _FrequencySection(
-          title: 'CLEARANCE',
-          items: [
-            _FrequencyItem(
-              name: 'Metro Clearance Delivery',
-              frequency: '132.6',
-            ),
-          ],
-        ),
+        // Group frequencies by section title
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        for (final freq in frequencies) {
+          final map = freq as Map<String, dynamic>;
+          final type = map['type'] as String? ?? '';
+          final section = _typeSections[type] ?? 'OTHER';
+          grouped.putIfAbsent(section, () => []).add(map);
+        }
 
-        // Ground
-        _FrequencySection(
-          title: 'GROUND',
-          items: [
-            _FrequencyItem(
-              name: 'Metro Ground',
-              frequency: '121.7',
-            ),
-          ],
-        ),
+        // Build ordered section list
+        final sections = <String>[];
+        for (final s in _sectionOrder) {
+          if (grouped.containsKey(s)) sections.add(s);
+        }
+        // Add any extra sections not in the predefined order
+        for (final s in grouped.keys) {
+          if (!sections.contains(s)) sections.add(s);
+        }
 
-        // Tower
-        _FrequencySection(
-          title: 'TOWER',
-          items: [
-            _FrequencyItem(
-              name: 'Metro Tower',
-              subtitle: '0600-2200',
-              frequency: '118.6',
-            ),
+        return ListView(
+          children: [
+            for (final section in sections)
+              _FrequencySection(
+                title: section,
+                items: grouped[section]!
+                    .map((f) => _FrequencyItem(
+                          name: f['name'] as String? ?? '',
+                          phone: f['phone'] as String?,
+                          frequency: f['frequency'] as String?,
+                        ))
+                    .toList(),
+              ),
+            const SizedBox(height: 32),
           ],
-        ),
-
-        // Approach / Departure
-        _FrequencySection(
-          title: 'APPROACH / DEPARTURE',
-          items: [
-            _FrequencyItem(
-              name: 'Denver Approach',
-              frequency: '120.3',
-            ),
-            _FrequencyItem(
-              name: 'Denver Departure',
-              frequency: '128.3',
-            ),
-          ],
-        ),
-
-        // UNICOM
-        _FrequencySection(
-          title: 'UNICOM / CTAF',
-          items: [
-            _FrequencyItem(
-              name: 'UNICOM',
-              frequency: '122.95',
-            ),
-          ],
-        ),
-        const SizedBox(height: 32),
-      ],
+        );
+      },
     );
   }
 }
@@ -129,17 +124,13 @@ class _FrequencySection extends StatelessWidget {
 
 class _FrequencyItem extends StatelessWidget {
   final String name;
-  final String? subtitle;
   final String? phone;
   final String? frequency;
-  final String? trailing;
 
   const _FrequencyItem({
     required this.name,
-    this.subtitle,
     this.phone,
     this.frequency,
-    this.trailing,
   });
 
   @override
@@ -164,15 +155,7 @@ class _FrequencyItem extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
-                if (subtitle != null)
-                  Text(
-                    subtitle!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                if (phone != null)
+                if (phone != null && phone!.isNotEmpty)
                   Text(
                     phone!,
                     style: const TextStyle(
@@ -183,7 +166,7 @@ class _FrequencyItem extends StatelessWidget {
               ],
             ),
           ),
-          if (frequency != null)
+          if (frequency != null && frequency!.isNotEmpty)
             Text(
               frequency!,
               style: const TextStyle(
@@ -192,9 +175,6 @@ class _FrequencyItem extends StatelessWidget {
                 color: AppColors.textPrimary,
               ),
             ),
-          if (trailing != null)
-            const Icon(Icons.chevron_right,
-                color: AppColors.textMuted, size: 20),
         ],
       ),
     );

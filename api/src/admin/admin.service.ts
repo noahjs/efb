@@ -4,6 +4,10 @@ import { Repository } from 'typeorm';
 import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
+import { Navaid } from '../navaids/entities/navaid.entity';
+import { Fix } from '../navaids/entities/fix.entity';
+import { Procedure } from '../procedures/entities/procedure.entity';
+import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -87,6 +91,10 @@ export class AdminService {
     @InjectRepository(Airport) private airportRepo: Repository<Airport>,
     @InjectRepository(Runway) private runwayRepo: Repository<Runway>,
     @InjectRepository(Frequency) private freqRepo: Repository<Frequency>,
+    @InjectRepository(Navaid) private navaidRepo: Repository<Navaid>,
+    @InjectRepository(Fix) private fixRepo: Repository<Fix>,
+    @InjectRepository(Procedure) private procedureRepo: Repository<Procedure>,
+    @InjectRepository(DtppCycle) private cycleRepo: Repository<DtppCycle>,
   ) {}
 
   // --- Data inventory ---
@@ -95,11 +103,22 @@ export class AdminService {
     const airports = await this.airportRepo.count();
     const runways = await this.runwayRepo.count();
     const frequencies = await this.freqRepo.count();
+    const navaids = await this.navaidRepo.count();
+    const fixes = await this.fixRepo.count();
+    const procedures = await this.procedureRepo.count();
     const charts = this.getInstalledCharts();
     const diskUsage = this.getDiskUsage();
 
+    // Get current d-TPP cycle
+    const cycles = await this.cycleRepo.find({
+      order: { seeded_at: 'DESC' },
+      take: 1,
+    });
+    const dtppCycle = cycles[0] || null;
+
     return {
-      database: { airports, runways, frequencies },
+      database: { airports, runways, frequencies, navaids, fixes, procedures },
+      dtppCycle,
       charts: {
         installed: charts,
         available: VFR_SECTIONAL_CHARTS,
@@ -128,11 +147,6 @@ export class AdminService {
   getDiskUsage(): Record<string, string> {
     const result: Record<string, string> = {};
 
-    const dbPath = path.join(this.dataDir, 'efb.sqlite');
-    if (fs.existsSync(dbPath)) {
-      result.database = this.formatBytes(fs.statSync(dbPath).size);
-    }
-
     const rawDir = path.join(this.dataDir, 'charts', 'raw');
     if (fs.existsSync(rawDir)) {
       result.chartsRaw = this.formatBytes(this.dirSize(rawDir));
@@ -141,6 +155,11 @@ export class AdminService {
     const tilesDir = path.join(this.dataDir, 'charts', 'tiles');
     if (fs.existsSync(tilesDir)) {
       result.chartsTiles = this.formatBytes(this.dirSize(tilesDir));
+    }
+
+    const pdfCacheDir = path.join(this.dataDir, 'procedures', 'pdfs');
+    if (fs.existsSync(pdfCacheDir)) {
+      result.procedurePdfs = this.formatBytes(this.dirSize(pdfCacheDir));
     }
 
     return result;
@@ -178,6 +197,66 @@ export class AdminService {
     );
 
     return job;
+  }
+
+  // --- Seed navaids ---
+
+  async runSeedNavaids(): Promise<JobStatus> {
+    const jobId = `seed-navaids-${Date.now()}`;
+    const job: JobStatus = {
+      id: jobId,
+      type: 'seed-navaids',
+      label: 'Seed Navigation Database (FAA NASR)',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      log: ['Starting navigation data seed...'],
+    };
+    this.jobs.set(jobId, job);
+
+    const seedScript = path.join(this.scriptsDir, '..', 'src', 'seed', 'seed-navaids.ts');
+    this.runScript(
+      'npx',
+      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
+      job,
+    );
+
+    return job;
+  }
+
+  // --- Seed procedures ---
+
+  async runSeedProcedures(): Promise<JobStatus> {
+    const jobId = `seed-procedures-${Date.now()}`;
+    const job: JobStatus = {
+      id: jobId,
+      type: 'seed-procedures',
+      label: 'Seed Procedures (FAA d-TPP)',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      log: ['Starting d-TPP procedure data seed...'],
+    };
+    this.jobs.set(jobId, job);
+
+    const seedScript = path.join(this.scriptsDir, '..', 'src', 'seed', 'seed-procedures.ts');
+    this.runScript(
+      'npx',
+      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
+      job,
+    );
+
+    return job;
+  }
+
+  // --- Clear PDF cache ---
+
+  async clearPdfCache(): Promise<{ deleted: boolean; size?: string }> {
+    const cacheDir = path.join(this.dataDir, 'procedures', 'pdfs');
+    if (!fs.existsSync(cacheDir)) {
+      return { deleted: false };
+    }
+    const size = this.formatBytes(this.dirSize(cacheDir));
+    fs.rmSync(cacheDir, { recursive: true, force: true });
+    return { deleted: true, size };
   }
 
   // --- Process VFR charts ---

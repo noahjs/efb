@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 
 class MapSidebar extends StatefulWidget {
-  const MapSidebar({super.key});
+  final VoidCallback? onZoomIn;
+  final VoidCallback? onZoomOut;
+
+  const MapSidebar({super.key, this.onZoomIn, this.onZoomOut});
 
   @override
   State<MapSidebar> createState() => _MapSidebarState();
@@ -118,12 +121,12 @@ class _MapSidebarState extends State<MapSidebar> {
           // Zoom controls
           _SidebarButton(
             icon: Icons.add,
-            onTap: () {},
+            onTap: () => widget.onZoomIn?.call(),
           ),
           const SizedBox(height: 2),
           _SidebarButton(
             icon: Icons.remove,
-            onTap: () {},
+            onTap: () => widget.onZoomOut?.call(),
           ),
         ],
       ),

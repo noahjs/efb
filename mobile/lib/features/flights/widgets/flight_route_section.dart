@@ -1,0 +1,110 @@
+import 'package:flutter/material.dart';
+import '../../../models/flight.dart';
+import 'flight_route_map.dart';
+import 'flight_section_header.dart';
+import 'flight_field_row.dart';
+import 'flight_edit_dialogs.dart';
+
+class FlightRouteSection extends StatelessWidget {
+  final Flight flight;
+  final ValueChanged<Flight> onChanged;
+
+  const FlightRouteSection({
+    super.key,
+    required this.flight,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FlightSectionHeader(title: 'Route'),
+        FlightFieldRow(
+          label: 'Flight Rules',
+          value: flight.flightRules,
+          onTap: () async {
+            final result = await showPickerSheet(
+              context,
+              title: 'Flight Rules',
+              options: ['VFR', 'IFR', 'DVFR', 'SVFR'],
+              currentValue: flight.flightRules,
+            );
+            if (result != null) {
+              onChanged(flight.copyWith(flightRules: result));
+            }
+          },
+        ),
+        FlightRouteMap(
+          departureIdentifier: flight.departureIdentifier,
+          destinationIdentifier: flight.destinationIdentifier,
+        ),
+        FlightFieldRow(
+          label: 'Route',
+          value: flight.routeString ?? 'Direct',
+          onTap: () async {
+            final result = await showTextEditSheet(
+              context,
+              title: 'Route String',
+              currentValue: flight.routeString ?? '',
+              hintText: 'e.g. DCT BJC V8 DBL',
+            );
+            if (result != null) {
+              onChanged(flight.copyWith(routeString: result));
+            }
+          },
+        ),
+        FlightFieldRow(
+          label: 'Routes',
+          value: 'Find Routes',
+          showChevron: true,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Route finder coming in a future update'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          },
+        ),
+        FlightFieldRow(
+          label: 'Cruise Altitude',
+          value: flight.cruiseAltitude != null
+              ? '${flight.cruiseAltitude} ft'
+              : 'Set',
+          onTap: () async {
+            final result = await showNumberEditSheet(
+              context,
+              title: 'Cruise Altitude',
+              currentValue: flight.cruiseAltitude?.toDouble(),
+              hintText: 'e.g. 6000',
+              suffix: 'ft',
+            );
+            if (result != null) {
+              onChanged(flight.copyWith(cruiseAltitude: result.toInt()));
+            }
+          },
+        ),
+        FlightFieldRow(
+          label: 'True Airspeed',
+          value: flight.trueAirspeed != null
+              ? '${flight.trueAirspeed} kts'
+              : 'Set',
+          onTap: () async {
+            final result = await showNumberEditSheet(
+              context,
+              title: 'True Airspeed',
+              currentValue: flight.trueAirspeed?.toDouble(),
+              hintText: 'e.g. 120',
+              suffix: 'kts',
+            );
+            if (result != null) {
+              onChanged(flight.copyWith(trueAirspeed: result.toInt()));
+            }
+          },
+        ),
+      ],
+    );
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:aviationweather.gov)",
+      "WebFetch(domain:open-meteo.com)",
+      "Bash(python3:*)",
+      "WebFetch(domain:nfdc.faa.gov)",
+      "WebFetch(domain:www.faa.gov)",
+      "WebSearch",
+      "WebFetch(domain:aeronav.faa.gov)",
+      "WebFetch(domain:api.faa.gov)",
+      "WebFetch(domain:notams.aim.faa.gov)"
+    ]
+  }
+}

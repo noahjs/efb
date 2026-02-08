@@ -1,22 +1,49 @@
+import 'dart:convert';
+import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
-import 'map_view.dart' show mapboxAccessToken;
+import 'map_view.dart' show EfbMapController, MapBounds, mapboxAccessToken;
 
 /// Web implementation using Mapbox GL JS directly via HtmlElementView.
 class PlatformMapView extends StatefulWidget {
   final String baseLayer;
+  final bool showFlightCategory;
+  final bool interactive;
+  final ValueChanged<String>? onAirportTapped;
+  final ValueChanged<MapBounds>? onBoundsChanged;
+  final List<Map<String, dynamic>> airports;
+  final List<List<double>> routeCoordinates;
+  final EfbMapController? controller;
 
-  const PlatformMapView({super.key, required this.baseLayer});
+  const PlatformMapView({
+    super.key,
+    required this.baseLayer,
+    this.showFlightCategory = false,
+    this.interactive = true,
+    this.onAirportTapped,
+    this.onBoundsChanged,
+    this.airports = const [],
+    this.routeCoordinates = const [],
+    this.controller,
+  });
 
   @override
   State<PlatformMapView> createState() => _PlatformMapViewState();
 }
 
+@JS('_efbOnAirportTap')
+external set _onAirportTapJs(JSFunction? fn);
+
+@JS('_efbOnBoundsChanged')
+external set _onBoundsChangedJs(JSFunction? fn);
+
 class _PlatformMapViewState extends State<PlatformMapView> {
   final String _viewType =
       'efb-mapbox-${DateTime.now().millisecondsSinceEpoch}';
   late final String _mapVar;
+  bool _mapReady = false;
+  final List<web.HTMLScriptElement> _injectedScripts = [];
 
   static String _styleForLayer(String layer) {
     switch (layer) {
@@ -33,6 +60,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   void initState() {
     super.initState();
     _mapVar = 'efbMap_${DateTime.now().millisecondsSinceEpoch}';
+    _registerCallbacks();
+    _bindController();
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) {
       final container =
           web.document.createElement('div') as web.HTMLDivElement;
@@ -42,7 +71,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         ..height = '100%'
         ..position = 'relative';
 
-      // Initialize Mapbox GL JS map after the element is attached
       Future.delayed(const Duration(milliseconds: 100), () {
         _initMapboxJs(container.id);
       });
@@ -51,35 +79,211 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     });
   }
 
+  void _bindController() {
+    widget.controller?.onZoomIn = () {
+      _evalJs('''
+        (function() {
+          var map = window.$_mapVar;
+          if (map) map.zoomIn();
+        })();
+      ''');
+    };
+    widget.controller?.onZoomOut = () {
+      _evalJs('''
+        (function() {
+          var map = window.$_mapVar;
+          if (map) map.zoomOut();
+        })();
+      ''');
+    };
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.onZoomIn = null;
+    widget.controller?.onZoomOut = null;
+    _onAirportTapJs = null;
+    _onBoundsChangedJs = null;
+    // Remove the Mapbox map instance
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (map) { map.remove(); }
+        delete window.$_mapVar;
+      })();
+    ''');
+    // Clean up injected script tags
+    for (final script in _injectedScripts) {
+      script.remove();
+    }
+    _injectedScripts.clear();
+    super.dispose();
+  }
+
+  void _registerCallbacks() {
+    _onAirportTapJs = ((JSString id) {
+      widget.onAirportTapped?.call(id.toDart);
+    }).toJS;
+
+    _onBoundsChangedJs =
+        ((JSNumber minLng, JSNumber minLat, JSNumber maxLng, JSNumber maxLat) {
+      widget.onBoundsChanged?.call((
+        minLat: minLat.toDartDouble,
+        maxLat: maxLat.toDartDouble,
+        minLng: minLng.toDartDouble,
+        maxLng: maxLng.toDartDouble,
+      ));
+    }).toJS;
+  }
+
   @override
   void didUpdateWidget(covariant PlatformMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Keep JS callbacks in sync with the latest widget callbacks
+    _registerCallbacks();
     if (oldWidget.baseLayer != widget.baseLayer) {
-      _switchStyle();
+      _switchLayer(oldWidget.baseLayer, widget.baseLayer);
+    }
+    if (oldWidget.showFlightCategory != widget.showFlightCategory) {
+      _setFlightCategoryMode(widget.showFlightCategory);
+    }
+    if (oldWidget.interactive != widget.interactive) {
+      _setInteractive(widget.interactive);
+    }
+    if (oldWidget.airports != widget.airports) {
+      _updateAirportsSource();
+    }
+    if (oldWidget.routeCoordinates != widget.routeCoordinates) {
+      _updateRouteSource();
     }
   }
 
-  void _switchStyle() {
-    final style = _styleForLayer(widget.baseLayer);
-    final addVfr = widget.baseLayer == 'vfr';
-    final script = '''
+  void _setInteractive(bool enabled) {
+    final method = enabled ? 'enable' : 'disable';
+    _evalJs('''
       (function() {
         var map = window.$_mapVar;
         if (!map) return;
-        map.setStyle('$style');
-        map.once('style.load', function() {
-          ${addVfr ? _vfrTilesJs() : ''}
-          ${_airportMarkersJs()}
-          ${_routeLineJs()}
-        });
+        map.scrollZoom.$method();
+        map.dragPan.$method();
+        map.doubleClickZoom.$method();
+        map.touchZoomRotate.$method();
       })();
-    ''';
-    _evalJs(script);
+    ''');
+  }
+
+  void _setFlightCategoryMode(bool enabled) {
+    final circleRadius = enabled ? 7 : 5;
+    final circleColor = enabled
+        ? "['match', ['get', 'category'], 'VFR', '#00C853', 'MVFR', '#2196F3', 'IFR', '#FF1744', 'LIFR', '#E040FB', '#888888']"
+        : "'#888888'";
+    final strokeWidth = enabled ? 1.5 : 0.5;
+    final labelsVisibility = enabled ? 'visible' : 'none';
+
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map || !map.getLayer('airport-dots')) return;
+        map.setPaintProperty('airport-dots', 'circle-radius', $circleRadius);
+        map.setPaintProperty('airport-dots', 'circle-color', $circleColor);
+        map.setPaintProperty('airport-dots', 'circle-stroke-width', $strokeWidth);
+        if (map.getLayer('airport-labels')) {
+          map.setLayoutProperty('airport-labels', 'visibility', '$labelsVisibility');
+        }
+      })();
+    ''');
+  }
+
+  void _updateAirportsSource() {
+    if (!_mapReady) return;
+    final geojson = _buildAirportsGeoJson(widget.airports);
+    // Escape for JS string embedding
+    final escaped = geojson.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) return;
+        var src = map.getSource('airports');
+        if (src) {
+          src.setData(JSON.parse('$escaped'));
+        }
+      })();
+    ''');
+  }
+
+  static String _buildAirportsGeoJson(List<Map<String, dynamic>> airports) {
+    final features = airports.where((a) {
+      return a['latitude'] != null && a['longitude'] != null;
+    }).map((a) {
+      final id = a['identifier'] ?? a['icao_identifier'] ?? '';
+      final lng = a['longitude'];
+      final lat = a['latitude'];
+      final category = a['category'] ?? 'unknown';
+      return {
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [lng, lat],
+        },
+        'properties': {
+          'id': id,
+          'category': category,
+        },
+      };
+    }).toList();
+
+    return jsonEncode({
+      'type': 'FeatureCollection',
+      'features': features,
+    });
+  }
+
+  void _switchLayer(String oldLayer, String newLayer) {
+    final oldStyle = _styleForLayer(oldLayer);
+    final newStyle = _styleForLayer(newLayer);
+    final vfrVisibility = newLayer == 'vfr' ? 'visible' : 'none';
+
+    if (oldStyle != newStyle) {
+      // Different Mapbox base style — full swap, re-add all layers after load
+      _evalJs('''
+        (function() {
+          var map = window.$_mapVar;
+          if (!map) return;
+          map.setStyle('$newStyle');
+          map.once('style.load', function() {
+            ${_vfrTilesJs(vfrVisibility)}
+            ${_airportLayersJs(widget.showFlightCategory)}
+            ${_routeLayerJs()}
+            ${_airportClickHandlersJs()}
+            ${_boundsHandlerJs()}
+          });
+        })();
+      ''');
+      // After style reload, push current data into the fresh sources
+      Future.delayed(const Duration(milliseconds: 200), () {
+        _updateAirportsSource();
+        _updateRouteSource();
+      });
+    } else {
+      // Same Mapbox style — just toggle VFR layer visibility
+      _evalJs('''
+        (function() {
+          var map = window.$_mapVar;
+          if (!map) return;
+          var vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
+          vfrCharts.forEach(function(chart) {
+            if (map.getLayer('vfr-layer-' + chart)) {
+              map.setLayoutProperty('vfr-layer-' + chart, 'visibility', '$vfrVisibility');
+            }
+          });
+        })();
+      ''');
+    }
   }
 
   void _initMapboxJs(String containerId) {
     final style = _styleForLayer(widget.baseLayer);
-    final addVfr = widget.baseLayer == 'vfr';
+    final vfrVisibility = widget.baseLayer == 'vfr' ? 'visible' : 'none';
     final script = '''
       (function() {
         if (typeof mapboxgl === 'undefined') {
@@ -98,20 +302,32 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         window.$_mapVar = map;
 
         map.on('load', function() {
-          ${addVfr ? _vfrTilesJs() : ''}
-          ${_airportMarkersJs()}
-          ${_routeLineJs()}
+          ${_vfrTilesJs(vfrVisibility)}
+          ${_airportLayersJs(widget.showFlightCategory)}
+          ${_routeLayerJs()}
+          ${_airportClickHandlersJs()}
+          ${_boundsHandlerJs()}
 
           // Navigation controls
           map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+
+          // Fire initial bounds
+          var b = map.getBounds();
+          if (window._efbOnBoundsChanged) {
+            window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+          }
         });
       })();
     ''';
 
     _evalJs(script);
+    // Mark map ready after init script runs (with margin for load event)
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _mapReady = true;
+    });
   }
 
-  static String _vfrTilesJs() {
+  static String _vfrTilesJs(String visibility) {
     return '''
           var vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
           vfrCharts.forEach(function(chart) {
@@ -128,6 +344,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               id: 'vfr-layer-' + chart,
               type: 'raster',
               source: 'vfr-' + chart,
+              layout: {
+                'visibility': '$visibility'
+              },
               paint: {
                 'raster-opacity': 0.85
               }
@@ -136,25 +355,21 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     ''';
   }
 
-  static String _airportMarkersJs() {
+  /// Creates the airports GeoJSON source (empty initially) and the dot/label layers.
+  /// When [showFlightCategory] is true, dots are colored by METAR category and labels shown.
+  /// When false, dots are small gray circles with no labels.
+  static String _airportLayersJs(bool showFlightCategory) {
+    final circleRadius = showFlightCategory ? 7 : 5;
+    final circleColor = showFlightCategory
+        ? "['match', ['get', 'category'], 'VFR', '#00C853', 'MVFR', '#2196F3', 'IFR', '#FF1744', 'LIFR', '#E040FB', '#888888']"
+        : "'#888888'";
+    final strokeWidth = showFlightCategory ? 1.5 : 0.5;
+    final labelsVisibility = showFlightCategory ? 'visible' : 'none';
+
     return '''
           map.addSource('airports', {
             type: 'geojson',
-            data: {
-              type: 'FeatureCollection',
-              features: [
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-104.8493, 39.5701] }, properties: { id: 'KAPA', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-105.1172, 39.9088] }, properties: { id: 'KBJC', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-104.6737, 39.8561] }, properties: { id: 'KDEN', category: 'mvfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-105.0113, 40.4518] }, properties: { id: 'KFNL', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-104.7006, 38.8058] }, properties: { id: 'KCFO', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-105.2256, 40.0393] }, properties: { id: 'KBDU', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-105.0481, 40.0102] }, properties: { id: 'KEIK', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-105.1633, 40.1637] }, properties: { id: 'KLMO', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-104.6332, 40.4374] }, properties: { id: 'KGXY', category: 'vfr' } },
-                { type: 'Feature', geometry: { type: 'Point', coordinates: [-104.7517, 39.7017] }, properties: { id: 'KBKF', category: 'vfr' } }
-              ]
-            }
+            data: { type: 'FeatureCollection', features: [] }
           });
 
           map.addLayer({
@@ -162,16 +377,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             type: 'circle',
             source: 'airports',
             paint: {
-              'circle-radius': 7,
-              'circle-color': [
-                'match', ['get', 'category'],
-                'vfr', '#00C853',
-                'mvfr', '#2196F3',
-                'ifr', '#FF1744',
-                'lifr', '#E040FB',
-                '#00C853'
-              ],
-              'circle-stroke-width': 1.5,
+              'circle-radius': $circleRadius,
+              'circle-color': $circleColor,
+              'circle-stroke-width': $strokeWidth,
               'circle-stroke-color': 'rgba(255,255,255,0.5)'
             }
           });
@@ -181,6 +389,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             type: 'symbol',
             source: 'airports',
             layout: {
+              'visibility': '$labelsVisibility',
               'text-field': ['get', 'id'],
               'text-size': 11,
               'text-offset': [0, -1.5],
@@ -195,21 +404,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     ''';
   }
 
-  static String _routeLineJs() {
+  static String _routeLayerJs() {
     return '''
           map.addSource('route', {
             type: 'geojson',
-            data: {
-              type: 'Feature',
-              geometry: {
-                type: 'LineString',
-                coordinates: [
-                  [-104.8493, 39.5701],
-                  [-105.15, 39.95],
-                  [-105.70, 40.55]
-                ]
-              }
-            }
+            data: { type: 'FeatureCollection', features: [] }
           });
 
           map.addLayer({
@@ -217,9 +416,76 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             type: 'line',
             source: 'route',
             paint: {
-              'line-color': '#FF00FF',
+              'line-color': '#00FFFF',
               'line-width': 3,
               'line-opacity': 0.9
+            }
+          });
+    ''';
+  }
+
+  void _updateRouteSource() {
+    if (!_mapReady) return;
+    final geojson = _buildRouteGeoJson(widget.routeCoordinates);
+    final escaped = geojson.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) return;
+        var src = map.getSource('route');
+        if (src) {
+          src.setData(JSON.parse('$escaped'));
+        }
+      })();
+    ''');
+  }
+
+  static String _buildRouteGeoJson(List<List<double>> coords) {
+    if (coords.length < 2) {
+      return '{"type":"FeatureCollection","features":[]}';
+    }
+    return jsonEncode({
+      'type': 'FeatureCollection',
+      'features': [
+        {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'LineString',
+            'coordinates': coords,
+          },
+          'properties': {},
+        }
+      ],
+    });
+  }
+
+  static String _airportClickHandlersJs() {
+    return '''
+          map.on('click', 'airport-dots', function(e) {
+            if (e.features && e.features.length > 0) {
+              var id = e.features[0].properties.id;
+              if (window._efbOnAirportTap) {
+                window._efbOnAirportTap(id);
+              }
+            }
+          });
+
+          map.on('mouseenter', 'airport-dots', function() {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+
+          map.on('mouseleave', 'airport-dots', function() {
+            map.getCanvas().style.cursor = '';
+          });
+    ''';
+  }
+
+  static String _boundsHandlerJs() {
+    return '''
+          map.on('moveend', function() {
+            var b = map.getBounds();
+            if (window._efbOnBoundsChanged) {
+              window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
             }
           });
     ''';
@@ -230,6 +496,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         web.document.createElement('script') as web.HTMLScriptElement;
     scriptEl.text = script;
     web.document.body!.append(scriptEl);
+    _injectedScripts.add(scriptEl);
   }
 
   @override

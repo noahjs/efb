@@ -36,11 +36,32 @@ final metarProvider =
   return client.getMetar(icao);
 });
 
-/// Provider for TAF data
+/// Provider for TAF data (nearest TAF with station attribution)
 final tafProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
   final client = ref.read(apiClientProvider);
-  return client.getTaf(icao);
+  return client.getNearestTaf(icao);
+});
+
+/// Provider for winds aloft data
+final windsAloftProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
+  final client = ref.read(apiClientProvider);
+  return client.getWindsAloft(icao);
+});
+
+/// Provider for NOTAMs
+final notamsProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
+  final client = ref.read(apiClientProvider);
+  return client.getNotams(icao);
+});
+
+/// Provider for 7-day forecast data
+final forecastProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
+  final client = ref.read(apiClientProvider);
+  return client.getForecast(icao);
 });
 
 /// Provider for airports in map bounds
@@ -49,6 +70,20 @@ final mapAirportsProvider = FutureProvider.family<List<dynamic>,
   (ref, bounds) async {
     final client = ref.read(apiClientProvider);
     return client.getAirportsInBounds(
+      minLat: bounds.minLat,
+      maxLat: bounds.maxLat,
+      minLng: bounds.minLng,
+      maxLng: bounds.maxLng,
+    );
+  },
+);
+
+/// Provider for bulk METARs in map bounds (flight categories)
+final mapMetarsProvider = FutureProvider.family<List<dynamic>,
+    ({double minLat, double maxLat, double minLng, double maxLng})>(
+  (ref, bounds) async {
+    final client = ref.read(apiClientProvider);
+    return client.getBulkMetars(
       minLat: bounds.minLat,
       maxLat: bounds.maxLat,
       minLng: bounds.minLng,

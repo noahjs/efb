@@ -19,113 +19,25 @@ import { RunwayEnd } from '../airports/entities/runway-end.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as https from 'https';
-import * as http from 'http';
-import { createReadStream } from 'fs';
-import { parse } from 'csv-parse';
-import { execSync } from 'child_process';
+import {
+  parsePipeDelimited,
+  parseCoordinate,
+  findFile,
+  ensureNasrData,
+} from './seed-utils';
+import { dbConfig } from '../db.config';
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
-const DB_PATH = path.join(DATA_DIR, 'efb.sqlite');
 const NASR_DIR = path.join(DATA_DIR, 'nasr');
 
-// NASR download URL - 28-day subscription CSV format
-const NASR_CSV_URL =
-  'https://nfdc.faa.gov/webContent/28DaySub/28DaySubscription_Effective_2026-01-30.zip';
-
 async function initDataSource(): Promise<DataSource> {
-  // Ensure data directory exists
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-
   const ds = new DataSource({
-    type: 'better-sqlite3',
-    database: DB_PATH,
+    ...dbConfig,
     entities: [Airport, Runway, RunwayEnd, Frequency],
-    synchronize: true,
   });
 
   await ds.initialize();
   return ds;
-}
-
-function downloadFile(url: string, dest: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    const protocol = url.startsWith('https') ? https : http;
-
-    (protocol as typeof https)
-      .get(url, (response) => {
-        // Handle redirects
-        if (
-          response.statusCode &&
-          response.statusCode >= 300 &&
-          response.statusCode < 400 &&
-          response.headers.location
-        ) {
-          file.close();
-          fs.unlinkSync(dest);
-          return downloadFile(response.headers.location, dest).then(
-            resolve,
-            reject,
-          );
-        }
-
-        response.pipe(file);
-        file.on('finish', () => {
-          file.close();
-          resolve();
-        });
-      })
-      .on('error', (err) => {
-        fs.unlinkSync(dest);
-        reject(err);
-      });
-  });
-}
-
-function parsePipeDelimited(
-  filePath: string,
-): Promise<Record<string, string>[]> {
-  return new Promise((resolve, reject) => {
-    const records: Record<string, string>[] = [];
-
-    createReadStream(filePath)
-      .pipe(
-        parse({
-          delimiter: ',',
-          columns: true,
-          skip_empty_lines: true,
-          trim: true,
-          relax_column_count: true,
-        }),
-      )
-      .on('data', (record: Record<string, string>) => records.push(record))
-      .on('end', () => resolve(records))
-      .on('error', reject);
-  });
-}
-
-function parseCoordinate(dms: string): number | null {
-  if (!dms) return null;
-
-  // Handle decimal format
-  const decimal = parseFloat(dms);
-  if (!isNaN(decimal) && Math.abs(decimal) <= 180) return decimal;
-
-  // Handle DMS format: e.g. "39-54-32.6800N" or "104-50-56.1100W"
-  const match = dms.match(
-    /(\d+)-(\d+)-([\d.]+)([NSEW])/,
-  );
-  if (!match) return null;
-
-  const deg = parseInt(match[1]);
-  const min = parseInt(match[2]);
-  const sec = parseFloat(match[3]);
-  const dir = match[4];
-
-  let result = deg + min / 60 + sec / 3600;
-  if (dir === 'S' || dir === 'W') result = -result;
-  return result;
 }
 
 async function seedAirports(ds: DataSource): Promise<number> {
@@ -149,51 +61,27 @@ async function seedAirports(ds: DataSource): Promise<number> {
     const airports: Partial<Airport>[] = [];
 
     for (const r of batch) {
-      const identifier =
-        r['LOCATION IDENTIFIER'] || r['ARPT_ID'] || r['LocationID'];
+      const identifier = r['ARPT_ID'];
       if (!identifier) continue;
 
       airports.push({
         identifier: identifier.trim(),
         icao_identifier:
-          (r['ICAO_ID'] || r['ICAO'] || '').trim() || undefined,
-        name: (
-          r['OFFICIAL FACILITY NAME'] ||
-          r['ARPT_NAME'] ||
-          r['FacilityName'] ||
-          ''
-        ).trim(),
-        city: (r['CITY'] || r['City'] || '').trim() || undefined,
-        state: (r['STATE'] || r['State'] || '').trim() || undefined,
-        latitude: parseCoordinate(
-          r['ARP LATITUDE'] ||
-            r['ARPLatitude'] ||
-            r['LATITUDE'] ||
-            r['Lat'] ||
-            '',
-        ) ?? undefined,
-        longitude: parseCoordinate(
-          r['ARP LONGITUDE'] ||
-            r['ARPLongitude'] ||
-            r['LONGITUDE'] ||
-            r['Lon'] ||
-            '',
-        ) ?? undefined,
-        elevation: parseFloat(
-          r['FIELD ELEVATION'] ||
-            r['ARPElevation'] ||
-            r['ELEVATION'] ||
-            r['Elev'] ||
-            '0',
-        ) || undefined,
+          (r['ICAO_ID'] || '').trim() || undefined,
+        name: (r['ARPT_NAME'] || '').trim(),
+        city: (r['CITY'] || '').trim() || undefined,
+        state: (r['STATE_CODE'] || '').trim() || undefined,
+        latitude: parseFloat(r['LAT_DECIMAL'] || '') || undefined,
+        longitude: parseFloat(r['LONG_DECIMAL'] || '') || undefined,
+        elevation: parseFloat(r['ELEV'] || '0') || undefined,
         magnetic_variation:
-          (r['MAGNETIC VARIATION'] || r['MagVar'] || '').trim() || undefined,
+          (r['MAG_VARN'] || '').trim() || undefined,
         ownership_type:
-          (r['OWNERSHIP TYPE'] || r['OwnershipType'] || '').trim() || undefined,
+          (r['OWNERSHIP_TYPE_CODE'] || '').trim() || undefined,
         facility_type:
-          (r['FACILITY TYPE'] || r['FacilityType'] || r['TYPE'] || '').trim() || undefined,
+          (r['SITE_TYPE_CODE'] || '').trim() || undefined,
         status:
-          (r['FACILITY STATUS'] || r['Status'] || '').trim() || 'O',
+          (r['ARPT_STATUS'] || '').trim() || 'O',
       });
     }
 
@@ -201,6 +89,191 @@ async function seedAirports(ds: DataSource): Promise<number> {
       await repo.save(airports as Airport[]);
       count += airports.length;
     }
+  }
+
+  return count;
+}
+
+async function seedRunways(ds: DataSource): Promise<{ runways: number; ends: number }> {
+  const rwyFile = findFile(NASR_DIR, 'APT_RWY.csv');
+  const rwyEndFile = findFile(NASR_DIR, 'APT_RWY_END.csv');
+  if (!rwyFile || !rwyEndFile) {
+    console.log('  Runway CSV files not found, skipping...');
+    return { runways: 0, ends: 0 };
+  }
+
+  // Seed runways
+  console.log(`  Reading ${rwyFile}...`);
+  const rwyRecords = await parsePipeDelimited(rwyFile);
+  console.log(`  Parsed ${rwyRecords.length} runway records`);
+
+  const rwyRepo = ds.getRepository(Runway);
+  let rwyCount = 0;
+
+  // Map (ARPT_ID, RWY_ID) → saved runway id for linking ends
+  const rwyLookup = new Map<string, number>();
+
+  const batchSize = 500;
+  for (let i = 0; i < rwyRecords.length; i += batchSize) {
+    const batch = rwyRecords.slice(i, i + batchSize);
+    const runways: Partial<Runway>[] = [];
+
+    for (const r of batch) {
+      const aptId = (r['ARPT_ID'] || '').trim();
+      const rwyId = (r['RWY_ID'] || '').trim();
+      if (!aptId || !rwyId) continue;
+
+      runways.push({
+        airport_identifier: aptId,
+        identifiers: rwyId,
+        length: parseInt(r['RWY_LEN'] || '', 10) || undefined,
+        width: parseInt(r['RWY_WIDTH'] || '', 10) || undefined,
+        surface: (r['SURFACE_TYPE_CODE'] || '').trim() || undefined,
+        condition: (r['COND'] || '').trim() || undefined,
+      });
+    }
+
+    if (runways.length > 0) {
+      const saved = await rwyRepo.save(runways as Runway[]);
+      for (const rwy of saved) {
+        rwyLookup.set(`${rwy.airport_identifier}:${rwy.identifiers}`, rwy.id);
+      }
+      rwyCount += saved.length;
+    }
+  }
+
+  console.log(`  Imported ${rwyCount} runways.`);
+
+  // Seed runway ends
+  console.log(`  Reading ${rwyEndFile}...`);
+  const endRecords = await parsePipeDelimited(rwyEndFile);
+  console.log(`  Parsed ${endRecords.length} runway end records`);
+
+  const endRepo = ds.getRepository(RunwayEnd);
+  let endCount = 0;
+
+  for (let i = 0; i < endRecords.length; i += batchSize) {
+    const batch = endRecords.slice(i, i + batchSize);
+    const ends: Partial<RunwayEnd>[] = [];
+
+    for (const r of batch) {
+      const aptId = (r['ARPT_ID'] || '').trim();
+      const rwyId = (r['RWY_ID'] || '').trim();
+      const endId = (r['RWY_END_ID'] || '').trim();
+      if (!aptId || !rwyId || !endId) continue;
+
+      const runwayId = rwyLookup.get(`${aptId}:${rwyId}`);
+      if (!runwayId) continue;
+
+      const rightTraffic = (r['RIGHT_HAND_TRAFFIC_PAT_FLAG'] || '').trim();
+
+      ends.push({
+        runway_id: runwayId,
+        identifier: endId,
+        heading: parseFloat(r['TRUE_ALIGNMENT'] || '') || undefined,
+        elevation: parseFloat(r['RWY_END_ELEV'] || '') || undefined,
+        latitude: parseFloat(r['LAT_DECIMAL'] || '') || undefined,
+        longitude: parseFloat(r['LONG_DECIMAL'] || '') || undefined,
+        tora: parseInt(r['TKOF_RUN_AVBL'] || '', 10) || undefined,
+        toda: parseInt(r['TKOF_DIST_AVBL'] || '', 10) || undefined,
+        asda: parseInt(r['ACLT_STOP_DIST_AVBL'] || '', 10) || undefined,
+        lda: parseInt(r['LNDG_DIST_AVBL'] || '', 10) || undefined,
+        glideslope: (r['VGSI_CODE'] || '').trim() || undefined,
+        lighting_approach: (r['APCH_LGT_SYSTEM_CODE'] || '').trim() || undefined,
+        traffic_pattern: rightTraffic === 'Y' ? 'Right' : 'Left',
+        displaced_threshold: parseInt(r['DISPLACED_THR_LEN'] || '', 10) || undefined,
+      });
+    }
+
+    if (ends.length > 0) {
+      await endRepo.save(ends as RunwayEnd[]);
+      endCount += ends.length;
+    }
+  }
+
+  console.log(`  Imported ${endCount} runway ends.`);
+  return { runways: rwyCount, ends: endCount };
+}
+
+/**
+ * Parse TWR3 records from the NASR TWR.txt fixed-width file.
+ * Each TWR3 record has: identifier (pos 5-8), then up to 9 freq/use pairs.
+ * Freq: 44 chars, Use: 50 chars, repeating from position 9.
+ */
+async function seedFrequencies(ds: DataSource): Promise<number> {
+  const twrFile = path.join(NASR_DIR, 'TWR.txt');
+  if (!fs.existsSync(twrFile)) {
+    console.log('  TWR.txt not found, skipping frequencies...');
+    return 0;
+  }
+
+  console.log(`  Reading ${twrFile} (TWR3 records)...`);
+  const content = fs.readFileSync(twrFile, 'utf-8');
+  const lines = content.split('\n').filter(l => l.startsWith('TWR3'));
+  console.log(`  Found ${lines.length} TWR3 records`);
+
+  // Build set of valid airport identifiers to filter out non-airport facilities
+  const airportIds = new Set<string>(
+    (await ds.getRepository(Airport)
+      .createQueryBuilder('a')
+      .select('a.identifier')
+      .getMany()
+    ).map(a => a.identifier),
+  );
+
+  const repo = ds.getRepository(Frequency);
+  const freqs: Partial<Frequency>[] = [];
+
+  // Map frequency use codes to friendly types
+  const useToType = (use: string): string => {
+    const u = use.toUpperCase();
+    if (u.includes('ATIS')) return 'ATIS';
+    if (u.includes('GND')) return 'GND';
+    if (u.includes('LCL') || u.includes('TWR')) return 'TWR';
+    if (u.includes('CD') || u.includes('CLNC')) return 'CD';
+    if (u.includes('APCH')) return 'APP';
+    if (u.includes('DEP')) return 'DEP';
+    if (u.includes('CTAF')) return 'CTAF';
+    if (u.includes('UNIC')) return 'UNIC';
+    if (u.includes('EMERG')) return 'EMERG';
+    return use.split('/')[0].trim();
+  };
+
+  for (const line of lines) {
+    const identifier = line.substring(4, 8).trim();
+    if (!identifier || !airportIds.has(identifier)) continue;
+
+    // Up to 9 frequency/use pairs, each: 44 chars freq + 50 chars use
+    const PAIR_START = 8;
+    const FREQ_LEN = 44;
+    const USE_LEN = 50;
+    const PAIR_LEN = FREQ_LEN + USE_LEN;
+
+    for (let p = 0; p < 9; p++) {
+      const offset = PAIR_START + p * PAIR_LEN;
+      const freqStr = line.substring(offset, offset + FREQ_LEN).trim();
+      const useStr = line.substring(offset + FREQ_LEN, offset + PAIR_LEN).trim();
+
+      if (!freqStr) continue;
+
+      freqs.push({
+        airport_identifier: identifier,
+        type: useToType(useStr),
+        name: useStr || undefined,
+        frequency: freqStr,
+      });
+    }
+  }
+
+  console.log(`  Parsed ${freqs.length} frequencies`);
+
+  // Batch insert
+  const batchSize = 500;
+  let count = 0;
+  for (let i = 0; i < freqs.length; i += batchSize) {
+    const batch = freqs.slice(i, i + batchSize);
+    await repo.save(batch as Frequency[]);
+    count += batch.length;
   }
 
   return count;
@@ -500,42 +573,18 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
   return sampleAirports.length;
 }
 
-function findFile(dir: string, ...names: string[]): string | null {
-  if (!fs.existsSync(dir)) return null;
-
-  for (const name of names) {
-    const filePath = path.join(dir, name);
-    if (fs.existsSync(filePath)) return filePath;
-  }
-
-  // Search subdirectories
-  try {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const result = findFile(path.join(dir, entry.name), ...names);
-        if (result) return result;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-}
-
 async function main() {
   console.log('=== EFB NASR Data Seed ===\n');
+
+  // Download + extract NASR data if not already present
+  await ensureNasrData(NASR_DIR);
 
   const ds = await initDataSource();
   console.log('Database initialized.\n');
 
-  // Clear existing data
+  // Clear existing data (CASCADE needed for Postgres foreign key constraints)
   console.log('Clearing existing data...');
-  await ds.getRepository(RunwayEnd).clear();
-  await ds.getRepository(Runway).clear();
-  await ds.getRepository(Frequency).clear();
-  await ds.getRepository(Airport).clear();
+  await ds.query('TRUNCATE TABLE runway_ends, runways, frequencies, airports CASCADE');
   console.log('  Done.\n');
 
   // Seed airports
@@ -543,13 +592,22 @@ async function main() {
   const airportCount = await seedAirports(ds);
   console.log(`  Imported ${airportCount} airports.\n`);
 
+  // Seed runways + runway ends
+  console.log('Seeding runways...');
+  const { runways: rwyCount, ends: endCount } = await seedRunways(ds);
+  console.log('');
+
+  // Seed frequencies from TWR.txt
+  console.log('Seeding frequencies...');
+  const freqCount = await seedFrequencies(ds);
+  console.log(`  Imported ${freqCount} frequencies.\n`);
+
   // Summary
-  const totalRunways = await ds.getRepository(Runway).count();
-  const totalFreqs = await ds.getRepository(Frequency).count();
   console.log('=== Seed Complete ===');
-  console.log(`  Airports:    ${airportCount}`);
-  console.log(`  Runways:     ${totalRunways}`);
-  console.log(`  Frequencies: ${totalFreqs}`);
+  console.log(`  Airports:     ${airportCount}`);
+  console.log(`  Runways:      ${rwyCount}`);
+  console.log(`  Runway Ends:  ${endCount}`);
+  console.log(`  Frequencies:  ${freqCount}`);
 
   await ds.destroy();
 }

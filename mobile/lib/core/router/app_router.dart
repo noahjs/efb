@@ -5,6 +5,7 @@ import '../../features/maps/maps_screen.dart';
 import '../../features/airports/screens/airports_screen.dart';
 import '../../features/airports/screens/airport_detail_screen.dart';
 import '../../features/flights/flights_screen.dart';
+import '../../features/flights/flight_detail_screen.dart';
 import '../../features/aircraft/aircraft_screen.dart';
 import '../../features/more/more_screen.dart';
 import '../widgets/app_shell.dart';
@@ -47,6 +48,22 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: FlightsScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'new',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) =>
+                  const FlightDetailScreen(flightId: null),
+            ),
+            GoRoute(
+              path: ':id',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final id = int.parse(state.pathParameters['id']!);
+                return FlightDetailScreen(flightId: id);
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: '/aircraft',

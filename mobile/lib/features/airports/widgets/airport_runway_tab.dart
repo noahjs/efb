@@ -1,151 +1,159 @@
-import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
+import 'dart:math';
 
-class AirportRunwayTab extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../services/airport_providers.dart';
+
+class AirportRunwayTab extends ConsumerWidget {
   final String airportId;
   const AirportRunwayTab({super.key, required this.airportId});
 
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            'RUNWAYS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textMuted,
-              letterSpacing: 0.8,
-            ),
-          ),
-        ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final airportAsync = ref.watch(airportDetailProvider(airportId));
+    final metarAsync = ref.watch(metarProvider(airportId));
 
-        // Runway 03-21
-        _RunwayCard(
-          runwayPair: '03 - 21',
-          dimensions: '3,600\' x 75\'',
-          surface: 'Fair asphalt',
-          ends: [
-            _RunwayEnd(
-              name: 'Rwy 03',
-              headwind: '9-12 kts',
-              crosswind: '13-17 kts',
-              headwindFavorable: true,
-              crosswindFavorable: false,
+    return airportAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => const Center(
+        child: Text(
+          'Failed to load runway data',
+          style: TextStyle(color: AppColors.textMuted),
+        ),
+      ),
+      data: (airport) {
+        if (airport == null) {
+          return const Center(
+            child: Text(
+              'No runway data available',
+              style: TextStyle(color: AppColors.textMuted),
             ),
-            _RunwayEnd(
-              name: 'Rwy 21',
-              headwind: '9-12 kts',
-              crosswind: '13-17 kts',
-              headwindFavorable: true,
-              crosswindFavorable: true,
-              bestWind: true,
-              trafficPattern: 'Right Traffic',
+          );
+        }
+
+        final runways = (airport['runways'] as List<dynamic>? ?? [])
+            .cast<Map<String, dynamic>>();
+
+        if (runways.isEmpty) {
+          return const Center(
+            child: Text(
+              'No runways found',
+              style: TextStyle(color: AppColors.textMuted),
             ),
+          );
+        }
+
+        // Get wind from METAR if available
+        final metar = metarAsync.whenData((d) => d).value;
+        final windDir = metar?['wdir'] as num?;
+        final windSpd = metar?['wspd'] as num?;
+        final windGust = metar?['wgst'] as num?;
+
+        // Compute wind components for each runway end
+        final endWinds = <String, _WindComponents>{};
+        int? bestEndKey;
+        double bestHeadwind = double.negativeInfinity;
+
+        if (windDir != null && windSpd != null) {
+          for (final rwy in runways) {
+            final ends = (rwy['ends'] as List<dynamic>? ?? [])
+                .cast<Map<String, dynamic>>();
+            for (final end in ends) {
+              final id = end['id']?.toString() ?? '';
+              final heading = end['heading'] as num?;
+              if (heading == null) continue;
+
+              final angleDiff = (windDir - heading) * pi / 180;
+              final headwind = windSpd * cos(angleDiff);
+              final crosswind = windSpd * sin(angleDiff).abs();
+              final gustHeadwind =
+                  windGust != null ? windGust * cos(angleDiff) : null;
+              final gustCrosswind =
+                  windGust != null ? (windGust * sin(angleDiff)).abs() : null;
+
+              endWinds[id] = _WindComponents(
+                headwind: headwind.round(),
+                crosswind: crosswind.round(),
+                gustHeadwind: gustHeadwind?.round(),
+                gustCrosswind: gustCrosswind?.round(),
+              );
+
+              if (headwind > bestHeadwind) {
+                bestHeadwind = headwind.toDouble();
+                bestEndKey = end['id'] as int?;
+              }
+            }
+          }
+        }
+
+        return ListView(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'RUNWAYS',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                  letterSpacing: 0.8,
+                ),
+              ),
+            ),
+            for (final rwy in runways)
+              _buildRunwayCard(context, rwy, endWinds, bestEndKey),
+            const SizedBox(height: 12),
+            // Wind info from METAR
+            if (windDir != null && windSpd != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  windGust != null
+                      ? 'Wind: $windDir° at $windSpd G$windGust kts'
+                      : 'Wind: $windDir° at $windSpd kts',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ),
+            const SizedBox(height: 32),
           ],
-          onTap: () => _showRunwayDetail(context, '03-21'),
-        ),
-
-        // Runway 12L-30R
-        _RunwayCard(
-          runwayPair: '12L - 30R',
-          dimensions: '9,000\' x 100\'',
-          surface: 'Good asphalt',
-          ends: [
-            _RunwayEnd(
-              name: 'Rwy 12L',
-              headwind: '13-17 kts',
-              crosswind: '9-12 kts',
-              headwindFavorable: false,
-              crosswindFavorable: true,
-            ),
-            _RunwayEnd(
-              name: 'Rwy 30R',
-              headwind: '13-17 kts',
-              crosswind: '9-12 kts',
-              headwindFavorable: true,
-              crosswindFavorable: false,
-              trafficPattern: 'Right Traffic',
-            ),
-          ],
-          onTap: () => _showRunwayDetail(context, '12L-30R'),
-        ),
-
-        // Runway 12R-30L
-        _RunwayCard(
-          runwayPair: '12R - 30L',
-          dimensions: '7,002\' x 75\'',
-          surface: 'Good asphalt',
-          ends: [
-            _RunwayEnd(
-              name: 'Rwy 12R',
-              headwind: '13-17 kts',
-              crosswind: '9-12 kts',
-              headwindFavorable: false,
-              crosswindFavorable: true,
-              trafficPattern: 'Right Traffic',
-            ),
-            _RunwayEnd(
-              name: 'Rwy 30L',
-              headwind: '13-17 kts',
-              crosswind: '9-12 kts',
-              headwindFavorable: true,
-              crosswindFavorable: false,
-            ),
-          ],
-          onTap: () => _showRunwayDetail(context, '12R-30L'),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Wind info
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'Wind: 250° at 16 - 21 kts (8m ago)',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: AppColors.textMuted,
-            ),
-          ),
-        ),
-        const SizedBox(height: 32),
-      ],
+        );
+      },
     );
   }
 
-  void _showRunwayDetail(BuildContext context, String runway) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.background,
-      builder: (context) => _RunwayDetailSheet(runway: runway),
-    );
-  }
-}
+  Widget _buildRunwayCard(
+    BuildContext context,
+    Map<String, dynamic> rwy,
+    Map<String, _WindComponents> endWinds,
+    int? bestEndKey,
+  ) {
+    final identifiers = rwy['identifiers'] as String? ?? '';
+    final length = rwy['length'];
+    final width = rwy['width'];
+    final surface = rwy['surface'] as String? ?? '';
+    final condition = rwy['condition'] as String? ?? '';
 
-class _RunwayCard extends StatelessWidget {
-  final String runwayPair;
-  final String dimensions;
-  final String surface;
-  final List<_RunwayEnd> ends;
-  final VoidCallback onTap;
+    final dims = length != null && width != null
+        ? '${_fmtNum(length)}\' x ${_fmtNum(width)}\''
+        : '';
+    final surfaceText =
+        [condition, surface].where((s) => s.isNotEmpty).join(' ').toLowerCase();
+    final surfaceDisplay =
+        surfaceText.isNotEmpty ? _capitalize(surfaceText) : '';
 
-  const _RunwayCard({
-    required this.runwayPair,
-    required this.dimensions,
-    required this.surface,
-    required this.ends,
-    required this.onTap,
-  });
+    // Format identifiers for display (e.g. "03-21" -> "03 - 21")
+    final displayPair = identifiers.replaceAll('-', ' - ');
 
-  @override
-  Widget build(BuildContext context) {
+    final ends =
+        (rwy['ends'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+
     return InkWell(
-      onTap: onTap,
+      onTap: () => _showRunwayDetail(context, airportId, identifiers),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
@@ -156,14 +164,13 @@ class _RunwayCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Runway pair info
             SizedBox(
               width: 80,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    runwayPair,
+                    displayPair,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -171,33 +178,39 @@ class _RunwayCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    dimensions,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
+                  if (dims.isNotEmpty)
+                    Text(
+                      dims,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
                     ),
-                  ),
-                  Text(
-                    surface,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
+                  if (surfaceDisplay.isNotEmpty)
+                    Text(
+                      surfaceDisplay,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
             const SizedBox(width: 16),
-            // Runway ends
             Expanded(
               child: Column(
-                children: ends
-                    .map((end) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: end,
-                        ))
-                    .toList(),
+                children: [
+                  for (final end in ends)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _RunwayEndWidget(
+                        end: end,
+                        wind: endWinds[end['id']?.toString() ?? ''],
+                        isBestWind: end['id'] == bestEndKey,
+                      ),
+                    ),
+                ],
               ),
             ),
             const Icon(Icons.chevron_right,
@@ -207,43 +220,78 @@ class _RunwayCard extends StatelessWidget {
       ),
     );
   }
+
+  void _showRunwayDetail(
+      BuildContext context, String airportId, String runway) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      builder: (context) =>
+          _RunwayDetailSheet(airportId: airportId, runwayIdentifiers: runway),
+    );
+  }
+
+  static String _fmtNum(dynamic n) {
+    if (n is num) {
+      return n.toInt().toString().replaceAllMapped(
+            RegExp(r'(\d)(?=(\d{3})+$)'),
+            (m) => '${m[1]},',
+          );
+    }
+    return n?.toString() ?? '--';
+  }
+
+  static String _capitalize(String s) {
+    if (s.isEmpty) return s;
+    return s[0].toUpperCase() + s.substring(1);
+  }
 }
 
-class _RunwayEnd extends StatelessWidget {
-  final String name;
-  final String headwind;
-  final String crosswind;
-  final bool headwindFavorable;
-  final bool crosswindFavorable;
-  final bool bestWind;
-  final String? trafficPattern;
+class _WindComponents {
+  final int headwind;
+  final int crosswind;
+  final int? gustHeadwind;
+  final int? gustCrosswind;
 
-  const _RunwayEnd({
-    required this.name,
+  const _WindComponents({
     required this.headwind,
     required this.crosswind,
-    required this.headwindFavorable,
-    required this.crosswindFavorable,
-    this.bestWind = false,
-    this.trafficPattern,
+    this.gustHeadwind,
+    this.gustCrosswind,
+  });
+}
+
+class _RunwayEndWidget extends StatelessWidget {
+  final Map<String, dynamic> end;
+  final _WindComponents? wind;
+  final bool isBestWind;
+
+  const _RunwayEndWidget({
+    required this.end,
+    this.wind,
+    this.isBestWind = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final identifier = end['identifier'] as String? ?? '';
+    final trafficPattern = end['traffic_pattern'] as String?;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Text(
-              name,
+              'Rwy $identifier',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
             ),
-            if (bestWind) ...[
+            if (isBestWind) ...[
               const SizedBox(width: 8),
               Container(
                 padding:
@@ -264,56 +312,84 @@ class _RunwayEnd extends StatelessWidget {
             ],
           ],
         ),
-        if (trafficPattern != null)
+        if (trafficPattern != null && trafficPattern.isNotEmpty)
           Text(
-            trafficPattern!,
+            trafficPattern,
             style: const TextStyle(
               fontSize: 11,
               color: AppColors.error,
             ),
           ),
-        Row(
-          children: [
-            Icon(
-              Icons.arrow_forward,
-              size: 12,
-              color: headwindFavorable ? AppColors.vfr : AppColors.error,
-            ),
-            const SizedBox(width: 2),
-            Text(
-              headwind,
-              style: TextStyle(
-                fontSize: 12,
-                color: headwindFavorable ? AppColors.vfr : AppColors.error,
+        if (wind != null)
+          Row(
+            children: [
+              Icon(
+                Icons.arrow_forward,
+                size: 12,
+                color: wind!.headwind >= 0 ? AppColors.vfr : AppColors.error,
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              Icons.arrow_downward,
-              size: 12,
-              color: crosswindFavorable ? AppColors.vfr : AppColors.error,
-            ),
-            const SizedBox(width: 2),
-            Text(
-              crosswind,
-              style: TextStyle(
-                fontSize: 12,
-                color: crosswindFavorable ? AppColors.vfr : AppColors.error,
+              const SizedBox(width: 2),
+              Text(
+                _formatWindComponent(
+                    wind!.headwind, wind!.gustHeadwind, 'kt'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color:
+                      wind!.headwind >= 0 ? AppColors.vfr : AppColors.error,
+                ),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.arrow_downward,
+                size: 12,
+                color:
+                    wind!.crosswind <= 15 ? AppColors.vfr : AppColors.error,
+              ),
+              const SizedBox(width: 2),
+              Text(
+                _formatWindComponent(
+                    wind!.crosswind, wind!.gustCrosswind, 'kt'),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: wind!.crosswind <= 15
+                      ? AppColors.vfr
+                      : AppColors.error,
+                ),
+              ),
+            ],
+          ),
       ],
     );
   }
+
+  static String _formatWindComponent(int base, int? gust, String unit) {
+    if (gust != null && gust != base) {
+      return '${base.abs()}-${gust.abs()} $unit';
+    }
+    return '${base.abs()} $unit';
+  }
 }
 
-class _RunwayDetailSheet extends StatelessWidget {
-  final String runway;
-  const _RunwayDetailSheet({required this.runway});
+class _RunwayDetailSheet extends ConsumerStatefulWidget {
+  final String airportId;
+  final String runwayIdentifiers;
+  const _RunwayDetailSheet({
+    required this.airportId,
+    required this.runwayIdentifiers,
+  });
+
+  @override
+  ConsumerState<_RunwayDetailSheet> createState() =>
+      _RunwayDetailSheetState();
+}
+
+class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
+  int _selectedEndIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    final airportAsync = ref.watch(airportDetailProvider(widget.airportId));
+
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
       builder: (context, scrollController) {
@@ -322,71 +398,251 @@ class _RunwayDetailSheet extends StatelessWidget {
             color: AppColors.background,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
-          child: ListView(
-            controller: scrollController,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: AppColors.toolbarBackground,
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: const Text('KBJC',
-                          style: TextStyle(
-                              color: AppColors.primary, fontSize: 14)),
+          child: airportAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, _) => const Center(
+              child: Text('Failed to load runway data',
+                  style: TextStyle(color: AppColors.textMuted)),
+            ),
+            data: (airport) {
+              if (airport == null) {
+                return const Center(
+                  child: Text('Airport not found',
+                      style: TextStyle(color: AppColors.textMuted)),
+                );
+              }
+
+              final runways = airport['runways'] as List<dynamic>? ?? [];
+              final runway = runways.cast<Map<String, dynamic>>().firstWhere(
+                    (r) => r['identifiers'] == widget.runwayIdentifiers,
+                    orElse: () => <String, dynamic>{},
+                  );
+
+              if (runway.isEmpty) {
+                return const Center(
+                  child: Text('Runway not found',
+                      style: TextStyle(color: AppColors.textMuted)),
+                );
+              }
+
+              final ends = (runway['ends'] as List<dynamic>? ?? [])
+                  .cast<Map<String, dynamic>>();
+
+              if (ends.isEmpty) {
+                return const Center(
+                  child: Text('No runway end data',
+                      style: TextStyle(color: AppColors.textMuted)),
+                );
+              }
+
+              // Clamp index in case data changed
+              final endIndex = _selectedEndIndex.clamp(0, ends.length - 1);
+              final end = ends[endIndex];
+
+              final length = runway['length'];
+              final width = runway['width'];
+              final surface = runway['surface'] as String? ?? '';
+              final condition = runway['condition'] as String? ?? '';
+              final slope = runway['slope'];
+              final dims = length != null && width != null
+                  ? '${_fmtNum(length)}\' x ${_fmtNum(width)}\''
+                  : '--';
+              final surfaceText = [surface, condition]
+                  .where((s) => s.isNotEmpty)
+                  .join(', ');
+
+              final heading = end['heading'];
+              final elevation = end['elevation'];
+              final glideslope = end['glideslope'] as String?;
+              final trafficPattern = end['traffic_pattern'] as String?;
+              final tora = end['tora'];
+              final toda = end['toda'];
+              final asda = end['asda'];
+              final lda = end['lda'];
+              final lightApproach =
+                  end['lighting_approach'] as String? ?? 'None';
+              final lightEdge = end['lighting_edge'] as String? ?? 'None';
+              final lat = end['latitude'];
+              final lng = end['longitude'];
+              final displaced = end['displaced_threshold'];
+
+              return ListView(
+                controller: scrollController,
+                children: [
+                  // Header with back button
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    color: AppColors.toolbarBackground,
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.pop(context),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.arrow_back_ios,
+                                  size: 16, color: AppColors.primary),
+                              SizedBox(width: 4),
+                              Text('Back',
+                                  style: TextStyle(
+                                      color: AppColors.primary, fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Runway Details',
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const Spacer(),
+                        const SizedBox(width: 60),
+                      ],
                     ),
-                    const Spacer(),
-                    Text(
-                      'Runway Details',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                  ),
+
+                  // Runway end toggle
+                  if (ends.length >= 2)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Row(
+                        children: List.generate(ends.length, (i) {
+                          final endId =
+                              ends[i]['identifier'] as String? ?? '??';
+                          final isSelected = i == endIndex;
+                          return Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                  right: i < ends.length - 1 ? 8 : 0),
+                              child: GestureDetector(
+                                onTap: () =>
+                                    setState(() => _selectedEndIndex = i),
+                                child: Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? AppColors.primary
+                                            .withValues(alpha: 0.15)
+                                        : AppColors.surface,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? AppColors.primary
+                                              .withValues(alpha: 0.5)
+                                          : AppColors.divider,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Rwy $endId',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
                       ),
                     ),
-                    const Spacer(),
-                    const SizedBox(width: 40),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _DetailSection(title: 'RUNWAY DETAILS', items: [
-                _DetailRow(label: 'Dimensions', value: '3,600\' x 75\''),
-                _DetailRow(label: 'Surface', value: 'Asphalt, fair condition'),
-                _DetailRow(label: 'Glideslope Ind.', value: '2-light PAPI (on left)'),
-                _DetailRow(label: 'Slope', value: '0.44%'),
-                _DetailRow(label: 'Heading', value: '205°M'),
-                _DetailRow(label: 'Strength', value: '130/F/D/X/T'),
-                _DetailRow(
-                  label: 'Traffic Pattern',
-                  value: 'Right traffic',
-                  valueColor: AppColors.error,
-                ),
-              ]),
-              _DetailSection(title: 'ELEVATION', items: [
-                _DetailRow(label: 'Touchdown', value: '5,620\' MSL'),
-              ]),
-              _DetailSection(title: 'DECLARED DISTANCES', items: [
-                _DetailRow(label: 'TORA', value: '3,600\''),
-                _DetailRow(label: 'TODA', value: '3,600\''),
-                _DetailRow(label: 'ASDA', value: '3,600\''),
-                _DetailRow(label: 'LDA', value: '3,600\''),
-              ]),
-              _DetailSection(title: 'LIGHTING', items: [
-                _DetailRow(label: 'Approach', value: 'None'),
-                _DetailRow(label: 'Edge', value: 'Medium Intensity'),
-              ]),
-              _DetailSection(title: 'COORDINATES', items: [
-                _DetailRow(label: '', value: '39.91°N/105.11°W'),
-              ]),
-              const SizedBox(height: 32),
-            ],
+
+                  const SizedBox(height: 8),
+
+                  _DetailSection(title: 'RUNWAY DETAILS', items: [
+                    _DetailRow(label: 'Dimensions', value: dims),
+                    if (surfaceText.isNotEmpty)
+                      _DetailRow(label: 'Surface', value: surfaceText),
+                    if (glideslope != null && glideslope.isNotEmpty)
+                      _DetailRow(
+                          label: 'Glideslope Ind.', value: glideslope),
+                    if (slope != null)
+                      _DetailRow(label: 'Slope', value: '$slope%'),
+                    if (heading != null)
+                      _DetailRow(label: 'Heading', value: '$heading°M'),
+                    if (trafficPattern != null && trafficPattern.isNotEmpty)
+                      _DetailRow(
+                        label: 'Traffic Pattern',
+                        value: trafficPattern,
+                        valueColor: AppColors.error,
+                      ),
+                  ]),
+
+                  if (elevation != null)
+                    _DetailSection(title: 'ELEVATION', items: [
+                      _DetailRow(
+                          label: 'Touchdown',
+                          value: '${_fmtNum(elevation)}\' MSL'),
+                    ]),
+
+                  if (tora != null ||
+                      toda != null ||
+                      asda != null ||
+                      lda != null)
+                    _DetailSection(title: 'DECLARED DISTANCES', items: [
+                      if (tora != null)
+                        _DetailRow(
+                            label: 'TORA', value: '${_fmtNum(tora)}\''),
+                      if (toda != null)
+                        _DetailRow(
+                            label: 'TODA', value: '${_fmtNum(toda)}\''),
+                      if (asda != null)
+                        _DetailRow(
+                            label: 'ASDA', value: '${_fmtNum(asda)}\''),
+                      if (lda != null)
+                        _DetailRow(
+                            label: 'LDA', value: '${_fmtNum(lda)}\''),
+                    ]),
+
+                  if (displaced != null && displaced > 0)
+                    _DetailSection(title: 'THRESHOLD', items: [
+                      _DetailRow(
+                          label: 'Displaced',
+                          value: '${_fmtNum(displaced)}\''),
+                    ]),
+
+                  _DetailSection(title: 'LIGHTING', items: [
+                    _DetailRow(label: 'Approach', value: lightApproach),
+                    _DetailRow(label: 'Edge', value: lightEdge),
+                  ]),
+
+                  if (lat != null && lng != null)
+                    _DetailSection(title: 'COORDINATES', items: [
+                      _DetailRow(
+                        label: '',
+                        value:
+                            '${lat.toStringAsFixed(4)}°${lat >= 0 ? 'N' : 'S'} / ${lng.abs().toStringAsFixed(4)}°${lng >= 0 ? 'E' : 'W'}',
+                      ),
+                    ]),
+
+                  const SizedBox(height: 32),
+                ],
+              );
+            },
           ),
         );
       },
     );
+  }
+
+  static String _fmtNum(dynamic n) {
+    if (n is num) {
+      return n.toInt().toString().replaceAllMapped(
+            RegExp(r'(\d)(?=(\d{3})+$)'),
+            (m) => '${m[1]},',
+          );
+    }
+    return n?.toString() ?? '--';
   }
 }
 

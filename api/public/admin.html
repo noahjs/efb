@@ -220,6 +220,18 @@
       <div class="value blue" id="statFreqs">--</div>
     </div>
     <div class="stat-card">
+      <div class="label">Navaids</div>
+      <div class="value green" id="statNavaids">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Fixes</div>
+      <div class="value green" id="statFixes">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Procedures</div>
+      <div class="value green" id="statProcedures">--</div>
+    </div>
+    <div class="stat-card">
       <div class="label">Charts Installed</div>
       <div class="value amber" id="statCharts">--</div>
     </div>
@@ -238,6 +250,42 @@
         Downloads the FAA NASR 28-day subscription data and populates the airport,
         runway, and frequency tables. Currently loaded with sample Colorado airports.
         Running this will import all ~20,000 US airports.
+      </p>
+    </div>
+  </div>
+
+  <!-- Navigation Database -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Navigation Database</h2>
+      <button class="btn btn-primary" onclick="seedNavaids()">
+        Seed Nav Data (FAA NASR)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Downloads FAA NASR 28-day subscription data and populates the navaid (VOR, VORTAC, NDB, etc.)
+        and fix/waypoint tables. Currently loaded with sample Colorado navaids and fixes.
+        Running this will import all US navaids and named fixes.
+      </p>
+    </div>
+  </div>
+
+  <!-- Terminal Procedures (d-TPP) -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Terminal Procedures (d-TPP)</h2>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-danger btn-sm" onclick="clearPdfCache()">Clear PDF Cache</button>
+        <button class="btn btn-primary" onclick="seedProcedures()">
+          Seed Procedures (FAA d-TPP)
+        </button>
+      </div>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;" id="dtppInfo">
+        Downloads the FAA d-TPP metafile XML and imports ~17,000 terminal procedure records
+        (approach plates, SIDs, STARs, airport diagrams). PDFs are cached on-demand when viewed.
       </p>
     </div>
   </div>
@@ -308,8 +356,21 @@ async function refreshData() {
     document.getElementById('statAirports').textContent = data.database.airports.toLocaleString();
     document.getElementById('statRunways').textContent = data.database.runways.toLocaleString();
     document.getElementById('statFreqs').textContent = data.database.frequencies.toLocaleString();
+    document.getElementById('statNavaids').textContent = data.database.navaids.toLocaleString();
+    document.getElementById('statFixes').textContent = data.database.fixes.toLocaleString();
+    document.getElementById('statProcedures').textContent = data.database.procedures.toLocaleString();
     document.getElementById('statCharts').textContent =
       `${data.charts.installedCount} / ${data.charts.totalAvailable}`;
+
+    // Update d-TPP cycle info
+    const dtppEl = document.getElementById('dtppInfo');
+    if (data.dtppCycle) {
+      const c = data.dtppCycle;
+      dtppEl.innerHTML = `Cycle <strong>${c.cycle}</strong> loaded — ${c.procedure_count.toLocaleString()} procedures. ` +
+        `Effective ${c.from_date} to ${c.to_date}. Seeded ${new Date(c.seeded_at).toLocaleString()}.`;
+    } else {
+      dtppEl.textContent = 'No d-TPP cycle loaded. Click "Seed Procedures" to download the FAA d-TPP metafile (~17,000 procedure records).';
+    }
 
     allCharts = data.charts.available;
     installedCharts = data.charts.installed;
@@ -339,9 +400,9 @@ function renderDiskUsage(disk) {
     return;
   }
   const labels = {
-    database: 'SQLite Database',
     chartsRaw: 'Chart Source Files (GeoTIFF)',
     chartsTiles: 'Chart Tiles (PNG)',
+    procedurePdfs: 'Procedure PDFs (cached)',
   };
   el.innerHTML = Object.entries(disk)
     .map(([k, v]) => `
@@ -462,6 +523,32 @@ async function seedAirports() {
   await fetchJSON(`${API}/seed/airports`, { method: 'POST' });
   setTimeout(refreshData, 500);
   if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedNavaids() {
+  toast('Starting navigation data seed job...');
+  await fetchJSON(`${API}/seed/navaids`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedProcedures() {
+  toast('Starting d-TPP procedure seed job...');
+  await fetchJSON(`${API}/seed/procedures`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function clearPdfCache() {
+  if (!confirm('Delete all cached procedure PDFs? They will be re-downloaded on next view.')) return;
+  toast('Clearing PDF cache...');
+  const result = await fetchJSON(`${API}/procedures/pdf-cache`, { method: 'DELETE' });
+  if (result.deleted) {
+    toast(`PDF cache cleared (${result.size})`);
+  } else {
+    toast('No PDF cache to clear');
+  }
+  setTimeout(refreshData, 500);
 }
 
 async function processChart(name) {

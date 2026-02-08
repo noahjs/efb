@@ -103,6 +103,42 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>?> getNearestTaf(String icao) async {
+    try {
+      final response = await _dio.get('/weather/taf/$icao/nearest');
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getForecast(String icao) async {
+    try {
+      final response = await _dio.get('/weather/forecast/$icao');
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getWindsAloft(String icao) async {
+    try {
+      final response = await _dio.get('/weather/winds/$icao');
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getNotams(String icao) async {
+    try {
+      final response = await _dio.get('/weather/notams/$icao');
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<dynamic>> getBulkMetars({
     required double minLat,
     required double maxLat,
@@ -120,6 +156,56 @@ class ApiClient {
     } catch (_) {
       return [];
     }
+  }
+  // --- Procedures ---
+
+  Future<Map<String, dynamic>> getProcedures(String airportId) async {
+    final response = await _dio.get('/procedures/$airportId');
+    return response.data;
+  }
+
+  String getProcedurePdfUrl(String airportId, int procedureId) {
+    return '${_dio.options.baseUrl}/procedures/$airportId/pdf/$procedureId';
+  }
+
+  // --- Flights ---
+
+  Future<Map<String, dynamic>> getFlights({
+    String? query,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await _dio.get('/flights', queryParameters: {
+      if (query != null && query.isNotEmpty) 'q': query,
+      'limit': limit,
+      'offset': offset,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getFlight(int id) async {
+    final response = await _dio.get('/flights/$id');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createFlight(Map<String, dynamic> data) async {
+    final response = await _dio.post('/flights', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateFlight(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.put('/flights/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteFlight(int id) async {
+    await _dio.delete('/flights/$id');
+  }
+
+  Future<Map<String, dynamic>> copyFlight(int id) async {
+    final response = await _dio.post('/flights/$id/copy');
+    return response.data;
   }
 }
 

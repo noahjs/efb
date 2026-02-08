@@ -10,13 +10,14 @@ async function bootstrap() {
 
   // CORS for Flutter web dev and admin page
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:8080',
-      'http://localhost:8081',
-      'http://localhost:5000',
-    ],
+    origin: (origin, callback) => {
+      // Allow all localhost origins in development
+      if (!origin || /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   });
 

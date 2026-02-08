@@ -4,11 +4,15 @@ import '../../../core/theme/app_theme.dart';
 class MapToolbar extends StatelessWidget {
   final VoidCallback onLayersTap;
   final VoidCallback onSettingsTap;
+  final VoidCallback? onFplTap;
+  final bool isFplOpen;
 
   const MapToolbar({
     super.key,
     required this.onLayersTap,
     required this.onSettingsTap,
+    this.onFplTap,
+    this.isFplOpen = false,
   });
 
   @override
@@ -31,19 +35,22 @@ class MapToolbar extends StatelessWidget {
                   onTap: onLayersTap,
                 ),
                 const SizedBox(width: 4),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Text(
-                    'FPL',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
+                GestureDetector(
+                  onTap: onFplTap,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isFplOpen ? AppColors.accent : AppColors.primary,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'FPL',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),

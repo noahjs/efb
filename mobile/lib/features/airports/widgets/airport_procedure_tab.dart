@@ -1,12 +1,80 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../models/procedure.dart';
+import '../../../services/api_client.dart';
+import '../../../services/procedure_providers.dart';
+import '../screens/procedure_pdf_screen.dart';
 
-class AirportProcedureTab extends StatelessWidget {
+class AirportProcedureTab extends ConsumerWidget {
   final String airportId;
   const AirportProcedureTab({super.key, required this.airportId});
 
   @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final proceduresAsync = ref.watch(airportProceduresProvider(airportId));
+
+    return proceduresAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      ),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                'Failed to load procedures',
+                style: const TextStyle(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => ref.invalidate(airportProceduresProvider(airportId)),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      data: (grouped) => _ProcedureTabView(
+        airportId: airportId,
+        grouped: grouped,
+      ),
+    );
+  }
+}
+
+class _ProcedureTabView extends StatelessWidget {
+  final String airportId;
+  final Map<String, List<Procedure>> grouped;
+
+  const _ProcedureTabView({
+    required this.airportId,
+    required this.grouped,
+  });
+
+  @override
   Widget build(BuildContext context) {
+    // Group into tab categories
+    final airport = <Procedure>[
+      ...grouped['APD'] ?? [],
+      ...grouped['HOT'] ?? [],
+      ...grouped['LAH'] ?? [],
+    ];
+    final departure = grouped['DP'] ?? [];
+    final arrival = grouped['STAR'] ?? [];
+    final approach = grouped['IAP'] ?? [];
+    final other = <Procedure>[
+      ...grouped['MIN'] ?? [],
+      // Include any chart codes not already categorized
+      ...grouped.entries
+          .where((e) => !{'APD', 'HOT', 'LAH', 'DP', 'STAR', 'IAP', 'MIN'}.contains(e.key))
+          .expand((e) => e.value),
+    ];
+
     return DefaultTabController(
       length: 5,
       child: Column(
@@ -30,11 +98,11 @@ class AirportProcedureTab extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _ProcedureList(items: _airportProcedures),
-                _ProcedureList(items: _departureProcedures),
-                _ProcedureList(items: _arrivalProcedures),
-                _ProcedureList(items: _approachProcedures),
-                _ProcedureList(items: _otherProcedures),
+                _ProcedureList(airportId: airportId, items: airport),
+                _ProcedureList(airportId: airportId, items: departure),
+                _ProcedureList(airportId: airportId, items: arrival),
+                _ProcedureList(airportId: airportId, items: approach),
+                _ProcedureList(airportId: airportId, items: other),
               ],
             ),
           ),
@@ -44,84 +112,10 @@ class AirportProcedureTab extends StatelessWidget {
   }
 }
 
-final _airportProcedures = [
-  _ProcedureItem(
-    source: 'GOV',
-    saved: true,
-    name: 'AIRPORT DIAGRAM',
-    hasMap: true,
-  ),
-  _ProcedureItem(
-    source: 'GOV',
-    saved: true,
-    name: 'ARRIVAL ALERT',
-    hasMap: false,
-  ),
-  _ProcedureItem(
-    source: 'GOV',
-    saved: false,
-    name: 'TAKEOFF MINIMUMS',
-    hasMap: false,
-  ),
-];
-
-final _departureProcedures = [
-  _ProcedureItem(
-    source: 'GOV',
-    saved: true,
-    name: 'ODP TAKEOFF OBSTACLE NOTES',
-    hasMap: false,
-  ),
-];
-
-final _arrivalProcedures = [
-  _ProcedureItem(
-    source: 'GOV',
-    saved: false,
-    name: 'COLORADO MOUNTAIN FLYING & ARRIVALS',
-    hasMap: true,
-  ),
-];
-
-final _approachProcedures = [
-  _ProcedureItem(
-    source: 'GOV',
-    saved: true,
-    name: 'ILS OR LOC RWY 30R',
-    hasMap: true,
-  ),
-  _ProcedureItem(
-    source: 'GOV',
-    saved: true,
-    name: 'RNAV (GPS) RWY 30R',
-    hasMap: true,
-  ),
-  _ProcedureItem(
-    source: 'GOV',
-    saved: false,
-    name: 'RNAV (GPS) RWY 12L',
-    hasMap: true,
-  ),
-  _ProcedureItem(
-    source: 'GOV',
-    saved: false,
-    name: 'VOR-A',
-    hasMap: true,
-  ),
-];
-
-final _otherProcedures = [
-  _ProcedureItem(
-    source: 'GOV',
-    saved: false,
-    name: 'ALTERNATE MINIMUMS',
-    hasMap: false,
-  ),
-];
-
 class _ProcedureList extends StatelessWidget {
-  final List<_ProcedureItem> items;
-  const _ProcedureList({required this.items});
+  final String airportId;
+  final List<Procedure> items;
+  const _ProcedureList({required this.airportId, required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -135,85 +129,97 @@ class _ProcedureList extends StatelessWidget {
     }
     return ListView.builder(
       itemCount: items.length,
-      itemBuilder: (context, index) => items[index],
+      itemBuilder: (context, index) => _ProcedureRow(
+        airportId: airportId,
+        procedure: items[index],
+      ),
     );
   }
 }
 
-class _ProcedureItem extends StatelessWidget {
-  final String source;
-  final bool saved;
-  final String name;
-  final bool hasMap;
+class _ProcedureRow extends ConsumerWidget {
+  final String airportId;
+  final Procedure procedure;
 
-  const _ProcedureItem({
-    required this.source,
-    required this.saved,
-    required this.name,
-    required this.hasMap,
+  const _ProcedureRow({
+    required this.airportId,
+    required this.procedure,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppColors.divider, width: 0.5),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return InkWell(
+      onTap: () {
+        final client = ref.read(apiClientProvider);
+        final pdfUrl = client.getProcedurePdfUrl(airportId, procedure.id);
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ProcedurePdfScreen(
+              title: procedure.chartName,
+              pdfUrl: pdfUrl,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppColors.divider, width: 0.5),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          // Source badge
-          Column(
-            children: [
-              Text(
-                source,
+        child: Row(
+          children: [
+            // Source badge
+            SizedBox(
+              width: 32,
+              child: Text(
+                'GOV',
                 style: const TextStyle(
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
                   color: AppColors.textMuted,
                 ),
               ),
-              if (saved)
-                const Text(
-                  'SAVED',
+            ),
+            const SizedBox(width: 8),
+            // Procedure name
+            Expanded(
+              child: Text(
+                procedure.chartName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            // Chart code badge for non-obvious types
+            if (procedure.copter != null && procedure.copter!.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                margin: const EdgeInsets.only(left: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'COPTER',
                   style: TextStyle(
                     fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted,
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(width: 12),
-          // Procedure name
-          Expanded(
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
               ),
-            ),
-          ),
-          // Actions
-          if (hasMap) ...[
-            IconButton(
-              icon: const Icon(Icons.ios_share, size: 18),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
               color: AppColors.textMuted,
-              onPressed: () {},
-            ),
-            TextButton(
-              onPressed: () {},
-              child: const Text(
-                'Map',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }

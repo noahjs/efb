@@ -3,8 +3,15 @@ import '../../../core/theme/app_theme.dart';
 
 class MapSettingsPanel extends StatefulWidget {
   final VoidCallback onClose;
+  final bool airportsOnly;
+  final ValueChanged<bool> onAirportsOnlyChanged;
 
-  const MapSettingsPanel({super.key, required this.onClose});
+  const MapSettingsPanel({
+    super.key,
+    required this.onClose,
+    required this.airportsOnly,
+    required this.onAirportsOnlyChanged,
+  });
 
   @override
   State<MapSettingsPanel> createState() => _MapSettingsPanelState();
@@ -13,11 +20,11 @@ class MapSettingsPanel extends StatefulWidget {
 class _MapSettingsPanelState extends State<MapSettingsPanel> {
   double _brightness = 0.3;
   bool _invertChartColors = false;
-  String _mapTheme = 'Dark';
-  String _terrain = 'Colored';
+  final String _mapTheme = 'Dark';
+  final String _terrain = 'Colored';
   bool _dayNightOverlay = false;
   bool _placeLabels = true;
-  String _culturalElements = 'All';
+  final String _culturalElements = 'All';
   String _autoCenterMode = 'north_up';
   bool _routeLabels = true;
 
@@ -30,7 +37,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
           maxHeight: MediaQuery.of(context).size.height * 0.7,
         ),
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surface,
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
         ),
         child: Column(
@@ -40,9 +47,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
-                color: Color(0xFFE8ECF0),
-                borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(0)),
+                color: AppColors.card,
               ),
               child: Row(
                 children: [
@@ -51,7 +56,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                     child: const Text(
                       'Close',
                       style: TextStyle(
-                        color: AppColors.primary,
+                        color: AppColors.accent,
                         fontSize: 16,
                       ),
                     ),
@@ -61,7 +66,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                       'Settings',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.black87,
+                        color: AppColors.textPrimary,
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                       ),
@@ -83,17 +88,18 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                     child: Row(
                       children: [
                         const Icon(Icons.brightness_low,
-                            color: Colors.grey, size: 20),
+                            color: AppColors.textMuted, size: 20),
                         Expanded(
                           child: Slider(
                             value: _brightness,
                             onChanged: (v) =>
                                 setState(() => _brightness = v),
-                            activeColor: AppColors.primary,
+                            activeColor: AppColors.accent,
+                            inactiveColor: AppColors.divider,
                           ),
                         ),
                         const Icon(Icons.brightness_high,
-                            color: Colors.grey, size: 20),
+                            color: AppColors.textMuted, size: 20),
                       ],
                     ),
                   ),
@@ -104,7 +110,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                     onChanged: (v) =>
                         setState(() => _invertChartColors = v),
                   ),
-                  const Divider(height: 1),
+                  const Divider(height: 1, color: AppColors.divider),
 
                   // ForeFlight Map section
                   _SectionLabel('FOREFLIGHT MAP'),
@@ -135,7 +141,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                     value: _culturalElements,
                     onTap: () {},
                   ),
-                  const Divider(height: 1),
+                  const Divider(height: 1, color: AppColors.divider),
 
                   // Auto-Center Mode
                   _SectionLabel('AUTO-CENTER MODE'),
@@ -172,7 +178,7 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                       ],
                     ),
                   ),
-                  const Divider(height: 1),
+                  const Divider(height: 1, color: AppColors.divider),
 
                   // Map Overlays
                   _SectionLabel('MAP OVERLAYS'),
@@ -181,6 +187,14 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                     value: _routeLabels,
                     onChanged: (v) =>
                         setState(() => _routeLabels = v),
+                  ),
+
+                  // Airports
+                  _SectionLabel('AIRPORTS'),
+                  _SettingsToggle(
+                    label: 'Airports Only',
+                    value: widget.airportsOnly,
+                    onChanged: widget.onAirportsOnlyChanged,
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -206,7 +220,7 @@ class _SectionLabel extends StatelessWidget {
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w500,
-          color: Colors.grey,
+          color: AppColors.textMuted,
           letterSpacing: 0.5,
         ),
       ),
@@ -234,12 +248,14 @@ class _SettingsToggle extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
           ),
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: AppColors.primary,
+            activeTrackColor: AppColors.accent,
+            activeThumbColor: Colors.white,
+            inactiveTrackColor: AppColors.divider,
           ),
         ],
       ),
@@ -269,7 +285,7 @@ class _SettingsNav extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(fontSize: 16, color: Colors.black87),
+              style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -278,13 +294,13 @@ class _SettingsNav extends StatelessWidget {
                   value,
                   style: const TextStyle(
                     fontSize: 16,
-                    color: AppColors.primary,
+                    color: AppColors.accent,
                   ),
                 ),
                 const SizedBox(width: 4),
                 const Icon(
                   Icons.chevron_right,
-                  color: Colors.grey,
+                  color: AppColors.textMuted,
                   size: 20,
                 ),
               ],
@@ -317,14 +333,14 @@ class _CenterModeButton extends StatelessWidget {
         width: 90,
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : const Color(0xFFE8ECF0),
+          color: isSelected ? AppColors.accent : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.grey,
+              color: isSelected ? Colors.white : AppColors.textMuted,
               size: 28,
             ),
             const SizedBox(height: 6),
@@ -333,7 +349,7 @@ class _CenterModeButton extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 11,
-                color: isSelected ? Colors.white : Colors.black54,
+                color: isSelected ? Colors.white : AppColors.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
