@@ -1,11 +1,14 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
 import '../models/scratchpad.dart';
+
+// Conditional import for file I/O (native only)
+import 'scratchpad_storage_io.dart'
+    if (dart.library.html) 'scratchpad_storage_web.dart' as platform;
 
 class ScratchPadStorage {
   static ScratchPadStorage? _instance;
-  String? _basePath;
+  final Map<String, ScratchPad> _cache = {};
+  bool _initialized = false;
 
   ScratchPadStorage._();
 
@@ -14,61 +17,45 @@ class ScratchPadStorage {
     return _instance!;
   }
 
-  Future<String> get _path async {
-    if (_basePath != null) return _basePath!;
-    final dir = await getApplicationDocumentsDirectory();
-    _basePath = '${dir.path}/scratchpads';
-    await Directory(_basePath!).create(recursive: true);
-    return _basePath!;
+  Future<void> _ensureLoaded() async {
+    if (_initialized) return;
+    _initialized = true;
+    try {
+      final data = await platform.loadAllFromDisk();
+      for (final json in data) {
+        try {
+          final pad = ScratchPad.fromJson(json);
+          _cache[pad.id] = pad;
+        } catch (_) {}
+      }
+    } catch (_) {
+      // File I/O not available (web) — start with empty cache
+    }
   }
 
   Future<List<ScratchPad>> loadAll() async {
-    final base = await _path;
-    final dir = Directory(base);
-    if (!await dir.exists()) return [];
-
-    final pads = <ScratchPad>[];
-    await for (final entity in dir.list()) {
-      if (entity is File && entity.path.endsWith('.json')) {
-        try {
-          final content = await entity.readAsString();
-          final json = jsonDecode(content) as Map<String, dynamic>;
-          pads.add(ScratchPad.fromJson(json));
-        } catch (_) {
-          // Skip corrupted files
-        }
-      }
-    }
-
+    await _ensureLoaded();
+    final pads = _cache.values.toList();
     pads.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return pads;
   }
 
   Future<ScratchPad?> load(String id) async {
-    final base = await _path;
-    final file = File('$base/$id.json');
-    if (!await file.exists()) return null;
-
-    try {
-      final content = await file.readAsString();
-      final json = jsonDecode(content) as Map<String, dynamic>;
-      return ScratchPad.fromJson(json);
-    } catch (_) {
-      return null;
-    }
+    await _ensureLoaded();
+    return _cache[id];
   }
 
   Future<void> save(ScratchPad pad) async {
-    final base = await _path;
-    final file = File('$base/${pad.id}.json');
-    await file.writeAsString(jsonEncode(pad.toJson()));
+    _cache[pad.id] = pad;
+    try {
+      await platform.saveToDisk(pad.id, jsonEncode(pad.toJson()));
+    } catch (_) {}
   }
 
   Future<void> delete(String id) async {
-    final base = await _path;
-    final file = File('$base/$id.json');
-    if (await file.exists()) {
-      await file.delete();
-    }
+    _cache.remove(id);
+    try {
+      await platform.deleteFromDisk(id);
+    } catch (_) {}
   }
 }

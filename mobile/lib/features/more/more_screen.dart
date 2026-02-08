@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
 
 class MoreScreen extends StatelessWidget {
@@ -237,7 +238,7 @@ class _SectionHeader extends StatelessWidget {
           ),
           if (title == 'VIEWS')
             TextButton(
-              onPressed: () {},
+              onPressed: () => context.push('/more/tab-order'),
               child: const Text(
                 'Edit Tab Order',
                 style: TextStyle(color: AppColors.primary, fontSize: 13),

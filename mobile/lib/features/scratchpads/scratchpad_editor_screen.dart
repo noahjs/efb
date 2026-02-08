@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
+import '../../models/flight.dart';
 import '../../models/scratchpad.dart';
+import '../../services/api_client.dart';
 import '../../services/scratchpad_providers.dart';
 import 'widgets/drawing_canvas.dart';
 
@@ -25,6 +27,8 @@ class _ScratchPadEditorScreenState
   Color _penColor = Colors.white;
   double _strokeWidth = 2.0;
   bool _loaded = false;
+  Map<String, String>? _craftHints;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -82,8 +86,153 @@ class _ScratchPadEditorScreenState
       ),
     );
     if (confirmed == true) {
-      setState(() => _strokes = []);
+      setState(() {
+        _strokes = [];
+        _craftHints = null;
+      });
       _save();
+    }
+  }
+
+  Future<void> _syncWithFlight() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+
+    try {
+      final api = ref.read(apiClientProvider);
+
+      // Fetch all flights
+      final result = await api.getFlights();
+      final items = result['items'] as List<dynamic>;
+      final flights = items.map((json) => Flight.fromJson(json)).toList();
+
+      if (flights.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No flights found'),
+              backgroundColor: AppColors.surfaceLight,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Find the flight with the closest ETD to now
+      final now = DateTime.now();
+      Flight? closest;
+      Duration? closestDiff;
+
+      for (final flight in flights) {
+        if (flight.departureIdentifier == null ||
+            flight.destinationIdentifier == null) {
+          continue;
+        }
+
+        Duration diff;
+        if (flight.etd != null && flight.etd!.isNotEmpty) {
+          try {
+            final etd = DateTime.parse(flight.etd!);
+            diff = (etd.difference(now)).abs();
+          } catch (_) {
+            // If ETD isn't parseable, use a large diff but still consider it
+            diff = const Duration(days: 365);
+          }
+        } else {
+          // No ETD — use updatedAt/createdAt as a fallback proxy
+          diff = const Duration(days: 365);
+        }
+
+        if (closestDiff == null || diff < closestDiff) {
+          closest = flight;
+          closestDiff = diff;
+        }
+      }
+
+      if (closest == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No flights with departure/destination found'),
+              backgroundColor: AppColors.surfaceLight,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Build CRAFT hints from matched flight
+      final hints = <String, String>{};
+
+      // C - Clearance: destination
+      hints['C'] = 'Cleared to ${closest.destinationIdentifier}';
+
+      // R - Route
+      if (closest.routeString != null && closest.routeString!.isNotEmpty) {
+        hints['R'] = closest.routeString!;
+      } else {
+        hints['R'] = 'Direct ${closest.destinationIdentifier}';
+      }
+
+      // A - Altitude
+      if (closest.cruiseAltitude != null) {
+        final alt = closest.cruiseAltitude!;
+        final altStr = alt >= 18000
+            ? 'FL${alt ~/ 100}'
+            : '${alt.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')}\'';
+        hints['A'] = '_____ expect $altStr in ___ min';
+      }
+
+      // F - Frequency: departure freq, then ARTCC center, else blank
+      if (closest.departureIdentifier != null) {
+        try {
+          final freqs = await api.getFrequencies(closest.departureIdentifier!);
+          String? depFreq;
+          for (final f in freqs) {
+            final type = (f['type'] as String?)?.toUpperCase().trim() ?? '';
+            final freq = f['frequency'] as String?;
+            if (freq == null) continue;
+            if (type == 'DEP') {
+              depFreq = freq;
+              break;
+            }
+          }
+
+          if (depFreq != null) {
+            hints['F'] = '${closest.departureIdentifier} Departure $depFreq';
+          } else {
+            final airport =
+                await api.getAirport(closest.departureIdentifier!);
+            final artccName = airport?['artcc_name'] as String?;
+            if (artccName != null && artccName.isNotEmpty) {
+              hints['F'] = '$artccName Center';
+            }
+          }
+        } catch (_) {}
+      }
+
+
+      if (mounted) {
+        setState(() => _craftHints = hints);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Synced with flight ${closest.departureIdentifier} → ${closest.destinationIdentifier}'),
+            backgroundColor: AppColors.surfaceLight,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -134,6 +283,8 @@ class _ScratchPadEditorScreenState
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
+    final isCraft = _pad?.template == ScratchPadTemplate.craft;
 
     return Scaffold(
       appBar: AppBar(
@@ -195,6 +346,41 @@ class _ScratchPadEditorScreenState
 
             const Spacer(),
 
+            // Sync button (CRAFT only)
+            if (isCraft)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: GestureDetector(
+                  onTap: _syncing ? null : _syncWithFlight,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _craftHints != null
+                          ? AppColors.primary.withValues(alpha: 0.3)
+                          : AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: _syncing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.textSecondary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.sync,
+                            size: 18,
+                            color: _craftHints != null
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                          ),
+                  ),
+                ),
+              ),
+
             // Eraser
             _ToolbarToggle(
               icon: Icons.auto_fix_high,
@@ -252,6 +438,7 @@ class _ScratchPadEditorScreenState
               strokes: _strokes,
               currentStroke: _currentStroke,
               template: _pad?.template ?? ScratchPadTemplate.draw,
+              craftHints: _craftHints,
               onStrokeStart: _onStrokeStart,
               onStrokeUpdate: _onStrokeUpdate,
               onStrokeEnd: _onStrokeEnd,

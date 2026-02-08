@@ -5,6 +5,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/flight.dart';
 import '../../services/api_client.dart';
 import '../../services/flight_providers.dart';
+import '../../services/aircraft_providers.dart';
 import 'widgets/flight_stats_bar.dart';
 import 'widgets/flight_quick_actions.dart';
 import 'widgets/flight_departure_section.dart';
@@ -46,7 +47,25 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
     if (widget.flightId == null) {
       _flight = Flight(etd: DateTime.now().toIso8601String());
       _loaded = true;
+      _applyDefaultAircraft();
     }
+  }
+
+  Future<void> _applyDefaultAircraft() async {
+    final aircraft = await ref.read(defaultAircraftProvider.future);
+    if (aircraft == null || !mounted) return;
+    final dp = aircraft.defaultProfile;
+    setState(() {
+      _flight = _flight.copyWith(
+        aircraftId: aircraft.id,
+        aircraftIdentifier: aircraft.tailNumber,
+        aircraftType: aircraft.aircraftType,
+        performanceProfileId: dp?.id,
+        performanceProfile: dp?.name,
+        trueAirspeed: dp?.cruiseTas?.round(),
+        fuelBurnRate: dp?.cruiseFuelBurn,
+      );
+    });
   }
 
   Future<void> _saveField(Flight updated) async {
@@ -169,6 +188,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                 FlightRouteSection(
                   flight: _flight,
                   onChanged: _saveField,
+                  apiClient: ref.read(apiClientProvider),
                 ),
                 FlightPayloadSection(
                   flight: _flight,

@@ -4,14 +4,15 @@ import '../../../models/scratchpad.dart';
 
 class TemplateBackgroundPainter extends CustomPainter {
   final ScratchPadTemplate template;
+  final Map<String, String>? craftHints;
 
-  TemplateBackgroundPainter(this.template);
+  TemplateBackgroundPainter(this.template, {this.craftHints});
 
   @override
   void paint(Canvas canvas, Size size) {
     switch (template) {
       case ScratchPadTemplate.craft:
-        _drawCraft(canvas, size);
+        _drawCraft(canvas, size, craftHints);
         break;
       case ScratchPadTemplate.grid:
         _drawGrid(canvas, size);
@@ -43,7 +44,7 @@ class TemplateBackgroundPainter extends CustomPainter {
     }
   }
 
-  void _drawCraft(Canvas canvas, Size size) {
+  void _drawCraft(Canvas canvas, Size size, Map<String, String>? hints) {
     final labels = ['C', 'R', 'A', 'F', 'T'];
     final sectionHeight = size.height / labels.length;
 
@@ -73,6 +74,27 @@ class TemplateBackgroundPainter extends CustomPainter {
       );
       textPainter.layout();
       textPainter.paint(canvas, Offset(12, y + 8));
+
+      // Hint text from synced flight
+      final hint = hints?[labels[i]];
+      if (hint != null && hint.isNotEmpty) {
+        final hintPainter = TextPainter(
+          text: TextSpan(
+            text: hint,
+            style: TextStyle(
+              color: AppColors.primary.withValues(alpha: 0.5),
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 2,
+          ellipsis: '...',
+        );
+        hintPainter.layout(maxWidth: size.width - 50);
+        hintPainter.paint(canvas, Offset(40, y + 14));
+      }
     }
   }
 
@@ -124,6 +146,7 @@ class TemplateBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant TemplateBackgroundPainter oldDelegate) {
-    return oldDelegate.template != template;
+    return oldDelegate.template != template ||
+        oldDelegate.craftHints != craftHints;
   }
 }

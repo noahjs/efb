@@ -8,6 +8,8 @@ import '../../../services/api_client.dart';
 import '../../../services/flight_providers.dart';
 import '../../../services/aircraft_providers.dart';
 import '../../../services/map_flight_provider.dart';
+import '../../../models/aircraft.dart';
+import '../../flights/widgets/altitude_picker_sheet.dart';
 import '../../flights/widgets/flight_edit_dialogs.dart';
 import '../../flights/widgets/preferred_route_sheet.dart';
 
@@ -47,7 +49,33 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
           etd: updated.etd,
           performanceProfileId: updated.performanceProfileId,
         );
-        ref.read(activeFlightProvider.notifier).set(updated.copyWith(
+        // Build a new Flight so null results properly clear stale values
+        // (copyWith's ?? operator can't set fields back to null).
+        ref.read(activeFlightProvider.notifier).set(Flight(
+              id: updated.id,
+              aircraftId: updated.aircraftId,
+              performanceProfileId: updated.performanceProfileId,
+              departureIdentifier: updated.departureIdentifier,
+              destinationIdentifier: updated.destinationIdentifier,
+              alternateIdentifier: updated.alternateIdentifier,
+              etd: updated.etd,
+              aircraftIdentifier: updated.aircraftIdentifier,
+              aircraftType: updated.aircraftType,
+              performanceProfile: updated.performanceProfile,
+              trueAirspeed: updated.trueAirspeed,
+              flightRules: updated.flightRules,
+              routeString: updated.routeString,
+              cruiseAltitude: updated.cruiseAltitude,
+              peopleCount: updated.peopleCount,
+              avgPersonWeight: updated.avgPersonWeight,
+              cargoWeight: updated.cargoWeight,
+              fuelPolicy: updated.fuelPolicy,
+              startFuelGallons: updated.startFuelGallons,
+              reserveFuelGallons: updated.reserveFuelGallons,
+              fuelBurnRate: updated.fuelBurnRate,
+              fuelAtShutdownGallons: updated.fuelAtShutdownGallons,
+              filingStatus: updated.filingStatus,
+              // Computed fields from API (may be null)
               distanceNm: (result['distance_nm'] as num?)?.toDouble(),
               eteMinutes: result['ete_minutes'] as int?,
               flightFuelGallons:
@@ -81,25 +109,6 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     );
     if (result != null && result != currentValue) {
       _saveField(updater(result));
-    }
-  }
-
-  Future<void> _editNumberField({
-    required String title,
-    required int? currentValue,
-    required Flight Function(int) updater,
-    String? hint,
-    String? suffix,
-  }) async {
-    final result = await showNumberEditSheet(
-      context,
-      title: title,
-      currentValue: currentValue?.toDouble(),
-      hintText: hint,
-      suffix: suffix,
-    );
-    if (result != null) {
-      _saveField(updater(result.toInt()));
     }
   }
 
@@ -194,15 +203,6 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     }
   }
 
-  void _reorderWaypoint(Flight flight, int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
-    final wps = _parseWaypoints(flight);
-    if (oldIndex >= wps.length) return;
-    final item = wps.removeAt(oldIndex);
-    wps.insert(newIndex, item);
-    _saveField(_buildRouteUpdate(flight, wps));
-  }
-
   void _swapRoute() {
     final flight = _flight;
     if (flight == null) return;
@@ -227,6 +227,135 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     if (result != null && flight != null) {
       _saveField(flight.copyWith(routeString: result.routeString));
     }
+  }
+
+  /// Estimate the pixel width of a waypoint chip + arrow.
+  static double _chipWidth(String label) {
+    // ~8.5px per character at fontSize 14 w700, plus 24px horizontal padding, plus 6px gap
+    return label.length * 8.5 + 24 + 6;
+  }
+
+  static const _arrowWidth = 22.0; // " → " text width + spacing
+
+  /// Build a collapsed list of waypoint chips that fits within [maxWidth].
+  /// Always shows first and last. Fills intermediate from the start, then
+  /// collapses remaining into a "..." chip.
+  List<Widget> _buildCollapsedWaypoints(
+      List<String> waypoints, double maxWidth, Flight? flight) {
+    if (waypoints.isEmpty) return [];
+    if (waypoints.length == 1) {
+      return [_waypointChip(waypoints[0], 0, flight)];
+    }
+
+    final firstW = _chipWidth(waypoints.first);
+    final lastW = _chipWidth(waypoints.last);
+    const ellipsisW = 40.0; // "..." chip width
+    // Reserve space for first, last, and arrows between them
+    final reserved = firstW + _arrowWidth + lastW;
+
+    if (waypoints.length == 2 || reserved > maxWidth) {
+      // Only room for first → last
+      return [
+        _waypointChip(waypoints.first, 0, flight),
+        _arrowSeparator(),
+        _waypointChip(waypoints.last, waypoints.length - 1, flight),
+      ];
+    }
+
+    // Try to fit intermediate waypoints from the start
+    var used = reserved;
+    var fitCount = 0;
+    for (var i = 1; i < waypoints.length - 1; i++) {
+      final w = _arrowWidth + _chipWidth(waypoints[i]);
+      // If not all intermediates fit, we need room for the ellipsis chip too
+      final needEllipsis = i + 1 < waypoints.length - 1;
+      final extra = needEllipsis ? _arrowWidth + ellipsisW : 0;
+      if (used + w + extra > maxWidth) break;
+      used += w;
+      fitCount++;
+    }
+
+    final intermediateCount = waypoints.length - 2;
+    if (fitCount >= intermediateCount) {
+      // All fit — show everything
+      final chips = <Widget>[_waypointChip(waypoints.first, 0, flight)];
+      for (var i = 1; i < waypoints.length - 1; i++) {
+        chips.add(_arrowSeparator());
+        chips.add(_waypointChip(waypoints[i], i, flight));
+      }
+      chips.add(_arrowSeparator());
+      chips.add(_waypointChip(waypoints.last, waypoints.length - 1, flight));
+      return chips;
+    }
+
+    // Show first, fitCount intermediates, ellipsis, last
+    final chips = <Widget>[_waypointChip(waypoints.first, 0, flight)];
+    for (var i = 1; i <= fitCount; i++) {
+      chips.add(_arrowSeparator());
+      chips.add(_waypointChip(waypoints[i], i, flight));
+    }
+    chips.add(_arrowSeparator());
+    chips.add(_ellipsisChip(waypoints, flight));
+    chips.add(_arrowSeparator());
+    chips.add(_waypointChip(waypoints.last, waypoints.length - 1, flight));
+    return chips;
+  }
+
+  Widget _waypointChip(String label, int index, Flight? flight) {
+    return GestureDetector(
+      onTap: flight != null ? () => _editWaypoint(flight, index) : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _ellipsisChip(List<String> waypoints, Flight? flight) {
+    final hidden = waypoints.length - 2;
+    return GestureDetector(
+      onTap: () {
+        // Show full route editor
+        if (flight?.id != null) {
+          context.push('/flights/${flight!.id}');
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '+$hidden',
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _arrowSeparator() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 2),
+      child: Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
+    );
   }
 
   String _formatEte(int? minutes) {
@@ -400,9 +529,63 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     );
   }
 
+  String _formatAltitudeChip(int ft) {
+    if (ft >= 18000) return 'FL${ft ~/ 100}';
+    final s = ft.toString();
+    if (s.length <= 3) return "$s'";
+    return "${s.substring(0, s.length - 3)},${s.substring(s.length - 3)}'";
+  }
+
+  Future<void> _showAltitudePicker(Flight? flight) async {
+    final api = ref.read(apiClientProvider);
+    final result = await showAltitudePickerSheet(
+      context,
+      apiClient: api,
+      currentAltitude: flight?.cruiseAltitude,
+      departureIdentifier: flight?.departureIdentifier,
+      destinationIdentifier: flight?.destinationIdentifier,
+      routeString: flight?.routeString,
+      trueAirspeed: flight?.trueAirspeed,
+      fuelBurnRate: flight?.fuelBurnRate,
+      performanceProfileId: flight?.performanceProfileId,
+    );
+    if (result != null) {
+      _saveField(
+          (flight ?? const Flight()).copyWith(cruiseAltitude: result));
+    }
+  }
+
+  /// Build a Flight pre-populated with the given aircraft & its default profile.
+  static Flight _flightFromAircraft(Aircraft aircraft) {
+    final dp = aircraft.defaultProfile;
+    return Flight(
+      etd: DateTime.now().toIso8601String(),
+      aircraftId: aircraft.id,
+      aircraftIdentifier: aircraft.tailNumber,
+      aircraftType: aircraft.aircraftType,
+      performanceProfileId: dp?.id,
+      performanceProfile: dp?.name,
+      trueAirspeed: dp?.cruiseTas?.round(),
+      fuelBurnRate: dp?.cruiseFuelBurn,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final flight = ref.watch(activeFlightProvider);
+    var flight = ref.watch(activeFlightProvider);
+
+    // When no active flight, seed from the default aircraft
+    if (flight == null) {
+      final defaultAircraft = ref.watch(defaultAircraftProvider).value;
+      if (defaultAircraft != null) {
+        flight = _flightFromAircraft(defaultAircraft);
+        // Push into provider so subsequent interactions use this flight
+        Future.microtask(() {
+          ref.read(activeFlightProvider.notifier).set(flight);
+        });
+      }
+    }
+
     final waypoints = _parseWaypoints(flight);
 
     return Container(
@@ -432,18 +615,9 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
                 Expanded(
                   child: _MetadataChip(
                     label: flight?.cruiseAltitude != null
-                        ? "${(flight!.cruiseAltitude! / 1000).toStringAsFixed(0)},000'"
+                        ? _formatAltitudeChip(flight!.cruiseAltitude!)
                         : 'Altitude',
-                    onTap: () => _editNumberField(
-                      title: 'Cruise Altitude',
-                      currentValue: flight?.cruiseAltitude,
-                      updater: (val) =>
-                          (flight ?? const Flight()).copyWith(
-                            cruiseAltitude: val,
-                          ),
-                      hint: 'e.g. 28000',
-                      suffix: 'ft',
-                    ),
+                    onTap: () => _showAltitudePicker(flight),
                   ),
                 ),
               ],
@@ -511,7 +685,7 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
 
           const Divider(height: 1, color: AppColors.divider),
 
-          // Route waypoint chips (drag to reorder)
+          // Route waypoint chips (collapsed when too many)
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
             child: SizedBox(
@@ -521,52 +695,15 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
                   Expanded(
                     child: waypoints.isEmpty
                         ? const SizedBox.shrink()
-                        : ReorderableListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            onReorder: (oldIndex, newIndex) {
-                              if (flight != null) {
-                                _reorderWaypoint(flight, oldIndex, newIndex);
-                              }
-                            },
-                            proxyDecorator: (child, index, animation) {
-                              return Material(
-                                color: Colors.transparent,
-                                elevation: 4,
-                                shadowColor: Colors.black54,
-                                borderRadius: BorderRadius.circular(8),
-                                child: child,
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final chips = _buildCollapsedWaypoints(
+                                waypoints,
+                                constraints.maxWidth,
+                                flight,
                               );
+                              return Row(children: chips);
                             },
-                            buildDefaultDragHandles: false,
-                            itemCount: waypoints.length,
-                            itemBuilder: (context, i) => Padding(
-                              key: ValueKey('wp_${waypoints[i]}_$i'),
-                              padding: const EdgeInsets.only(right: 6),
-                              child: ReorderableDelayedDragStartListener(
-                                index: i,
-                                child: GestureDetector(
-                                  onTap: () => _editWaypoint(flight!, i),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.primary,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        waypoints[i],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
                           ),
                   ),
                   const SizedBox(width: 6),

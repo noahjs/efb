@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
+import '../../../services/airport_providers.dart';
 
 /// Riverpod provider to fetch nearby airports for a long-press location.
 final _nearbyAirportsProvider =
@@ -43,6 +44,19 @@ class MapLongPressSheet extends ConsumerWidget {
         aeroFeatures.where((f) => f['_layerType'] == 'artcc').toList();
     final airways =
         aeroFeatures.where((f) => f['_layerType'] == 'airway').toList();
+
+    // Look up airport names for Class D airspaces by identifier
+    final airportNames = <String, String>{};
+    for (final a in airspaces) {
+      final cls = (a['airspace_class'] ?? a['class'] ?? '').toString();
+      final ident = (a['identifier'] ?? '').toString();
+      if (cls == 'D' && ident.isNotEmpty) {
+        final airport = ref.watch(airportDetailProvider(ident)).value;
+        if (airport != null) {
+          airportNames[ident] = (airport['name'] ?? '').toString();
+        }
+      }
+    }
 
     return Container(
       constraints: BoxConstraints(
@@ -109,7 +123,7 @@ class MapLongPressSheet extends ConsumerWidget {
                   _SectionHeader(title: 'AIRSPACE'),
                   const SizedBox(height: 6),
                   ...artccs.map(_buildArtccRow),
-                  ...airspaces.map(_buildAirspaceRow),
+                  ...airspaces.map((f) => _buildAirspaceRow(f, airportNames)),
                   ...airways.map(_buildAirwayRow),
                   const SizedBox(height: 16),
                 ],
@@ -156,12 +170,25 @@ class MapLongPressSheet extends ConsumerWidget {
     );
   }
 
-  Widget _buildAirspaceRow(Map<String, dynamic> feature) {
-    final name = feature['name'] ?? feature['designator'] ?? 'Airspace';
-    final classType = feature['class'] ?? feature['airspace_class'] ?? '';
-    final title = classType.toString().isNotEmpty
-        ? '$name Class $classType'
-        : name.toString();
+  Widget _buildAirspaceRow(
+      Map<String, dynamic> feature, Map<String, String> airportNames) {
+    final name = (feature['name'] ?? feature['designator'] ?? 'Airspace').toString();
+    final ident = (feature['identifier'] ?? '').toString();
+    final classType = (feature['class'] ?? feature['airspace_class'] ?? '').toString();
+
+    String title;
+    // For Class D, use the airport name if available (e.g. "Centennial - Class D")
+    final airportName = ident.isNotEmpty ? airportNames[ident] : null;
+    if (classType == 'D' && airportName != null && airportName.isNotEmpty) {
+      title = '$airportName - Class D';
+    } else {
+      // Avoid "DENVER CLASS B Class B" — only append if not already in the name
+      final alreadyHasClass = classType.isNotEmpty &&
+          name.toUpperCase().contains('CLASS ${classType.toUpperCase()}');
+      title = classType.isNotEmpty && !alreadyHasClass
+          ? '$name Class $classType'
+          : name;
+    }
 
     final altRange = _formatAltitudeRange(feature);
 

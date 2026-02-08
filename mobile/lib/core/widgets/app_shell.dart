@@ -1,44 +1,39 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../models/tab_item.dart';
 import '../theme/app_theme.dart';
+import '../../services/tab_order_provider.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   final Widget child;
 
   const AppShell({super.key, required this.child});
 
-  int _currentIndex(BuildContext context) {
+  int _currentIndex(BuildContext context, List<TabItem> tabs) {
     final location = GoRouterState.of(context).uri.toString();
-    if (location.startsWith('/airports')) return 0;
-    if (location.startsWith('/maps')) return 1;
-    if (location.startsWith('/flights')) return 2;
-    if (location.startsWith('/scratchpads')) return 3;
-    if (location.startsWith('/more')) return 4;
-    return 1;
+    for (var i = 0; i < tabs.length; i++) {
+      if (location.startsWith(tabs[i].route)) return i;
+    }
+    // Check if we're on /more
+    if (location.startsWith('/more')) return tabs.length;
+    return -1;
   }
 
-  void _onTap(BuildContext context, int index) {
-    switch (index) {
-      case 0:
-        context.go('/airports');
-        break;
-      case 1:
-        context.go('/maps');
-        break;
-      case 2:
-        context.go('/flights');
-        break;
-      case 3:
-        context.go('/scratchpads');
-        break;
-      case 4:
-        context.go('/more');
-        break;
+  void _onTap(BuildContext context, int index, List<TabItem> tabs) {
+    if (index < tabs.length) {
+      context.go(tabs[index].route);
+    } else {
+      context.go('/more');
     }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tabs = ref.watch(bottomNavTabsProvider);
+
+    final currentIdx = _currentIndex(context, tabs);
+
     return Scaffold(
       body: child,
       bottomNavigationBar: Container(
@@ -48,30 +43,15 @@ class AppShell extends StatelessWidget {
           ),
         ),
         child: BottomNavigationBar(
-          currentIndex: _currentIndex(context),
-          onTap: (index) => _onTap(context, index),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.navigation_outlined),
-              activeIcon: Icon(Icons.navigation),
-              label: 'Airports',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.map_outlined),
-              activeIcon: Icon(Icons.map),
-              label: 'Maps',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.route_outlined),
-              activeIcon: Icon(Icons.route),
-              label: 'Flights',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.edit_note),
-              activeIcon: Icon(Icons.edit_note),
-              label: 'ScratchPads',
-            ),
-            BottomNavigationBarItem(
+          currentIndex: currentIdx >= 0 ? currentIdx : 0,
+          onTap: (index) => _onTap(context, index, tabs),
+          items: [
+            ...tabs.map((t) => BottomNavigationBarItem(
+                  icon: Icon(t.icon),
+                  activeIcon: Icon(t.activeIcon),
+                  label: t.label,
+                )),
+            const BottomNavigationBarItem(
               icon: Icon(Icons.menu),
               activeIcon: Icon(Icons.menu),
               label: 'More',

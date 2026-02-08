@@ -260,6 +260,30 @@ class ApiClient {
     return response.data;
   }
 
+  Future<Map<String, dynamic>> calculateAltitudes({
+    String? departureIdentifier,
+    String? destinationIdentifier,
+    String? routeString,
+    int? trueAirspeed,
+    double? fuelBurnRate,
+    int? performanceProfileId,
+    required List<int> altitudes,
+  }) async {
+    final response = await _dio.post('/calculate/altitudes', data: {
+      if (departureIdentifier != null)
+        'departure_identifier': departureIdentifier,
+      if (destinationIdentifier != null)
+        'destination_identifier': destinationIdentifier,
+      if (routeString != null) 'route_string': routeString,
+      if (trueAirspeed != null) 'true_airspeed': trueAirspeed,
+      if (fuelBurnRate != null) 'fuel_burn_rate': fuelBurnRate,
+      if (performanceProfileId != null)
+        'performance_profile_id': performanceProfileId,
+      'altitudes': altitudes,
+    });
+    return response.data;
+  }
+
   // --- Aircraft ---
 
   Future<Map<String, dynamic>> getAircraftList({

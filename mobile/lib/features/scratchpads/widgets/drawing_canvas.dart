@@ -6,6 +6,7 @@ class DrawingCanvas extends StatelessWidget {
   final List<Stroke> strokes;
   final Stroke? currentStroke;
   final ScratchPadTemplate template;
+  final Map<String, String>? craftHints;
   final void Function(Offset position) onStrokeStart;
   final void Function(Offset position) onStrokeUpdate;
   final VoidCallback onStrokeEnd;
@@ -15,6 +16,7 @@ class DrawingCanvas extends StatelessWidget {
     required this.strokes,
     this.currentStroke,
     required this.template,
+    this.craftHints,
     required this.onStrokeStart,
     required this.onStrokeUpdate,
     required this.onStrokeEnd,
@@ -32,6 +34,7 @@ class DrawingCanvas extends StatelessWidget {
             strokes: strokes,
             currentStroke: currentStroke,
             template: template,
+            craftHints: craftHints,
           ),
           size: Size.infinite,
         ),
@@ -44,17 +47,20 @@ class _CanvasPainter extends CustomPainter {
   final List<Stroke> strokes;
   final Stroke? currentStroke;
   final ScratchPadTemplate template;
+  final Map<String, String>? craftHints;
 
   _CanvasPainter({
     required this.strokes,
     this.currentStroke,
     required this.template,
+    this.craftHints,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     // Draw template background first
-    TemplateBackgroundPainter(template).paint(canvas, size);
+    TemplateBackgroundPainter(template, craftHints: craftHints)
+        .paint(canvas, size);
 
     // Draw completed strokes
     for (final stroke in strokes) {
@@ -108,6 +114,7 @@ class _CanvasPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CanvasPainter oldDelegate) {
     return oldDelegate.strokes.length != strokes.length ||
-        oldDelegate.currentStroke != currentStroke;
+        oldDelegate.currentStroke != currentStroke ||
+        oldDelegate.craftHints != craftHints;
   }
 }

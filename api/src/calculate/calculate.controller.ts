@@ -3,7 +3,7 @@ import {
   IsOptional,
   IsString,
   IsNumber,
-  IsDateString,
+  IsArray,
 } from 'class-validator';
 import { CalculateService } from './calculate.service';
 
@@ -41,6 +41,11 @@ class CalculateDto {
   performance_profile_id?: number;
 }
 
+class CalculateAltitudesDto extends CalculateDto {
+  @IsArray()
+  altitudes: number[];
+}
+
 @Controller('calculate')
 export class CalculateController {
   constructor(private readonly calculateService: CalculateService) {}
@@ -53,5 +58,10 @@ export class CalculateController {
   @Post('debug')
   async calculateDebug(@Body() dto: CalculateDto) {
     return this.calculateService.calculateDebug(dto);
+  }
+
+  @Post('altitudes')
+  async calculateAltitudes(@Body() dto: CalculateAltitudesDto) {
+    return this.calculateService.calculateForAltitudes(dto, dto.altitudes);
   }
 }

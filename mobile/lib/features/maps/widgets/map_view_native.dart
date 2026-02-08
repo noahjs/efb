@@ -256,7 +256,12 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final lat = coords.lat.toDouble();
     final lng = coords.lng.toDouble();
     final point = context.touchPosition;
-    final screenCoord = ScreenCoordinate(x: point.x, y: point.y);
+    // Use a 20px box around the tap point to catch nearby airspace edges
+    const pad = 20.0;
+    final queryBox = RenderedQueryGeometry.fromScreenBox(ScreenBox(
+      min: ScreenCoordinate(x: point.x - pad, y: point.y - pad),
+      max: ScreenCoordinate(x: point.x + pad, y: point.y + pad),
+    ));
 
     final layerMap = {
       'airspace-fill': 'airspace',
@@ -265,17 +270,23 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     };
 
     final allFeatures = <Map<String, dynamic>>[];
+    final seenIds = <String>{};
 
     try {
       for (final entry in layerMap.entries) {
         final results = await map.queryRenderedFeatures(
-          RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
+          queryBox,
           RenderedQueryOptions(layerIds: [entry.key]),
         );
         for (final result in results) {
           if (result == null) continue;
           final props = result.queriedFeature.feature['properties'];
           if (props is Map) {
+            // Deduplicate by id + layer type
+            final id = (props['id'] ?? props['name'] ?? '').toString();
+            final dedupKey = '${entry.value}:$id';
+            if (seenIds.contains(dedupKey)) continue;
+            seenIds.add(dedupKey);
             final featureMap = Map<String, dynamic>.from(props);
             featureMap['_layerType'] = entry.value;
             allFeatures.add(featureMap);

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/airport_providers.dart';
 import '../../services/aeronautical_providers.dart';
@@ -30,7 +31,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   bool _showSettings = false;
   bool _showFlightPlan = false;
   String _selectedBaseLayer = 'satellite';
-  final Set<String> _activeOverlays = {'flight_category'};
+  Set<String> _activeOverlays = {'flight_category'};
   AeroSettings _aero = const AeroSettings();
   bool _showAeroSettings = false;
   final _mapController = EfbMapController();
@@ -39,9 +40,36 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   Timer? _boundsDebounce;
 
   @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  @override
   void dispose() {
     _boundsDebounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final baseLayer = prefs.getString('map_base_layer') ?? 'satellite';
+    final overlays = prefs.getStringList('map_overlays') ?? ['flight_category'];
+    final aero = await AeroSettings.load();
+    if (mounted) {
+      setState(() {
+        _selectedBaseLayer = baseLayer;
+        _activeOverlays = overlays.toSet();
+        _aero = aero;
+      });
+    }
+  }
+
+  Future<void> _saveMapSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('map_base_layer', _selectedBaseLayer);
+    prefs.setStringList('map_overlays', _activeOverlays.toList());
+    _aero.save();
   }
 
   void _toggleLayerPicker() {
@@ -79,6 +107,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       _selectedBaseLayer = layer;
       _showLayerPicker = false;
     });
+    _saveMapSettings();
   }
 
   void _onOverlayToggled(String overlay) {
@@ -89,6 +118,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         _activeOverlays.add(overlay);
       }
     });
+    _saveMapSettings();
   }
 
   void _onMapLongPressed(
@@ -134,6 +164,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           settings: _aero,
           onChanged: (newSettings) {
             setState(() => _aero = newSettings);
+            _saveMapSettings();
           },
           onClose: () => Navigator.of(context).pop(),
         ),
@@ -285,7 +316,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           // Left sidebar controls
           Positioned(
             left: 0,
-            top: 160,
+            bottom: 80,
             child: MapSidebar(
               onZoomIn: _mapController.zoomIn,
               onZoomOut: _mapController.zoomOut,

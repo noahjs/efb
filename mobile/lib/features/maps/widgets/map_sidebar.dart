@@ -18,8 +18,6 @@ class MapSidebar extends StatefulWidget {
 }
 
 class _MapSidebarState extends State<MapSidebar> {
-  bool _isRecording = false;
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -33,13 +31,6 @@ class _MapSidebarState extends State<MapSidebar> {
             icon: Icons.settings,
             size: 18,
             onTap: () => widget.onAeroSettingsTap?.call(),
-          ),
-          const SizedBox(height: 2),
-
-          // Map orientation toggle
-          _SidebarButton(
-            icon: Icons.explore,
-            onTap: () {},
           ),
           const SizedBox(height: 12),
 
@@ -67,52 +58,6 @@ class _MapSidebarState extends State<MapSidebar> {
             decoration: const BoxDecoration(
               color: AppColors.primary,
               shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Edit / Pencil tool
-          _SidebarButton(
-            icon: Icons.edit,
-            size: 18,
-            onTap: () {},
-          ),
-          const SizedBox(height: 2),
-
-          // Waypoint pin
-          _SidebarButton(
-            icon: Icons.location_on_outlined,
-            onTap: () {},
-          ),
-          const SizedBox(height: 12),
-
-          // REC button
-          GestureDetector(
-            onTap: () => setState(() => _isRecording = !_isRecording),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-              decoration: BoxDecoration(
-                color: _isRecording
-                    ? AppColors.error.withValues(alpha: 0.8)
-                    : AppColors.surface.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'REC',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            _isRecording ? '01:23' : '00:00',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 9,
             ),
           ),
           const SizedBox(height: 12),

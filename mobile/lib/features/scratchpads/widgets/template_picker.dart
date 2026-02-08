@@ -10,6 +10,7 @@ class TemplatePicker extends StatelessWidget {
   static Future<ScratchPadTemplate?> show(BuildContext context) {
     return showModalBottomSheet<ScratchPadTemplate>(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
@@ -63,7 +64,8 @@ class TemplatePicker extends StatelessWidget {
             crossAxisCount: 3,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 16,
+            childAspectRatio: 1.3,
+            mainAxisSpacing: 8,
             crossAxisSpacing: 16,
             children: [
               _TemplateOption(

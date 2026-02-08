@@ -29,8 +29,11 @@ class _LayerPickerState extends State<LayerPicker> {
     ('street', 'Street'),
   ];
 
-  static const overlayLayers = [
+  static const leftOverlays = [
     ('aeronautical', 'Aeronautical'),
+  ];
+
+  static const overlayLayers = [
     ('radar', 'Radar'),
     ('radar_classic', 'Radar (Classic)'),
     ('radar_lowest', 'Radar (Lowest Tilt)'),
@@ -79,21 +82,32 @@ class _LayerPickerState extends State<LayerPicker> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Base layers column
+            // Base layers + aeronautical column
             Expanded(
-              child: ListView.builder(
+              child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 shrinkWrap: true,
-                itemCount: baseLayers.length,
-                itemBuilder: (context, index) {
-                  final (id, label) = baseLayers[index];
-                  final isSelected = widget.selectedBaseLayer == id;
-                  return _LayerRow(
-                    label: label,
-                    isActive: isSelected,
-                    onTap: () => widget.onBaseLayerChanged(id),
-                  );
-                },
+                children: [
+                  ...leftOverlays.map((entry) {
+                    final (id, label) = entry;
+                    final isActive = widget.activeOverlays.contains(id);
+                    return _LayerRow(
+                      label: label,
+                      isActive: isActive,
+                      onTap: () => widget.onOverlayToggled(id),
+                    );
+                  }),
+                  const Divider(color: AppColors.divider, height: 1),
+                  ...baseLayers.map((entry) {
+                    final (id, label) = entry;
+                    final isSelected = widget.selectedBaseLayer == id;
+                    return _LayerRow(
+                      label: label,
+                      isActive: isSelected,
+                      onTap: () => widget.onBaseLayerChanged(id),
+                    );
+                  }),
+                ],
               ),
             ),
             Container(

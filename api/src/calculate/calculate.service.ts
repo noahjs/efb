@@ -46,6 +46,13 @@ export interface CalculateDebugResult extends CalculateResult {
   steps: { label: string; value: string }[];
 }
 
+export interface AltitudeResult {
+  altitude: number;
+  ete_minutes: number | null;
+  flight_fuel_gallons: number | null;
+  calculation_method: string;
+}
+
 @Injectable()
 export class CalculateService {
   constructor(
@@ -62,6 +69,142 @@ export class CalculateService {
 
   async calculateDebug(input: CalculateInput): Promise<CalculateDebugResult> {
     return this.run(input, true) as Promise<CalculateDebugResult>;
+  }
+
+  /**
+   * Compute ETE and fuel for multiple altitudes efficiently.
+   * Resolves route, profile, and elevations once, then runs phase math per altitude.
+   */
+  async calculateForAltitudes(
+    input: CalculateInput,
+    altitudes: number[],
+  ): Promise<{ distance_nm: number | null; results: AltitudeResult[] }> {
+    // Build route identifiers
+    const routeIds = (input.route_string || '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const identifiers: string[] = [];
+    if (input.departure_identifier) identifiers.push(input.departure_identifier);
+    identifiers.push(...routeIds);
+    if (input.destination_identifier) identifiers.push(input.destination_identifier);
+
+    if (identifiers.length < 2) {
+      return {
+        distance_nm: null,
+        results: altitudes.map((a) => ({
+          altitude: a,
+          ete_minutes: null,
+          flight_fuel_gallons: null,
+          calculation_method: 'none',
+        })),
+      };
+    }
+
+    const waypoints = await this.navaidsService.resolveRoute(identifiers);
+    if (waypoints.length < 2) {
+      return {
+        distance_nm: null,
+        results: altitudes.map((a) => ({
+          altitude: a,
+          ete_minutes: null,
+          flight_fuel_gallons: null,
+          calculation_method: 'none',
+        })),
+      };
+    }
+
+    // Total distance
+    let totalNm = 0;
+    for (let i = 1; i < waypoints.length; i++) {
+      totalNm += haversineNm(
+        waypoints[i - 1].latitude,
+        waypoints[i - 1].longitude,
+        waypoints[i].latitude,
+        waypoints[i].longitude,
+      );
+    }
+    const distanceNm = Math.round(totalNm * 10) / 10;
+
+    // Load profile + elevations once
+    let profile: PerformanceProfile | null = null;
+    if (input.performance_profile_id) {
+      profile = await this.profileRepo.findOne({
+        where: { id: input.performance_profile_id },
+      });
+    }
+    const depElev = await this.getAirportElevation(input.departure_identifier);
+    const destElev = await this.getAirportElevation(input.destination_identifier);
+
+    const hasFullProfile =
+      profile &&
+      profile.climb_rate &&
+      profile.climb_speed &&
+      profile.climb_fuel_flow &&
+      profile.descent_rate &&
+      profile.descent_speed &&
+      profile.descent_fuel_flow;
+
+    const results = altitudes.map((alt) => {
+      // Try 3-phase
+      if (hasFullProfile && profile) {
+        const climbAlt = Math.max(0, alt - depElev);
+        const climbTimeMin = climbAlt > 0 ? climbAlt / profile.climb_rate : 0;
+        const climbDist = profile.climb_speed * (climbTimeMin / 60);
+        const climbFuel = profile.climb_fuel_flow * (climbTimeMin / 60);
+
+        const descentAlt = Math.max(0, alt - destElev);
+        const descentTimeMin =
+          descentAlt > 0 ? descentAlt / profile.descent_rate : 0;
+        const descentDist = profile.descent_speed * (descentTimeMin / 60);
+        const descentFuel = profile.descent_fuel_flow * (descentTimeMin / 60);
+
+        if (climbDist + descentDist <= totalNm) {
+          const cruiseDist = totalNm - climbDist - descentDist;
+          const cruiseTimeMin =
+            profile.cruise_tas > 0
+              ? (cruiseDist / profile.cruise_tas) * 60
+              : 0;
+          const cruiseFuel = profile.cruise_fuel_burn
+            ? profile.cruise_fuel_burn * (cruiseTimeMin / 60)
+            : 0;
+
+          const totalTime = climbTimeMin + cruiseTimeMin + descentTimeMin;
+          const totalFuel = climbFuel + cruiseFuel + descentFuel;
+
+          return {
+            altitude: alt,
+            ete_minutes: Math.round(totalTime),
+            flight_fuel_gallons: Math.round(totalFuel * 10) / 10,
+            calculation_method: 'three_phase',
+          } as AltitudeResult;
+        }
+      }
+
+      // Fallback: single-phase
+      const tas = input.true_airspeed || (profile?.cruise_tas ?? 0);
+      const burnRate = input.fuel_burn_rate || (profile?.cruise_fuel_burn ?? 0);
+
+      if (tas > 0) {
+        const eteHours = totalNm / tas;
+        return {
+          altitude: alt,
+          ete_minutes: Math.round(eteHours * 60),
+          flight_fuel_gallons:
+            burnRate > 0 ? Math.round(eteHours * burnRate * 10) / 10 : null,
+          calculation_method: 'single_phase',
+        } as AltitudeResult;
+      }
+
+      return {
+        altitude: alt,
+        ete_minutes: null,
+        flight_fuel_gallons: null,
+        calculation_method: 'none',
+      } as AltitudeResult;
+    });
+
+    return { distance_nm: distanceNm, results };
   }
 
   private async run(

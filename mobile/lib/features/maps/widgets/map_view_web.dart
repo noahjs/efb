@@ -652,11 +652,21 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   static String _longPressHandlerJs() {
     return '''
           map.on('contextmenu', function(e) {
+            var pad = 20;
+            var box = [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]];
             var layers = ['airspace-fill', 'artcc-lines', 'airway-lines'];
             var existingLayers = layers.filter(function(l) { return map.getLayer(l); });
-            var features = existingLayers.length > 0
-              ? map.queryRenderedFeatures(e.point, { layers: existingLayers })
+            var allFeatures = existingLayers.length > 0
+              ? map.queryRenderedFeatures(box, { layers: existingLayers })
               : [];
+            // Deduplicate by id + layer
+            var seen = {};
+            var features = allFeatures.filter(function(f) {
+              var key = f.layer.id + ':' + (f.properties.id || f.properties.name || '');
+              if (seen[key]) return false;
+              seen[key] = true;
+              return true;
+            });
             var props = features.map(function(f) { return JSON.stringify(f.properties); });
             var layerIds = features.map(function(f) { return f.layer.id; });
             if (window._efbOnMapLongPress) {

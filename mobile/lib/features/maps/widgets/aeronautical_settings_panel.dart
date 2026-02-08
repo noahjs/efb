@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 
 /// All aeronautical settings state, persisted in MapsScreen across
@@ -65,7 +68,7 @@ class AeroSettings {
     this.activationByNotam = true,
     this.showAirspaces = true,
     this.showTrsa = true,
-    this.showClassE = true,
+    this.showClassE = false,
     this.showModeC = true,
     this.showSua = true,
     this.showProhibitedRestricted = true,
@@ -76,7 +79,7 @@ class AeroSettings {
     this.showAdiz = true,
     this.showSuaOther = true,
     this.worldwideAltitudes = true,
-    this.showAirways = true,
+    this.showAirways = false,
     this.showLowAirways = true,
     this.showHighAirways = true,
     this.showHelicopterAirways = false,
@@ -168,6 +171,105 @@ class AeroSettings {
       showOrganizedTracks: showOrganizedTracks ?? this.showOrganizedTracks,
       showGridMora: showGridMora ?? this.showGridMora,
     );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'placeLabels': placeLabels,
+        'airportsOnly': airportsOnly,
+        'showHeliports': showHeliports,
+        'showPrivateAirports': showPrivateAirports,
+        'showSeaplaneBases': showSeaplaneBases,
+        'showOtherFields': showOtherFields,
+        'autoHighlight': autoHighlight,
+        'activationByNotam': activationByNotam,
+        'showAirspaces': showAirspaces,
+        'showTrsa': showTrsa,
+        'showClassE': showClassE,
+        'showModeC': showModeC,
+        'showSua': showSua,
+        'showProhibitedRestricted': showProhibitedRestricted,
+        'showMoaAlertTraining': showMoaAlertTraining,
+        'showCautionDangerWarning': showCautionDangerWarning,
+        'showTraTsa': showTraTsa,
+        'showParachuteAreas': showParachuteAreas,
+        'showAdiz': showAdiz,
+        'showSuaOther': showSuaOther,
+        'worldwideAltitudes': worldwideAltitudes,
+        'showAirways': showAirways,
+        'showLowAirways': showLowAirways,
+        'showHighAirways': showHighAirways,
+        'showHelicopterAirways': showHelicopterAirways,
+        'showWaypoints': showWaypoints,
+        'showFixesRnav': showFixesRnav,
+        'showVfrWaypoints': showVfrWaypoints,
+        'showVfrHelicopterWaypoints': showVfrHelicopterWaypoints,
+        'showAtcBoundaries': showAtcBoundaries,
+        'showArtcc': showArtcc,
+        'showAtcSectors': showAtcSectors,
+        'showOrganizedTracks': showOrganizedTracks,
+        'showGridMora': showGridMora,
+      };
+
+  static AeroSettings fromJson(Map<String, dynamic> j) {
+    bool b(String key, bool fallback) => (j[key] as bool?) ?? fallback;
+    const d = AeroSettings();
+    return AeroSettings(
+      placeLabels: b('placeLabels', d.placeLabels),
+      airportsOnly: b('airportsOnly', d.airportsOnly),
+      showHeliports: b('showHeliports', d.showHeliports),
+      showPrivateAirports: b('showPrivateAirports', d.showPrivateAirports),
+      showSeaplaneBases: b('showSeaplaneBases', d.showSeaplaneBases),
+      showOtherFields: b('showOtherFields', d.showOtherFields),
+      autoHighlight: b('autoHighlight', d.autoHighlight),
+      activationByNotam: b('activationByNotam', d.activationByNotam),
+      showAirspaces: b('showAirspaces', d.showAirspaces),
+      showTrsa: b('showTrsa', d.showTrsa),
+      showClassE: b('showClassE', d.showClassE),
+      showModeC: b('showModeC', d.showModeC),
+      showSua: b('showSua', d.showSua),
+      showProhibitedRestricted:
+          b('showProhibitedRestricted', d.showProhibitedRestricted),
+      showMoaAlertTraining:
+          b('showMoaAlertTraining', d.showMoaAlertTraining),
+      showCautionDangerWarning:
+          b('showCautionDangerWarning', d.showCautionDangerWarning),
+      showTraTsa: b('showTraTsa', d.showTraTsa),
+      showParachuteAreas: b('showParachuteAreas', d.showParachuteAreas),
+      showAdiz: b('showAdiz', d.showAdiz),
+      showSuaOther: b('showSuaOther', d.showSuaOther),
+      worldwideAltitudes: b('worldwideAltitudes', d.worldwideAltitudes),
+      showAirways: b('showAirways', d.showAirways),
+      showLowAirways: b('showLowAirways', d.showLowAirways),
+      showHighAirways: b('showHighAirways', d.showHighAirways),
+      showHelicopterAirways:
+          b('showHelicopterAirways', d.showHelicopterAirways),
+      showWaypoints: b('showWaypoints', d.showWaypoints),
+      showFixesRnav: b('showFixesRnav', d.showFixesRnav),
+      showVfrWaypoints: b('showVfrWaypoints', d.showVfrWaypoints),
+      showVfrHelicopterWaypoints:
+          b('showVfrHelicopterWaypoints', d.showVfrHelicopterWaypoints),
+      showAtcBoundaries: b('showAtcBoundaries', d.showAtcBoundaries),
+      showArtcc: b('showArtcc', d.showArtcc),
+      showAtcSectors: b('showAtcSectors', d.showAtcSectors),
+      showOrganizedTracks: b('showOrganizedTracks', d.showOrganizedTracks),
+      showGridMora: b('showGridMora', d.showGridMora),
+    );
+  }
+
+  Future<void> save() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('map_aero_settings', jsonEncode(toJson()));
+  }
+
+  static Future<AeroSettings> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final str = prefs.getString('map_aero_settings');
+    if (str == null) return const AeroSettings();
+    try {
+      return fromJson(jsonDecode(str) as Map<String, dynamic>);
+    } catch (_) {
+      return const AeroSettings();
+    }
   }
 }
 

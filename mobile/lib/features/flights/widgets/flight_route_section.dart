@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/flight.dart';
+import '../../../services/api_client.dart';
+import 'altitude_picker_sheet.dart';
 import 'flight_route_map.dart';
 import 'flight_section_header.dart';
 import 'flight_field_row.dart';
@@ -20,14 +22,23 @@ int? _parseAltitude(String? alt) {
   return num;
 }
 
+String _formatAltitudeDisplay(int ft) {
+  if (ft >= 18000) return 'FL${ft ~/ 100}';
+  final s = ft.toString();
+  if (s.length <= 3) return "$s'";
+  return "${s.substring(0, s.length - 3)},${s.substring(s.length - 3)}'";
+}
+
 class FlightRouteSection extends StatelessWidget {
   final Flight flight;
   final ValueChanged<Flight> onChanged;
+  final ApiClient apiClient;
 
   const FlightRouteSection({
     super.key,
     required this.flight,
     required this.onChanged,
+    required this.apiClient,
   });
 
   @override
@@ -106,18 +117,22 @@ class FlightRouteSection extends StatelessWidget {
         FlightFieldRow(
           label: 'Cruise Altitude',
           value: flight.cruiseAltitude != null
-              ? '${flight.cruiseAltitude} ft'
+              ? _formatAltitudeDisplay(flight.cruiseAltitude!)
               : 'Set',
           onTap: () async {
-            final result = await showNumberEditSheet(
+            final result = await showAltitudePickerSheet(
               context,
-              title: 'Cruise Altitude',
-              currentValue: flight.cruiseAltitude?.toDouble(),
-              hintText: 'e.g. 6000',
-              suffix: 'ft',
+              apiClient: apiClient,
+              currentAltitude: flight.cruiseAltitude,
+              departureIdentifier: flight.departureIdentifier,
+              destinationIdentifier: flight.destinationIdentifier,
+              routeString: flight.routeString,
+              trueAirspeed: flight.trueAirspeed,
+              fuelBurnRate: flight.fuelBurnRate,
+              performanceProfileId: flight.performanceProfileId,
             );
             if (result != null) {
-              onChanged(flight.copyWith(cruiseAltitude: result.toInt()));
+              onChanged(flight.copyWith(cruiseAltitude: result));
             }
           },
         ),

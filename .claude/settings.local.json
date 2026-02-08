@@ -18,7 +18,11 @@
       "Bash(npm run lint)",
       "Bash(cut:*)",
       "Bash(lsof:*)",
-      "Bash(flutter clean:*)"
+      "Bash(flutter clean:*)",
+      "WebFetch(domain:mesonet.agron.iastate.edu)",
+      "WebFetch(domain:mapservices.weather.noaa.gov)",
+      "WebFetch(domain:nowcoast.noaa.gov)",
+      "WebFetch(domain:aviationweather-cprk.ncep.noaa.gov)"
     ]
   }
 }

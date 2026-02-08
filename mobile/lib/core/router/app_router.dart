@@ -16,6 +16,7 @@ import '../../features/aircraft/screens/performance_profile_edit_screen.dart';
 import '../../features/aircraft/screens/fuel_tanks_screen.dart';
 import '../../features/aircraft/screens/equipment_screen.dart';
 import '../../features/more/more_screen.dart';
+import '../../features/more/tab_order_screen.dart';
 import '../widgets/app_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -155,6 +156,13 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: MoreScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'tab-order',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const TabOrderScreen(),
+            ),
+          ],
         ),
       ],
     ),
