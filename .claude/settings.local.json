@@ -12,7 +12,8 @@
       "WebSearch",
       "WebFetch(domain:aeronav.faa.gov)",
       "WebFetch(domain:api.faa.gov)",
-      "WebFetch(domain:notams.aim.faa.gov)"
+      "WebFetch(domain:notams.aim.faa.gov)",
+      "Bash(nslookup:*)"
     ]
   }
 }

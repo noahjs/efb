@@ -535,32 +535,79 @@ export class WeatherService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
+    // Look up FAA identifier (e.g. KAPA -> APA)
+    const airport = await this.airportsService.findById(icao);
+    const faaId = airport?.identifier ?? icao.replace(/^K/, '');
+
     try {
+      const params = new URLSearchParams();
+      params.append('searchType', '0');
+      params.append('designatorsForLocation', faaId);
+      params.append('designatorForAccountable', '');
+      params.append('latDegrees', '');
+      params.append('latMinutes', '0');
+      params.append('latSeconds', '0');
+      params.append('longDegrees', '');
+      params.append('longMinutes', '0');
+      params.append('longSeconds', '0');
+      params.append('radius', '10');
+      params.append('sortColumns', '5 false');
+      params.append('sortDirection', 'true');
+      params.append('designatorForNotamNumberSearch', '');
+      params.append('notamNumber', '');
+      params.append('radiusSearchOnDesignator', 'false');
+      params.append('radiusSearchDesignator', '');
+      params.append('latitudeDirection', 'N');
+      params.append('longitudeDirection', 'W');
+      params.append('freeFormText', '');
+      params.append('flightPathText', '');
+      params.append('flightPathDivertAirfields', '');
+      params.append('flightPathBuffer', '4');
+      params.append('flightPathIncludeNavaids', 'true');
+      params.append('flightPathIncludeArtcc', 'false');
+      params.append('flightPathIncludeTfr', 'true');
+      params.append('flightPathIncludeRegulatory', 'false');
+      params.append('flightPathResultsType', 'All NOTAMs');
+      params.append('archiveDate', '');
+      params.append('archiveDesignator', '');
+      params.append('offset', '0');
+      params.append('notamsOnly', 'false');
+      params.append('filters', '');
+
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/notam`, {
-          params: { ids: icao, format: 'json' },
-        }),
+        this.http.post(
+          'https://notams.aim.faa.gov/notamSearch/search',
+          params.toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'User-Agent':
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+              Accept: 'application/json, text/plain, */*',
+              Origin: 'https://notams.aim.faa.gov',
+              Referer: 'https://notams.aim.faa.gov/notamSearch/',
+            },
+            timeout: 30000,
+          },
+        ),
       );
 
-      const rawList = Array.isArray(data) ? data : [];
+      const rawList = data?.notamList ?? [];
 
       const notams = rawList
-        .filter(
-          (n: any) =>
-            n.icaoId === icao &&
-            n.validTimeFrom &&
-            (!n.validTimeTo ||
-              new Date(n.validTimeTo).getTime() > Date.now()),
-        )
+        .filter((n: any) => !n.cancelledOrExpired)
         .map((n: any) => ({
-          id: n.notamId ?? '',
-          type: this.classifyNotam(n.text ?? ''),
+          id: n.notamNumber ?? '',
+          type: n.keyword ?? '',
           icaoId: n.icaoId ?? icao,
           facilityDesignator: n.facilityDesignator ?? '',
-          text: n.text ?? '',
-          effectiveStart: n.validTimeFrom ?? null,
-          effectiveEnd: n.validTimeTo ?? null,
-          classification: n.classification ?? '',
+          text:
+            n.traditionalMessageFrom4thWord ??
+            n.traditionalMessage ??
+            '',
+          effectiveStart: this.parseNotamDate(n.startDate),
+          effectiveEnd: this.parseNotamDate(n.endDate),
+          classification: n.featureName ?? '',
           isExpired: false,
         }));
 
@@ -578,18 +625,19 @@ export class WeatherService {
     }
   }
 
-  private classifyNotam(text: string): string {
-    const upper = text.toUpperCase();
-    if (/\bRWY\b|RUNWAY/.test(upper)) return 'RWY';
-    if (/\bTWY\b|TAXIWAY/.test(upper)) return 'TWY';
-    if (/\bOBST\b|OBSTACLE|TOWER|CRANE/.test(upper)) return 'OBST';
-    if (/\bAIRSPACE\b|TFR\b|SUA\b/.test(upper)) return 'AIRSPACE';
-    if (/\bNAV\b|VOR\b|ILS\b|LOC\b|GPS\b|RNAV\b/.test(upper)) return 'NAV';
-    if (/\bSVC\b|SERVICE|TWR\b|TOWER\b|ATIS\b|CTAF\b/.test(upper))
-      return 'SVC';
-    if (/\bAPRON\b|RAMP\b/.test(upper)) return 'APRON';
-    if (/\bAD\b|AERODROME|AIRPORT/.test(upper)) return 'AD';
-    return '';
+  /**
+   * Parse FAA NOTAM date format "MM/DD/YYYY HHMM" to ISO 8601.
+   */
+  private parseNotamDate(dateStr: string | null | undefined): string | null {
+    if (!dateStr) return null;
+    // Handle "MM/DD/YYYY HHMM" or "MM/DD/YYYY HHMMest" formats
+    const clean = dateStr.replace(/EST$/i, '').trim();
+    const match = clean.match(
+      /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2})(\d{2})$/,
+    );
+    if (!match) return null;
+    const [, month, day, year, hour, minute] = match;
+    return `${year}-${month}-${day}T${hour}:${minute}:00Z`;
   }
 
   private async resolveNwsGrid(

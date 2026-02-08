@@ -75,17 +75,32 @@ export class AirportsService {
   }
 
   async getRunways(identifier: string) {
+    const faaId = await this.resolveFaaIdentifier(identifier);
     return this.runwayRepo.find({
-      where: { airport_identifier: identifier },
+      where: { airport_identifier: faaId },
       relations: ['ends'],
     });
   }
 
   async getFrequencies(identifier: string) {
+    const faaId = await this.resolveFaaIdentifier(identifier);
     return this.frequencyRepo.find({
-      where: { airport_identifier: identifier },
+      where: { airport_identifier: faaId },
       order: { type: 'ASC' },
     });
+  }
+
+  /**
+   * Resolve an identifier (FAA or ICAO) to the FAA 3-letter code.
+   * If the identifier matches an airport's icao_identifier, returns the
+   * FAA identifier. Otherwise returns the input unchanged.
+   */
+  private async resolveFaaIdentifier(identifier: string): Promise<string> {
+    const airport = await this.airportRepo.findOne({
+      where: [{ identifier }, { icao_identifier: identifier }],
+      select: ['identifier'],
+    });
+    return airport?.identifier ?? identifier;
   }
 
   /**
