@@ -73,6 +73,7 @@ class ScratchPad {
   final ScratchPadTemplate template;
   final List<Stroke> strokes;
   final String? textContent;
+  final Map<String, String>? craftHints;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int sortOrder;
@@ -82,6 +83,7 @@ class ScratchPad {
     required this.template,
     this.strokes = const [],
     this.textContent,
+    this.craftHints,
     required this.createdAt,
     required this.updatedAt,
     this.sortOrder = 0,
@@ -90,6 +92,8 @@ class ScratchPad {
   ScratchPad copyWith({
     List<Stroke>? strokes,
     String? textContent,
+    Map<String, String>? craftHints,
+    bool clearCraftHints = false,
     DateTime? updatedAt,
     int? sortOrder,
   }) =>
@@ -98,6 +102,7 @@ class ScratchPad {
         template: template,
         strokes: strokes ?? this.strokes,
         textContent: textContent ?? this.textContent,
+        craftHints: clearCraftHints ? null : (craftHints ?? this.craftHints),
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
         sortOrder: sortOrder ?? this.sortOrder,
@@ -108,6 +113,7 @@ class ScratchPad {
         'template': template.name,
         'strokes': strokes.map((s) => s.toJson()).toList(),
         'textContent': textContent,
+        'craftHints': craftHints,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
         'sortOrder': sortOrder,
@@ -124,6 +130,8 @@ class ScratchPad {
                 .toList() ??
             [],
         textContent: json['textContent'] as String?,
+        craftHints: (json['craftHints'] as Map<String, dynamic>?)
+            ?.map((k, v) => MapEntry(k, v as String)),
         createdAt: DateTime.parse(json['createdAt'] as String),
         updatedAt: DateTime.parse(json['updatedAt'] as String),
         sortOrder: json['sortOrder'] as int? ?? 0,

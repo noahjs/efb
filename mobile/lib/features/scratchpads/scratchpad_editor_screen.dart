@@ -43,6 +43,7 @@ class _ScratchPadEditorScreenState
       setState(() {
         _pad = pad;
         _strokes = List.from(pad.strokes);
+        _craftHints = pad.craftHints;
         _loaded = true;
       });
     }
@@ -52,8 +53,10 @@ class _ScratchPadEditorScreenState
     if (_pad == null) return;
     final updated = _pad!.copyWith(
       strokes: _strokes,
+      craftHints: _craftHints,
       updatedAt: DateTime.now(),
     );
+    _pad = updated;
     await ref.read(scratchPadListProvider.notifier).save(updated);
   }
 
@@ -90,7 +93,15 @@ class _ScratchPadEditorScreenState
         _strokes = [];
         _craftHints = null;
       });
-      _save();
+      if (_pad != null) {
+        final updated = _pad!.copyWith(
+          strokes: [],
+          clearCraftHints: true,
+          updatedAt: DateTime.now(),
+        );
+        _pad = updated;
+        await ref.read(scratchPadListProvider.notifier).save(updated);
+      }
     }
   }
 
@@ -217,7 +228,7 @@ class _ScratchPadEditorScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Synced with flight ${closest.departureIdentifier} → ${closest.destinationIdentifier}'),
+                '${closest.departureIdentifier} → ${closest.destinationIdentifier}'),
             backgroundColor: AppColors.surfaceLight,
           ),
         );

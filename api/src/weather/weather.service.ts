@@ -17,19 +17,21 @@ interface WindsAloftForecast {
   altitudes: WindsAloftAltitude[];
 }
 
+// AWC METAR API actual field names (https://aviationweather.gov/api/data/metar)
 interface MetarResponse {
-  raw: string;
-  icao: string;
-  flight_category: string;
-  temperature: number | null;
-  dewpoint: number | null;
-  wind_direction: number | null;
-  wind_speed: number | null;
-  wind_gust: number | null;
-  visibility: number | null;
-  altimeter: number | null;
+  rawOb: string;
+  icaoId: string;
+  fltCat: string;
+  temp: number | null;
+  dewp: number | null;
+  wdir: number | null;
+  wspd: number | null;
+  wgst: number | null;
+  visib: number | string | null;
+  altim: number | null;
   clouds: Array<{ cover: string; base: number | null }>;
-  observed: string;
+  obsTime: number;
+  reportTime: string;
 }
 
 @Injectable()
@@ -63,10 +65,11 @@ export class WeatherService {
     try {
       const { data } = await firstValueFrom(
         this.http.get(`${this.AWC_BASE}/metar`, {
-          params: { ids: icao, format: 'json' },
+          params: { ids: icao, format: 'json', hours: 3 },
         }),
       );
 
+      // AWC returns multiple observations when hours > 1.5; take the most recent
       const result = Array.isArray(data) && data.length > 0 ? data[0] : null;
       if (result) {
         this.setCache(cacheKey, result);
@@ -112,15 +115,26 @@ export class WeatherService {
     if (cached) return cached;
 
     try {
-      // AWC allows bounding box queries using a special format
-      const bbox = `${bounds.minLng},${bounds.minLat},${bounds.maxLng},${bounds.maxLat}`;
+      // AWC bbox format: lat0, lon0, lat1, lon1
+      const bbox = `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
       const { data } = await firstValueFrom(
         this.http.get(`${this.AWC_BASE}/metar`, {
-          params: { bbox, format: 'json' },
+          params: { bbox, format: 'json', hours: 3 },
         }),
       );
 
-      const result = Array.isArray(data) ? data : [];
+      // Deduplicate: keep only the most recent METAR per station
+      const all = Array.isArray(data) ? data : [];
+      const latest = new Map<string, any>();
+      for (const m of all) {
+        const id = m.icaoId;
+        if (!id) continue;
+        const existing = latest.get(id);
+        if (!existing || (m.obsTime ?? 0) > (existing.obsTime ?? 0)) {
+          latest.set(id, m);
+        }
+      }
+      const result = Array.from(latest.values());
       this.setCache(cacheKey, result);
       return result;
     } catch (error) {

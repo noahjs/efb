@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../services/api_client.dart';
 import '../../services/airport_providers.dart';
 import '../../services/aeronautical_providers.dart';
 import '../../services/map_flight_provider.dart';
@@ -16,6 +18,8 @@ import 'widgets/map_settings_panel.dart';
 import 'widgets/aeronautical_settings_panel.dart';
 import 'widgets/map_view.dart';
 import 'widgets/airport_bottom_sheet.dart';
+import 'widgets/navaid_bottom_sheet.dart';
+import 'widgets/fix_bottom_sheet.dart';
 import 'widgets/map_long_press_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
 
@@ -39,6 +43,16 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   MapBounds? _currentBounds;
   Timer? _boundsDebounce;
 
+  // Search state
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _isSearching = false;
+  List<dynamic>? _searchResults;
+  List<dynamic>? _navaidResults;
+  List<dynamic>? _fixResults;
+  bool _searchLoading = false;
+  Timer? _searchDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +62,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   @override
   void dispose() {
     _boundsDebounce?.cancel();
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -70,6 +87,105 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     prefs.setString('map_base_layer', _selectedBaseLayer);
     prefs.setStringList('map_overlays', _activeOverlays.toList());
     _aero.save();
+  }
+
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = null;
+        _navaidResults = null;
+        _fixResults = null;
+        _searchLoading = false;
+      });
+      return;
+    }
+    setState(() => _searchLoading = true);
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final client = ref.read(apiClientProvider);
+        final results = await Future.wait([
+          client.searchAirports(query: query, limit: 10),
+          client.searchNavaids(query: query, limit: 10),
+          client.searchFixes(query: query, limit: 10),
+        ]);
+        if (mounted && _searchController.text == query) {
+          setState(() {
+            _searchResults = results[0] is Map
+                ? (results[0] as Map)['items'] as List<dynamic>?
+                : null;
+            _navaidResults = results[1] is List ? results[1] as List : null;
+            _fixResults = results[2] is List ? results[2] as List : null;
+            _searchLoading = false;
+          });
+        }
+      } catch (_) {
+        if (mounted) setState(() => _searchLoading = false);
+      }
+    });
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    setState(() {
+      _isSearching = false;
+      _searchResults = null;
+      _navaidResults = null;
+      _fixResults = null;
+      _searchLoading = false;
+    });
+  }
+
+  void _onSearchResultTapped(Map<String, dynamic> airport) {
+    final lat = airport['latitude'] as num?;
+    final lng = airport['longitude'] as num?;
+    if (lat != null && lng != null) {
+      _mapController.flyTo(lat.toDouble(), lng.toDouble(), zoom: 12);
+    }
+    final identifier = airport['identifier'] ?? '';
+    _clearSearch();
+    _onAirportTapped(identifier);
+  }
+
+  void _onNavaidResultTapped(Map<String, dynamic> navaid) {
+    final lat = navaid['latitude'] as num?;
+    final lng = navaid['longitude'] as num?;
+    if (lat != null && lng != null) {
+      _mapController.flyTo(lat.toDouble(), lng.toDouble(), zoom: 12);
+    }
+    final identifier = navaid['identifier'] ?? '';
+    _clearSearch();
+    _showNavaidSheet(identifier);
+  }
+
+  void _onFixResultTapped(Map<String, dynamic> fix) {
+    final lat = fix['latitude'] as num?;
+    final lng = fix['longitude'] as num?;
+    if (lat != null && lng != null) {
+      _mapController.flyTo(lat.toDouble(), lng.toDouble(), zoom: 12);
+    }
+    _clearSearch();
+    _showFixSheet(fix);
+  }
+
+  void _showNavaidSheet(String identifier) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => NavaidBottomSheet(navaidId: identifier),
+    );
+  }
+
+  void _showFixSheet(Map<String, dynamic> fixData) {
+    final identifier = fixData['identifier'] ?? '';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => FixBottomSheet(fixId: identifier, fixData: fixData),
+    );
   }
 
   void _toggleLayerPicker() {
@@ -174,6 +290,202 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     });
   }
 
+  Widget _buildSearchResults() {
+    if (_searchLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    final airports = _searchResults;
+    final navaids = _navaidResults;
+    final hasAirports = airports != null && airports.isNotEmpty;
+    final hasNavaids = navaids != null && navaids.isNotEmpty;
+
+    if (!hasAirports && !hasNavaids) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text(
+          'No results found',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: ListView(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        children: [
+          if (hasAirports) ...[
+            _buildSectionHeader('Airports'),
+            for (int i = 0; i < airports.length; i++) ...[
+              if (i > 0)
+                const Divider(height: 0.5, color: AppColors.divider),
+              _buildAirportRow(airports[i] as Map<String, dynamic>),
+            ],
+          ],
+          if (hasNavaids) ...[
+            if (hasAirports)
+              const Divider(height: 0.5, color: AppColors.divider),
+            _buildSectionHeader('Navaids'),
+            for (int i = 0; i < navaids.length; i++) ...[
+              if (i > 0)
+                const Divider(height: 0.5, color: AppColors.divider),
+              _buildNavaidRow(navaids[i] as Map<String, dynamic>),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      color: AppColors.surfaceLight,
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textMuted,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAirportRow(Map<String, dynamic> airport) {
+    final identifier = airport['identifier'] ?? '';
+    final icao = airport['icao_identifier'] ?? '';
+    final displayId = icao.isNotEmpty ? icao : identifier;
+    final name = airport['name'] ?? '';
+    final city = airport['city'] ?? '';
+    final state = airport['state'] ?? '';
+    final location = [city, state].where((s) => s.isNotEmpty).join(', ');
+
+    return InkWell(
+      onTap: () => _onSearchResultTapped(airport),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 52,
+              child: Text(
+                displayId,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.accent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (location.isNotEmpty)
+                    Text(
+                      location,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavaidRow(Map<String, dynamic> navaid) {
+    final identifier = navaid['identifier'] ?? '';
+    final name = navaid['name'] ?? '';
+    final type = navaid['type'] ?? '';
+    final freq = navaid['frequency'] ?? '';
+    final subtitle = [type, if (freq.isNotEmpty) freq]
+        .where((s) => s.isNotEmpty)
+        .join(' \u2022 ');
+
+    return InkWell(
+      onTap: () => _onNavaidResultTapped(navaid),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 52,
+              child: Text(
+                identifier,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.accent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.navigation_outlined,
+              size: 16,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final toolbarBottom = MediaQuery.of(context).padding.top + 90;
@@ -203,16 +515,16 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         final metarMap = <String, String>{};
         for (final m in metars) {
           if (m is Map) {
-            final icao = m['icao'] as String?;
-            final cat = m['flight_category'] as String?;
+            final icao = m['icaoId'] as String?;
+            final cat = m['fltCat'] as String?;
             if (icao != null && cat != null) {
               metarMap[icao] = cat;
             }
           }
         }
         airports = airports.map((a) {
-          final id = a['identifier'] ?? a['icao_identifier'] ?? '';
-          final category = metarMap[id];
+          final icao = a['icao_identifier'] ?? a['identifier'] ?? '';
+          final category = metarMap[icao];
           if (category != null) {
             return {...a, 'category': category};
           }
@@ -395,6 +707,14 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                   onSettingsTap: _toggleSettings,
                   onFplTap: _toggleFlightPlan,
                   isFplOpen: _showFlightPlan,
+                  searchController: _searchController,
+                  searchFocusNode: _searchFocusNode,
+                  onSearchChanged: _onSearchChanged,
+                  onSearchTap: () {
+                    setState(() => _isSearching = true);
+                  },
+                  onSearchClear: _clearSearch,
+                  isSearching: _isSearching,
                 ),
                 AnimatedSize(
                   duration: const Duration(milliseconds: 250),
@@ -407,6 +727,34 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               ],
             ),
           ),
+
+          // Search results dropdown
+          if (_isSearching && _searchController.text.isNotEmpty)
+            Positioned(
+              top: toolbarBottom,
+              left: 8,
+              right: 8,
+              child: PointerInterceptor(
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black45,
+                          blurRadius: 12,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildSearchResults(),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

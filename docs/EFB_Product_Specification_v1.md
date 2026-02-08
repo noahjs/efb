@@ -23,7 +23,8 @@ Version 1.0 — February 2026
 - [Logbook Module](./modules/logbook.md)
 - [Aircraft Profiles Module](./modules/aircraft-profiles.md)
 - [Weight & Balance Module](./modules/weight-and-balance.md)
-- [Weather Imagery Module](./modules/weather-imagery.md)
+- [Weather Imagery Module](./modules/weather-imagery.md) (overview)
+- [Imagery Module](./modules/imagery.md) (detailed spec — weather imagery + plates)
 - [US Data Sources](./modules/us-data-sources.md)
 - [Cross-Cutting Concerns](./modules/cross-cutting-concerns.md)
 

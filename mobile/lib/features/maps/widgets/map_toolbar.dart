@@ -6,6 +6,12 @@ class MapToolbar extends StatelessWidget {
   final VoidCallback onSettingsTap;
   final VoidCallback? onFplTap;
   final bool isFplOpen;
+  final TextEditingController? searchController;
+  final FocusNode? searchFocusNode;
+  final ValueChanged<String>? onSearchChanged;
+  final VoidCallback? onSearchTap;
+  final VoidCallback? onSearchClear;
+  final bool isSearching;
 
   const MapToolbar({
     super.key,
@@ -13,6 +19,12 @@ class MapToolbar extends StatelessWidget {
     required this.onSettingsTap,
     this.onFplTap,
     this.isFplOpen = false,
+    this.searchController,
+    this.searchFocusNode,
+    this.onSearchChanged,
+    this.onSearchTap,
+    this.onSearchClear,
+    this.isSearching = false,
   });
 
   @override
@@ -93,15 +105,43 @@ class MapToolbar extends StatelessWidget {
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  SizedBox(width: 10),
-                  Icon(Icons.search, color: AppColors.textMuted, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Search',
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 15),
+                  const SizedBox(width: 10),
+                  const Icon(Icons.search, color: AppColors.textMuted, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      focusNode: searchFocusNode,
+                      onChanged: onSearchChanged,
+                      onTap: onSearchTap,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 15,
+                      ),
+                      decoration: const InputDecoration(
+                        hintText: 'Search airports',
+                        hintStyle: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 15,
+                        ),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(vertical: 8),
+                        filled: false,
+                      ),
+                    ),
                   ),
+                  if (isSearching)
+                    GestureDetector(
+                      onTap: onSearchClear,
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(Icons.close,
+                            color: AppColors.textMuted, size: 18),
+                      ),
+                    ),
                 ],
               ),
             ),

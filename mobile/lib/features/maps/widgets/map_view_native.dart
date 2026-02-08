@@ -137,33 +137,29 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final map = _mapboxMap;
     if (map == null || !_airportSourceReady) return;
 
+    final catVis = enabled ? 'visible' : 'none';
+
     try {
-      if (enabled) {
-        // Colored dots by flight category, with labels
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-radius', 7.0);
+      // Toggle colored category layers
+      for (final cat in _flightCategoryColors.keys) {
         await map.style.setStyleLayerProperty(
-          'airport-dots',
-          'circle-color',
-          ['match', ['get', 'category'],
-            'VFR', '#00C853',
-            'MVFR', '#2196F3',
-            'IFR', '#FF1744',
-            'LIFR', '#E040FB',
-            '#888888'],
-        );
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-stroke-width', 1.5);
-        await map.style.setStyleLayerProperty(
-          'airport-labels', 'visibility', 'visible',
-        );
-      } else {
-        // Small gray dots, no labels
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-radius', 5.0);
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-color', '#888888');
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-stroke-width', 0.5);
-        await map.style.setStyleLayerProperty(
-          'airport-labels', 'visibility', 'none',
+          'airport-dots-${cat.toLowerCase()}', 'visibility', catVis,
         );
       }
+
+      // Adjust base gray layer size
+      if (enabled) {
+        await map.style.setStyleLayerProperty('airport-dots', 'circle-radius', 7.0);
+        await map.style.setStyleLayerProperty('airport-dots', 'circle-stroke-width', 1.5);
+      } else {
+        await map.style.setStyleLayerProperty('airport-dots', 'circle-radius', 5.0);
+        await map.style.setStyleLayerProperty('airport-dots', 'circle-stroke-width', 0.5);
+      }
+
+      // Toggle labels
+      await map.style.setStyleLayerProperty(
+        'airport-labels', 'visibility', catVis,
+      );
     } catch (e) {
       debugPrint('Failed to apply flight category mode: $e');
     }
@@ -191,6 +187,17 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       mapboxMap.flyTo(
         CameraOptions(zoom: cam.zoom - 1),
         MapAnimationOptions(duration: 300),
+      );
+    };
+
+    // Bind flyTo controller
+    widget.controller?.onFlyTo = (double lat, double lng, {double? zoom}) {
+      mapboxMap.flyTo(
+        CameraOptions(
+          center: Point(coordinates: Position(lng, lat)),
+          zoom: zoom ?? 11,
+        ),
+        MapAnimationOptions(duration: 1000),
       );
     };
   }
@@ -232,7 +239,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     try {
       final features = await map.queryRenderedFeatures(
         RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
-        RenderedQueryOptions(layerIds: ['airport-dots']),
+        RenderedQueryOptions(layerIds: [
+          'airport-dots',
+          'airport-dots-vfr',
+          'airport-dots-mvfr',
+          'airport-dots-ifr',
+          'airport-dots-lifr',
+        ]),
       );
 
       if (features.isNotEmpty) {
@@ -315,6 +328,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     _fireBounds();
   }
 
+  static const _flightCategoryColors = {
+    'VFR': Color(0xFF00C853),
+    'MVFR': Color(0xFF2196F3),
+    'IFR': Color(0xFFFF1744),
+    'LIFR': Color(0xFFE040FB),
+  };
+
   String _buildAirportsGeoJson() {
     final features = widget.airports.where((a) {
       return a['latitude'] != null && a['longitude'] != null;
@@ -385,8 +405,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
-  /// Creates the airports GeoJSON source (empty initially) and the dot/label layers.
-  /// Flight category mode is applied separately via [_applyFlightCategoryMode].
+  /// Creates the airports GeoJSON source and layered circle dots.
+  /// One base gray layer for all airports, plus a colored layer per flight
+  /// category (VFR/MVFR/IFR/LIFR) filtered by the 'category' property.
+  /// Colored layers sit on top and cover the gray base when visible.
   Future<void> _addAirportLayers(MapboxMap map) async {
     const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
 
@@ -394,6 +416,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       await map.style
           .addSource(GeoJsonSource(id: 'airports', data: emptyGeoJson));
 
+      // Base layer — gray dots for all airports (always visible)
       await map.style.addLayer(CircleLayer(
         id: 'airport-dots',
         sourceId: 'airports',
@@ -402,6 +425,20 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         circleStrokeWidth: 0.5,
         circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
       ));
+
+      // One colored layer per flight category, filtered and hidden by default
+      for (final entry in _flightCategoryColors.entries) {
+        await map.style.addLayer(CircleLayer(
+          id: 'airport-dots-${entry.key.toLowerCase()}',
+          sourceId: 'airports',
+          circleRadius: 7.0,
+          circleColor: entry.value.toARGB32(),
+          circleStrokeWidth: 1.5,
+          circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+          filter: ['==', ['get', 'category'], entry.key],
+          visibility: Visibility.NONE,
+        ));
+      }
 
       await map.style.addLayer(SymbolLayer(
         id: 'airport-labels',

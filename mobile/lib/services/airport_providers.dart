@@ -105,6 +105,13 @@ final mapAirportsProvider = FutureProvider.family<List<dynamic>,
   },
 );
 
+/// Provider for navaid detail
+final navaidDetailProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, id) async {
+  final client = ref.read(apiClientProvider);
+  return client.getNavaid(id);
+});
+
 /// Resolve a list of waypoint identifiers (airports, navaids, fixes)
 /// to coordinates. The parameter is a comma-joined string of identifiers.
 final resolvedRouteProvider =

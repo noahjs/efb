@@ -456,6 +456,42 @@ class ApiClient {
     }
   }
 
+  // --- Navaids & Fixes ---
+
+  Future<List<dynamic>> searchNavaids({
+    String? query,
+    String? type,
+    int limit = 50,
+  }) async {
+    final response = await _dio.get('/navaids/search', queryParameters: {
+      if (query != null) 'q': query,
+      if (type != null) 'type': type,
+      'limit': limit,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>?> getNavaid(String identifier) async {
+    try {
+      final response = await _dio.get('/navaids/$identifier');
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<List<dynamic>> searchFixes({
+    String? query,
+    int limit = 50,
+  }) async {
+    final response = await _dio.get('/fixes/search', queryParameters: {
+      if (query != null) 'q': query,
+      'limit': limit,
+    });
+    return response.data;
+  }
+
   // --- Waypoint Resolution ---
 
   Future<List<dynamic>> resolveWaypoints(List<String> identifiers) async {

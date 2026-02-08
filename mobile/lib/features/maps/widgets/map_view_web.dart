@@ -108,12 +108,22 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         })();
       ''');
     };
+    widget.controller?.onFlyTo = (double lat, double lng, {double? zoom}) {
+      final z = zoom ?? 11;
+      _evalJs('''
+        (function() {
+          var map = window.$_mapVar;
+          if (map) map.flyTo({center: [$lng, $lat], zoom: $z, duration: 1000});
+        })();
+      ''');
+    };
   }
 
   @override
   void dispose() {
     widget.controller?.onZoomIn = null;
     widget.controller?.onZoomOut = null;
+    widget.controller?.onFlyTo = null;
     _onAirportTapJs = null;
     _onBoundsChangedJs = null;
     _onMapLongPressJs = null;

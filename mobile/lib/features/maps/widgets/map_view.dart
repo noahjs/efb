@@ -13,14 +13,17 @@ typedef MapBounds = ({
   double maxLng,
 });
 
-/// Controller to programmatically zoom the map.
-/// Platform views bind [onZoomIn] / [onZoomOut] to their map instances.
+/// Controller to programmatically zoom/fly the map.
+/// Platform views bind callbacks to their map instances.
 class EfbMapController {
   VoidCallback? onZoomIn;
   VoidCallback? onZoomOut;
+  void Function(double lat, double lng, {double? zoom})? onFlyTo;
 
   void zoomIn() => onZoomIn?.call();
   void zoomOut() => onZoomOut?.call();
+  void flyTo(double lat, double lng, {double? zoom}) =>
+      onFlyTo?.call(lat, lng, zoom: zoom);
 }
 
 class EfbMapView extends StatelessWidget {

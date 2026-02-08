@@ -22,7 +22,13 @@
       "WebFetch(domain:mesonet.agron.iastate.edu)",
       "WebFetch(domain:mapservices.weather.noaa.gov)",
       "WebFetch(domain:nowcoast.noaa.gov)",
-      "WebFetch(domain:aviationweather-cprk.ncep.noaa.gov)"
+      "WebFetch(domain:aviationweather-cprk.ncep.noaa.gov)",
+      "WebFetch(domain:rucsoundings.noaa.gov)",
+      "WebFetch(domain:support.foreflight.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.spc.noaa.gov)",
+      "WebFetch(domain:cloudfront.foreflight.com)",
+      "WebFetch(domain:www.swpc.noaa.gov)"
     ]
   }
 }

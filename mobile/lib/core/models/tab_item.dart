@@ -63,10 +63,62 @@ const allAvailableTabs = <TabItem>[
     activeIcon: Icons.flight,
     iconColor: Color(0xFF7E57C2),
   ),
+  TabItem(
+    key: 'plates',
+    label: 'Plates',
+    route: '/plates',
+    icon: Icons.description_outlined,
+    activeIcon: Icons.description,
+    iconColor: Color(0xFF5C6BC0),
+  ),
+  TabItem(
+    key: 'documents',
+    label: 'Documents',
+    route: '/documents',
+    icon: Icons.folder_outlined,
+    activeIcon: Icons.folder,
+    iconColor: Color(0xFF7E57C2),
+  ),
+  TabItem(
+    key: 'imagery',
+    label: 'Imagery',
+    route: '/imagery',
+    icon: Icons.image_outlined,
+    activeIcon: Icons.image,
+    iconColor: Color(0xFF26A69A),
+  ),
+  TabItem(
+    key: 'logbook',
+    label: 'Logbook',
+    route: '/logbook',
+    icon: Icons.book_outlined,
+    activeIcon: Icons.book,
+    iconColor: Color(0xFF5C6BC0),
+  ),
+  TabItem(
+    key: 'weight_balance',
+    label: 'Weight & Balance',
+    route: '/weight-balance',
+    icon: Icons.scale_outlined,
+    activeIcon: Icons.scale,
+    iconColor: Color(0xFF26A69A),
+  ),
+  TabItem(
+    key: 'track_logs',
+    label: 'Track Logs',
+    route: '/track-logs',
+    icon: Icons.timeline,
+    activeIcon: Icons.timeline,
+    iconColor: Color(0xFF66BB6A),
+  ),
 ];
 
-/// Default tab keys for the bottom nav bar (first 4 slots).
-const defaultTabKeys = ['airports', 'maps', 'flights', 'scratchpads'];
+/// Default tab keys — first 4 become bottom nav, rest overflow to More.
+const defaultTabKeys = [
+  'airports', 'maps', 'flights', 'scratchpads',
+  'aircraft', 'plates', 'documents', 'imagery',
+  'logbook', 'weight_balance', 'track_logs',
+];
 
 /// Number of slots in the bottom nav (excluding More).
 const tabBarSlotCount = 4;
