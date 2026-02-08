@@ -16,13 +16,49 @@ import { Fix } from './navaids/entities/fix.entity';
 import { Procedure } from './procedures/entities/procedure.entity';
 import { DtppCycle } from './procedures/entities/dtpp-cycle.entity';
 import { ProceduresModule } from './procedures/procedures.module';
+import { RoutesModule } from './routes/routes.module';
+import { PreferredRoute } from './routes/entities/preferred-route.entity';
+import { PreferredRouteSegment } from './routes/entities/preferred-route-segment.entity';
+import { UsersModule } from './users/users.module';
+import { User } from './users/entities/user.entity';
+import { StarredAirport } from './users/entities/starred-airport.entity';
+import { AircraftModule } from './aircraft/aircraft.module';
+import { Aircraft } from './aircraft/entities/aircraft.entity';
+import { PerformanceProfile } from './aircraft/entities/performance-profile.entity';
+import { FuelTank } from './aircraft/entities/fuel-tank.entity';
+import { Equipment } from './aircraft/entities/equipment.entity';
+import { AirspacesModule } from './airspaces/airspaces.module';
+import { Airspace } from './airspaces/entities/airspace.entity';
+import { AirwaySegment } from './airspaces/entities/airway-segment.entity';
+import { ArtccBoundary } from './airspaces/entities/artcc-boundary.entity';
 import { dbConfig } from './db.config';
 
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       ...dbConfig,
-      entities: [Airport, Runway, RunwayEnd, Frequency, Flight, Navaid, Fix, Procedure, DtppCycle],
+      entities: [
+        Airport,
+        Runway,
+        RunwayEnd,
+        Frequency,
+        Flight,
+        Navaid,
+        Fix,
+        Procedure,
+        DtppCycle,
+        PreferredRoute,
+        PreferredRouteSegment,
+        User,
+        StarredAirport,
+        Aircraft,
+        PerformanceProfile,
+        FuelTank,
+        Equipment,
+        Airspace,
+        AirwaySegment,
+        ArtccBoundary,
+      ],
     }),
     AirportsModule,
     WeatherModule,
@@ -31,6 +67,10 @@ import { dbConfig } from './db.config';
     FlightsModule,
     NavaidsModule,
     ProceduresModule,
+    RoutesModule,
+    UsersModule,
+    AircraftModule,
+    AirspacesModule,
   ],
 })
 export class AppModule {}

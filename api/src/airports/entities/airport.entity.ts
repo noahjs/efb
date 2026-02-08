@@ -1,10 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryColumn,
-  OneToMany,
-  Index,
-} from 'typeorm';
+import { Entity, Column, PrimaryColumn, OneToMany, Index } from 'typeorm';
 import { Runway } from './runway.entity';
 import { Frequency } from './frequency.entity';
 
@@ -51,6 +45,69 @@ export class Airport {
 
   @Column({ type: 'varchar', nullable: true })
   status: string;
+
+  @Column({ type: 'integer', nullable: true })
+  tpa: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  fuel_types: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  facility_use: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  artcc_id: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  artcc_name: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  fss_id: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  fss_name: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  notam_id: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  sectional_chart: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  customs_flag: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  landing_rights_flag: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  lighting_schedule: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  beacon_schedule: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  nasr_effective_date: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  manager_name: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  manager_phone: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  manager_address: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  owner_name: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  owner_phone: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  owner_address: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  tower_hours: string;
 
   @OneToMany(() => Runway, (runway) => runway.airport, { cascade: true })
   runways: Runway[];

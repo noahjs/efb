@@ -15,6 +15,9 @@ class PlatformMapView extends StatefulWidget {
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
+  final Map<String, dynamic>? airspaceGeoJson;
+  final Map<String, dynamic>? airwayGeoJson;
+  final Map<String, dynamic>? artccGeoJson;
 
   const PlatformMapView({
     super.key,
@@ -26,6 +29,9 @@ class PlatformMapView extends StatefulWidget {
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
+    this.airspaceGeoJson,
+    this.airwayGeoJson,
+    this.artccGeoJson,
   });
 
   @override
@@ -156,6 +162,15 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (oldWidget.routeCoordinates != widget.routeCoordinates) {
       _updateRouteSource();
     }
+    if (oldWidget.airspaceGeoJson != widget.airspaceGeoJson) {
+      _updateAeroSource('airspaces', widget.airspaceGeoJson);
+    }
+    if (oldWidget.airwayGeoJson != widget.airwayGeoJson) {
+      _updateAeroSource('airways', widget.airwayGeoJson);
+    }
+    if (oldWidget.artccGeoJson != widget.artccGeoJson) {
+      _updateAeroSource('artcc', widget.artccGeoJson);
+    }
   }
 
   void _setInteractive(bool enabled) {
@@ -252,6 +267,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.setStyle('$newStyle');
           map.once('style.load', function() {
             ${_vfrTilesJs(vfrVisibility)}
+            ${_aeronauticalLayersJs()}
             ${_airportLayersJs(widget.showFlightCategory)}
             ${_routeLayerJs()}
             ${_airportClickHandlersJs()}
@@ -263,6 +279,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       Future.delayed(const Duration(milliseconds: 200), () {
         _updateAirportsSource();
         _updateRouteSource();
+        _updateAeroSource('airspaces', widget.airspaceGeoJson);
+        _updateAeroSource('airways', widget.airwayGeoJson);
+        _updateAeroSource('artcc', widget.artccGeoJson);
       });
     } else {
       // Same Mapbox style — just toggle VFR layer visibility
@@ -303,6 +322,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
         map.on('load', function() {
           ${_vfrTilesJs(vfrVisibility)}
+          ${_aeronauticalLayersJs()}
           ${_airportLayersJs(widget.showFlightCategory)}
           ${_routeLayerJs()}
           ${_airportClickHandlersJs()}
@@ -457,6 +477,84 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         }
       ],
     });
+  }
+
+  /// Creates aeronautical GeoJSON sources and layers (ARTCC, airways, airspaces).
+  static String _aeronauticalLayersJs() {
+    return '''
+          map.addSource('artcc', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'artcc-lines',
+            type: 'line',
+            source: 'artcc',
+            paint: {
+              'line-color': '#999999',
+              'line-width': 1,
+              'line-opacity': 0.6,
+              'line-dasharray': [4, 4]
+            }
+          });
+
+          map.addSource('airways', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'airway-lines',
+            type: 'line',
+            source: 'airways',
+            paint: {
+              'line-color': '#64B5F6',
+              'line-width': 1,
+              'line-opacity': 0.7
+            }
+          });
+
+          map.addSource('airspaces', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'airspace-fill',
+            type: 'fill',
+            source: 'airspaces',
+            paint: {
+              'fill-color': '#2196F3',
+              'fill-opacity': 0.1
+            }
+          });
+          map.addLayer({
+            id: 'airspace-border',
+            type: 'line',
+            source: 'airspaces',
+            paint: {
+              'line-color': '#2196F3',
+              'line-width': 2,
+              'line-opacity': 0.8
+            }
+          });
+    ''';
+  }
+
+  void _updateAeroSource(String sourceId, Map<String, dynamic>? data) {
+    if (!_mapReady) return;
+    final geojson = data != null
+        ? jsonEncode(data)
+        : '{"type":"FeatureCollection","features":[]}';
+    final escaped = geojson.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) return;
+        var src = map.getSource('$sourceId');
+        if (src) {
+          src.setData(JSON.parse('$escaped'));
+        }
+      })();
+    ''');
   }
 
   static String _airportClickHandlersJs() {

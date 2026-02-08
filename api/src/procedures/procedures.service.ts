@@ -8,7 +8,14 @@ import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
 
-const PDF_CACHE_DIR = path.join(__dirname, '..', '..', 'data', 'procedures', 'pdfs');
+const PDF_CACHE_DIR = path.join(
+  __dirname,
+  '..',
+  '..',
+  'data',
+  'procedures',
+  'pdfs',
+);
 
 @Injectable()
 export class ProceduresService {

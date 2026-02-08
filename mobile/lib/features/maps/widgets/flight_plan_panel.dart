@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/flight.dart';
 import '../../../services/flight_providers.dart';
+import '../../../services/aircraft_providers.dart';
 import '../../../services/map_flight_provider.dart';
 import '../../flights/widgets/flight_edit_dialogs.dart';
+import '../../flights/widgets/preferred_route_sheet.dart';
 
 class FlightPlanPanel extends ConsumerStatefulWidget {
   const FlightPlanPanel({super.key});
@@ -114,22 +116,67 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
   Future<void> _editWaypoint(Flight flight, int index) async {
     final wps = _parseWaypoints(flight);
     if (index >= wps.length) return;
-    final result = await showTextEditSheet(
-      context,
-      title: 'Edit Waypoint',
-      currentValue: wps[index],
-      hintText: 'Airport or waypoint identifier',
+
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(wps[index],
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                )),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.edit, color: AppColors.textSecondary),
+              title: const Text('Edit',
+                  style: TextStyle(color: AppColors.textPrimary)),
+              onTap: () => Navigator.pop(ctx, 'edit'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: AppColors.error),
+              title: const Text('Remove',
+                  style: TextStyle(color: AppColors.error)),
+              onTap: () => Navigator.pop(ctx, 'remove'),
+            ),
+          ],
+        ),
+      ),
     );
-    if (result != null && result.trim().isNotEmpty) {
-      wps[index] = result.trim().toUpperCase();
+
+    if (!mounted) return;
+    if (action == 'edit') {
+      final result = await showTextEditSheet(
+        context,
+        title: 'Edit Waypoint',
+        currentValue: wps[index],
+        hintText: 'Airport or waypoint identifier',
+      );
+      if (result != null && result.trim().isNotEmpty) {
+        wps[index] = result.trim().toUpperCase();
+        _saveField(_buildRouteUpdate(flight, wps));
+      }
+    } else if (action == 'remove') {
+      wps.removeAt(index);
       _saveField(_buildRouteUpdate(flight, wps));
     }
   }
 
-  void _removeWaypoint(Flight flight, int index) {
+  void _reorderWaypoint(Flight flight, int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex--;
     final wps = _parseWaypoints(flight);
-    if (index >= wps.length) return;
-    wps.removeAt(index);
+    if (oldIndex >= wps.length) return;
+    final item = wps.removeAt(oldIndex);
+    wps.insert(newIndex, item);
     _saveField(_buildRouteUpdate(flight, wps));
   }
 
@@ -143,6 +190,20 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
 
   void _clearFlight() {
     ref.read(activeFlightProvider.notifier).clear();
+  }
+
+  Future<void> _openRouteFinder(Flight? flight, List<String> waypoints) async {
+    if (waypoints.length < 2) return;
+    final origin = waypoints.first;
+    final destination = waypoints.last;
+    final result = await showPreferredRouteSheet(
+      context,
+      origin: origin,
+      destination: destination,
+    );
+    if (result != null && flight != null) {
+      _saveField(flight.copyWith(routeString: result.routeString));
+    }
   }
 
   String _formatEte(int? minutes) {
@@ -166,6 +227,156 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     }
   }
 
+  void _showAircraftPicker(Flight? flight) {
+    final aircraftAsync = ref.read(aircraftListProvider(''));
+    aircraftAsync.when(
+      loading: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Loading aircraft...')),
+        );
+      },
+      error: (_, _) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load aircraft')),
+        );
+      },
+      data: (aircraftList) {
+        if (aircraftList.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No aircraft found. Add one in the Aircraft tab.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: AppColors.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+          ),
+          builder: (ctx) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Select Aircraft',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    )),
+                const SizedBox(height: 12),
+                ...aircraftList.map((a) => ListTile(
+                      title: Text(a.tailNumber,
+                          style: const TextStyle(color: AppColors.textPrimary)),
+                      subtitle: Text(a.aircraftType,
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 13)),
+                      trailing: a.id == flight?.aircraftId
+                          ? const Icon(Icons.check,
+                              color: AppColors.accent, size: 20)
+                          : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        final defaultProfile = a.defaultProfile;
+                        _saveField((flight ?? const Flight()).copyWith(
+                          aircraftId: a.id,
+                          aircraftIdentifier: a.tailNumber,
+                          aircraftType: a.aircraftType,
+                          performanceProfileId: defaultProfile?.id,
+                          performanceProfile: defaultProfile?.name,
+                          trueAirspeed: defaultProfile?.cruiseTas?.round(),
+                          fuelBurnRate: defaultProfile?.cruiseFuelBurn,
+                        ));
+                      },
+                    )),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showProfilePicker(Flight? flight) {
+    if (flight?.aircraftId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select an aircraft first'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final detailAsync = ref.read(aircraftDetailProvider(flight!.aircraftId!));
+    detailAsync.when(
+      loading: () {},
+      error: (_, _) {},
+      data: (aircraft) {
+        if (aircraft == null) return;
+        final profiles = aircraft.performanceProfiles;
+        if (profiles.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('No profiles. Add one in the Aircraft tab.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+          return;
+        }
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: AppColors.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+          ),
+          builder: (ctx) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Select Profile',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    )),
+                const SizedBox(height: 12),
+                ...profiles.map((p) => ListTile(
+                      title: Text(p.name,
+                          style:
+                              const TextStyle(color: AppColors.textPrimary)),
+                      subtitle: Text(
+                          '${p.cruiseTas?.round() ?? '--'} kt / ${p.cruiseFuelBurn ?? '--'} GPH',
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 13)),
+                      trailing: p.id == flight.performanceProfileId
+                          ? const Icon(Icons.check,
+                              color: AppColors.accent, size: 20)
+                          : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _saveField(flight.copyWith(
+                          performanceProfileId: p.id,
+                          performanceProfile: p.name,
+                          trueAirspeed: p.cruiseTas?.round(),
+                          fuelBurnRate: p.cruiseFuelBurn,
+                        ));
+                      },
+                    )),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final flight = ref.watch(activeFlightProvider);
@@ -184,30 +395,14 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
                 Expanded(
                   child: _MetadataChip(
                     label: flight?.aircraftIdentifier ?? 'Tail #',
-                    onTap: () => _editTextField(
-                      title: 'Aircraft Identifier',
-                      currentValue: flight?.aircraftIdentifier,
-                      updater: (val) =>
-                          (flight ?? const Flight()).copyWith(
-                            aircraftIdentifier: val.toUpperCase(),
-                          ),
-                      hint: 'e.g. N980EK',
-                    ),
+                    onTap: () => _showAircraftPicker(flight),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: _MetadataChip(
                     label: flight?.performanceProfile ?? 'Performance',
-                    onTap: () => _editTextField(
-                      title: 'Performance Profile',
-                      currentValue: flight?.performanceProfile,
-                      updater: (val) =>
-                          (flight ?? const Flight()).copyWith(
-                            performanceProfile: val,
-                          ),
-                      hint: 'e.g. Maximum Cruise',
-                    ),
+                    onTap: () => _showProfilePicker(flight),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -293,36 +488,62 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
 
           const Divider(height: 1, color: AppColors.divider),
 
-          // Route waypoint chips
+          // Route waypoint chips (drag to reorder)
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
+            child: SizedBox(
+              height: 34,
+              child: Row(
                 children: [
-                  for (var i = 0; i < waypoints.length; i++)
-                    GestureDetector(
-                      onTap: () => _editWaypoint(flight!, i),
-                      onLongPress: () => _removeWaypoint(flight!, i),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          waypoints[i],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: waypoints.isEmpty
+                        ? const SizedBox.shrink()
+                        : ReorderableListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            onReorder: (oldIndex, newIndex) {
+                              if (flight != null) {
+                                _reorderWaypoint(flight, oldIndex, newIndex);
+                              }
+                            },
+                            proxyDecorator: (child, index, animation) {
+                              return Material(
+                                color: Colors.transparent,
+                                elevation: 4,
+                                shadowColor: Colors.black54,
+                                borderRadius: BorderRadius.circular(8),
+                                child: child,
+                              );
+                            },
+                            buildDefaultDragHandles: true,
+                            itemCount: waypoints.length,
+                            itemBuilder: (context, i) => Padding(
+                              key: ValueKey('wp_${waypoints[i]}_$i'),
+                              padding: const EdgeInsets.only(right: 6),
+                              child: GestureDetector(
+                                onTap: () => _editWaypoint(flight!, i),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      waypoints[i],
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
+                  ),
+                  const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () => _addWaypoint(flight),
                     child: Container(
@@ -341,12 +562,47 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
             ),
           ),
 
-          // Swap / Clear row
+          // Swap / Clear / Find Route row
           Padding(
             padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                // Find Route button
+                GestureDetector(
+                  onTap: waypoints.length >= 2
+                      ? () => _openRouteFinder(flight, waypoints)
+                      : null,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.alt_route,
+                            size: 14,
+                            color: waypoints.length >= 2
+                                ? AppColors.accent
+                                : AppColors.textMuted),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Find Route',
+                          style: TextStyle(
+                            color: waypoints.length >= 2
+                                ? AppColors.accent
+                                : AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Spacer(),
                 if (_saving)
                   const Padding(
                     padding: EdgeInsets.only(right: 8),

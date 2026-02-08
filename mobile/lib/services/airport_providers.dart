@@ -1,6 +1,24 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_client.dart';
 
+/// Provider for starred airports (full airport objects)
+final starredAirportsProvider =
+    FutureProvider<List<dynamic>>((ref) async {
+  final client = ref.read(apiClientProvider);
+  return client.getStarredAirports();
+});
+
+/// Provider for starred airport identifiers (for quick lookup)
+final starredAirportIdsProvider = Provider<AsyncValue<Set<String>>>((ref) {
+  final starred = ref.watch(starredAirportsProvider);
+  return starred.whenData(
+    (airports) => airports
+        .map((a) => (a['identifier'] ?? '') as String)
+        .where((id) => id.isNotEmpty)
+        .toSet(),
+  );
+});
+
 /// Provider for airport search results
 final airportSearchProvider =
     FutureProvider.family<Map<String, dynamic>, String>((ref, query) async {
@@ -64,6 +82,15 @@ final forecastProvider =
   return client.getForecast(icao);
 });
 
+/// Provider for nearby airports
+final nearbyAirportsProvider = FutureProvider.family<List<dynamic>,
+    ({double lat, double lng})>(
+  (ref, params) async {
+    final client = ref.read(apiClientProvider);
+    return client.getNearbyAirports(lat: params.lat, lng: params.lng, limit: 8);
+  },
+);
+
 /// Provider for airports in map bounds
 final mapAirportsProvider = FutureProvider.family<List<dynamic>,
     ({double minLat, double maxLat, double minLng, double maxLng})>(
@@ -77,6 +104,15 @@ final mapAirportsProvider = FutureProvider.family<List<dynamic>,
     );
   },
 );
+
+/// Resolve a list of waypoint identifiers (airports, navaids, fixes)
+/// to coordinates. The parameter is a comma-joined string of identifiers.
+final resolvedRouteProvider =
+    FutureProvider.family<List<dynamic>, String>((ref, ids) async {
+  if (ids.isEmpty) return [];
+  final client = ref.read(apiClientProvider);
+  return client.resolveWaypoints(ids.split(','));
+});
 
 /// Provider for bulk METARs in map bounds (flight categories)
 final mapMetarsProvider = FutureProvider.family<List<dynamic>,

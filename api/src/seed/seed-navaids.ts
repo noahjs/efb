@@ -65,17 +65,12 @@ async function seedNavaids(ds: DataSource): Promise<number> {
         type: (r['NAV_TYPE'] || '').trim(),
         latitude: lat,
         longitude: lng,
-        elevation:
-          parseFloat(r['ELEV'] || '') || undefined,
-        frequency:
-          (r['FREQ'] || '').trim() || undefined,
-        channel:
-          (r['CHAN'] || '').trim() || undefined,
-        magnetic_variation:
-          (r['MAG_VARN'] || '').trim() || undefined,
+        elevation: parseFloat(r['ELEV'] || '') || undefined,
+        frequency: (r['FREQ'] || '').trim() || undefined,
+        channel: (r['CHAN'] || '').trim() || undefined,
+        magnetic_variation: (r['MAG_VARN'] || '').trim() || undefined,
         state: (r['STATE_CODE'] || '').trim() || undefined,
-        status:
-          (r['NAV_STATUS'] || '').trim() || undefined,
+        status: (r['NAV_STATUS'] || '').trim() || undefined,
       });
     }
 
@@ -246,10 +241,8 @@ async function seedFixes(ds: DataSource): Promise<number> {
         latitude: lat,
         longitude: lng,
         state: (r['STATE_CODE'] || '').trim() || undefined,
-        artcc_high:
-          (r['ARTCC_ID_HIGH'] || '').trim() || undefined,
-        artcc_low:
-          (r['ARTCC_ID_LOW'] || '').trim() || undefined,
+        artcc_high: (r['ARTCC_ID_HIGH'] || '').trim() || undefined,
+        artcc_low: (r['ARTCC_ID_LOW'] || '').trim() || undefined,
       });
     }
 
@@ -267,7 +260,7 @@ async function seedSampleFixes(ds: DataSource): Promise<number> {
   const samples: Partial<Fix>[] = [
     {
       identifier: 'TOMSN',
-      latitude: 39.9500,
+      latitude: 39.95,
       longitude: -105.1333,
       state: 'CO',
       artcc_high: 'ZDV',
@@ -275,8 +268,8 @@ async function seedSampleFixes(ds: DataSource): Promise<number> {
     },
     {
       identifier: 'DRAIN',
-      latitude: 39.7500,
-      longitude: -104.7000,
+      latitude: 39.75,
+      longitude: -104.7,
       state: 'CO',
       artcc_high: 'ZDV',
       artcc_low: 'ZDV',
@@ -291,7 +284,7 @@ async function seedSampleFixes(ds: DataSource): Promise<number> {
     },
     {
       identifier: 'TSHNR',
-      latitude: 39.6500,
+      latitude: 39.65,
       longitude: -104.9667,
       state: 'CO',
       artcc_high: 'ZDV',
@@ -315,7 +308,7 @@ async function seedSampleFixes(ds: DataSource): Promise<number> {
     },
     {
       identifier: 'SSKIS',
-      latitude: 39.6000,
+      latitude: 39.6,
       longitude: -106.5167,
       state: 'CO',
       artcc_high: 'ZDV',
@@ -324,14 +317,14 @@ async function seedSampleFixes(ds: DataSource): Promise<number> {
     {
       identifier: 'LANDR',
       latitude: 40.1833,
-      longitude: -105.1000,
+      longitude: -105.1,
       state: 'CO',
       artcc_high: 'ZDV',
       artcc_low: 'ZDV',
     },
     {
       identifier: 'WOBEE',
-      latitude: 39.5500,
+      latitude: 39.55,
       longitude: -104.5833,
       state: 'CO',
       artcc_high: 'ZDV',

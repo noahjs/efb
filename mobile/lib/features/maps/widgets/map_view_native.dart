@@ -14,6 +14,9 @@ class PlatformMapView extends StatefulWidget {
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
+  final Map<String, dynamic>? airspaceGeoJson;
+  final Map<String, dynamic>? airwayGeoJson;
+  final Map<String, dynamic>? artccGeoJson;
 
   const PlatformMapView({
     super.key,
@@ -25,6 +28,9 @@ class PlatformMapView extends StatefulWidget {
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
+    this.airspaceGeoJson,
+    this.airwayGeoJson,
+    this.artccGeoJson,
   });
 
   @override
@@ -35,6 +41,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   MapboxMap? _mapboxMap;
   bool _airportSourceReady = false;
   bool _routeSourceReady = false;
+  bool _aeroSourceReady = false;
 
   static const _vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
 
@@ -73,6 +80,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
     if (oldWidget.routeCoordinates != widget.routeCoordinates) {
       _updateRouteSource();
+    }
+    if (oldWidget.airspaceGeoJson != widget.airspaceGeoJson ||
+        oldWidget.airwayGeoJson != widget.airwayGeoJson ||
+        oldWidget.artccGeoJson != widget.artccGeoJson) {
+      _updateAeronauticalSources();
     }
   }
 
@@ -233,12 +245,14 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   void _onStyleLoaded(StyleLoadedEventData data) async {
     if (_mapboxMap == null) return;
     await _addVfrTiles(_mapboxMap!);
+    await _addAeronauticalLayers(_mapboxMap!);
     await _addAirportLayers(_mapboxMap!);
     await _addRouteLayer(_mapboxMap!);
     await _applyFlightCategoryMode(widget.showFlightCategory);
     // Push current data into the fresh sources
     _updateAirportsSource();
     _updateRouteSource();
+    _updateAeronauticalSources();
     // Fire initial bounds
     _fireBounds();
   }
@@ -397,6 +411,87 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       await _mapboxMap!.style.setStyleSourceProperty('route', 'data', geojson);
     } catch (e) {
       debugPrint('Failed to update route source: $e');
+    }
+  }
+
+  /// Creates aeronautical GeoJSON sources and layers (airspaces, airways, ARTCC).
+  /// Added below VFR tiles but above airport dots so airspace fills don't cover airports.
+  Future<void> _addAeronauticalLayers(MapboxMap map) async {
+    const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
+
+    try {
+      // ARTCC boundaries (bottom layer — gray dashed)
+      await map.style
+          .addSource(GeoJsonSource(id: 'artcc', data: emptyGeoJson));
+      await map.style.addLayer(LineLayer(
+        id: 'artcc-lines',
+        sourceId: 'artcc',
+        lineColor: const Color(0xFF999999).toARGB32(),
+        lineWidth: 1.0,
+        lineOpacity: 0.6,
+        lineDasharray: [4.0, 4.0],
+      ));
+
+      // Airways (thin light-blue lines)
+      await map.style
+          .addSource(GeoJsonSource(id: 'airways', data: emptyGeoJson));
+      await map.style.addLayer(LineLayer(
+        id: 'airway-lines',
+        sourceId: 'airways',
+        lineColor: const Color(0xFF64B5F6).toARGB32(),
+        lineWidth: 1.0,
+        lineOpacity: 0.7,
+      ));
+
+      // Airspaces (fill + border)
+      await map.style
+          .addSource(GeoJsonSource(id: 'airspaces', data: emptyGeoJson));
+      await map.style.addLayer(FillLayer(
+        id: 'airspace-fill',
+        sourceId: 'airspaces',
+        fillOpacity: 0.1,
+        fillColor: const Color(0xFF2196F3).toARGB32(),
+      ));
+      await map.style.addLayer(LineLayer(
+        id: 'airspace-border',
+        sourceId: 'airspaces',
+        lineWidth: 2.0,
+        lineColor: const Color(0xFF2196F3).toARGB32(),
+        lineOpacity: 0.8,
+      ));
+
+      _aeroSourceReady = true;
+    } catch (e) {
+      debugPrint('Failed to add aeronautical layers: $e');
+    }
+  }
+
+  Future<void> _updateAeronauticalSources() async {
+    if (!_aeroSourceReady || _mapboxMap == null) return;
+
+    try {
+      // Update airspaces
+      final airspaceData = widget.airspaceGeoJson != null
+          ? jsonEncode(widget.airspaceGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('airspaces', 'data', airspaceData);
+
+      // Update airways
+      final airwayData = widget.airwayGeoJson != null
+          ? jsonEncode(widget.airwayGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('airways', 'data', airwayData);
+
+      // Update ARTCC
+      final artccData = widget.artccGeoJson != null
+          ? jsonEncode(widget.artccGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('artcc', 'data', artccData);
+    } catch (e) {
+      debugPrint('Failed to update aeronautical sources: $e');
     }
   }
 

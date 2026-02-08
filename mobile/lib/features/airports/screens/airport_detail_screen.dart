@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/solar.dart';
+import '../../../services/api_client.dart';
 import '../../../services/airport_providers.dart';
 import '../widgets/airport_info_tab.dart';
 import '../widgets/airport_weather_tab.dart';
@@ -30,14 +31,7 @@ class AirportDetailScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(context).pop(),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.person_outline),
-              onPressed: () {},
-            ),
-            IconButton(
-              icon: const Icon(Icons.my_location),
-              onPressed: () {},
-            ),
+            _StarButton(airportId: airportId),
           ],
         ),
         body: Column(
@@ -233,6 +227,45 @@ class _AirportHeader extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _StarButton extends ConsumerWidget {
+  final String airportId;
+
+  const _StarButton({required this.airportId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final starredIdsAsync = ref.watch(starredAirportIdsProvider);
+    final starredIds =
+        starredIdsAsync.whenOrNull(data: (ids) => ids) ?? <String>{};
+
+    // Check both FAA and ICAO forms
+    final airportAsync = ref.watch(airportDetailProvider(airportId));
+    final faaId = airportAsync.whenOrNull(
+        data: (a) => a?['identifier'] as String?) ?? airportId;
+    final isStarred = starredIds.contains(faaId);
+
+    return IconButton(
+      icon: Icon(
+        isStarred ? Icons.star : Icons.star_border,
+        color: isStarred ? Colors.amber : null,
+      ),
+      onPressed: () async {
+        final client = ref.read(apiClientProvider);
+        try {
+          if (isStarred) {
+            await client.unstarAirport(faaId);
+          } else {
+            await client.starAirport(airportId);
+          }
+          ref.invalidate(starredAirportsProvider);
+        } catch (_) {
+          // ignore
+        }
+      },
     );
   }
 }

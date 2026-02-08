@@ -4,12 +4,34 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Aircraft } from '../../aircraft/entities/aircraft.entity';
+import { PerformanceProfile } from '../../aircraft/entities/performance-profile.entity';
 
 @Entity('flights')
 export class Flight {
   @PrimaryGeneratedColumn()
   id: number;
+
+  // Aircraft FK links
+  @Column({ type: 'integer', nullable: true })
+  aircraft_id: number;
+
+  @ManyToOne(() => Aircraft, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'aircraft_id' })
+  aircraft: Aircraft;
+
+  @Column({ type: 'integer', nullable: true })
+  performance_profile_id: number;
+
+  @ManyToOne(() => PerformanceProfile, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'performance_profile_id' })
+  performance_profile_rel: PerformanceProfile;
 
   // Departure / Destination
   @Column({ type: 'varchar', nullable: true })

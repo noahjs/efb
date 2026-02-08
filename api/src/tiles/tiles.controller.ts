@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Res,
-  NotFoundException,
-} from '@nestjs/common';
+import { Controller, Get, Param, Res, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';

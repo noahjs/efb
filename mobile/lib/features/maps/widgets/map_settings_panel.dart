@@ -3,14 +3,10 @@ import '../../../core/theme/app_theme.dart';
 
 class MapSettingsPanel extends StatefulWidget {
   final VoidCallback onClose;
-  final bool airportsOnly;
-  final ValueChanged<bool> onAirportsOnlyChanged;
 
   const MapSettingsPanel({
     super.key,
     required this.onClose,
-    required this.airportsOnly,
-    required this.onAirportsOnlyChanged,
   });
 
   @override
@@ -189,13 +185,6 @@ class _MapSettingsPanelState extends State<MapSettingsPanel> {
                         setState(() => _routeLabels = v),
                   ),
 
-                  // Airports
-                  _SectionLabel('AIRPORTS'),
-                  _SettingsToggle(
-                    label: 'Airports Only',
-                    value: widget.airportsOnly,
-                    onChanged: widget.onAirportsOnlyChanged,
-                  ),
                   const SizedBox(height: 20),
                 ],
               ),

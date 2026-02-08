@@ -29,9 +29,7 @@ export class AirportsService {
       qb.andWhere('airport.state = :state', { state });
     }
 
-    qb.orderBy('airport.identifier', 'ASC')
-      .skip(offset)
-      .take(limit);
+    qb.orderBy('airport.identifier', 'ASC').skip(offset).take(limit);
 
     const [items, total] = await qb.getManyAndCount();
     return { items, total, limit, offset };
@@ -39,10 +37,7 @@ export class AirportsService {
 
   async findById(identifier: string) {
     return this.airportRepo.findOne({
-      where: [
-        { identifier },
-        { icao_identifier: identifier },
-      ],
+      where: [{ identifier }, { icao_identifier: identifier }],
       relations: ['runways', 'runways.ends', 'frequencies'],
     });
   }
@@ -69,7 +64,12 @@ export class AirportsService {
     return airports
       .map((a) => ({
         ...a,
-        distance_nm: this.haversineNm(lat, lng, a.latitude ?? 0, a.longitude ?? 0),
+        distance_nm: this.haversineNm(
+          lat,
+          lng,
+          a.latitude ?? 0,
+          a.longitude ?? 0,
+        ),
       }))
       .sort((a, b) => a.distance_nm - b.distance_nm);
   }
@@ -117,7 +117,10 @@ export class AirportsService {
     return this.airportRepo
       .createQueryBuilder('airport')
       .where('airport.latitude BETWEEN :minLat AND :maxLat', { minLat, maxLat })
-      .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', { minLng, maxLng })
+      .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', {
+        minLng,
+        maxLng,
+      })
       .take(limit)
       .getMany();
   }

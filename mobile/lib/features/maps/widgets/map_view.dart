@@ -35,6 +35,11 @@ class EfbMapView extends StatelessWidget {
   /// Route line coordinates as [[lng, lat], ...].
   final List<List<double>> routeCoordinates;
 
+  /// Aeronautical GeoJSON FeatureCollections (airspaces, airways, ARTCC).
+  final Map<String, dynamic>? airspaceGeoJson;
+  final Map<String, dynamic>? airwayGeoJson;
+  final Map<String, dynamic>? artccGeoJson;
+
   const EfbMapView({
     super.key,
     required this.baseLayer,
@@ -45,6 +50,9 @@ class EfbMapView extends StatelessWidget {
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
+    this.airspaceGeoJson,
+    this.airwayGeoJson,
+    this.artccGeoJson,
   });
 
   @override
@@ -58,6 +66,9 @@ class EfbMapView extends StatelessWidget {
       airports: airports,
       routeCoordinates: routeCoordinates,
       controller: controller,
+      airspaceGeoJson: airspaceGeoJson,
+      airwayGeoJson: airwayGeoJson,
+      artccGeoJson: artccGeoJson,
     );
   }
 }

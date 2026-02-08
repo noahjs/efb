@@ -5,12 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../../services/airport_providers.dart';
+import '../../services/aeronautical_providers.dart';
 import '../../services/map_flight_provider.dart';
 import 'widgets/map_toolbar.dart';
 import 'widgets/map_sidebar.dart';
 import 'widgets/map_bottom_bar.dart';
 import 'widgets/layer_picker.dart';
 import 'widgets/map_settings_panel.dart';
+import 'widgets/aeronautical_settings_panel.dart';
 import 'widgets/map_view.dart';
 import 'widgets/airport_bottom_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
@@ -29,6 +31,12 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   String _selectedBaseLayer = 'satellite';
   final Set<String> _activeOverlays = {'flight_category'};
   bool _airportsOnly = true;
+  bool _showAirspaces = true;
+  bool _showClassE = true;
+  bool _showAirways = true;
+  bool _showLowAirways = true;
+  bool _showHighAirways = true;
+  bool _showArtcc = true;
   final _mapController = EfbMapController();
 
   MapBounds? _currentBounds;
@@ -107,6 +115,45 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     });
   }
 
+  void _showAeroSettingsPanel() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => AeronauticalSettingsPanel(
+        onClose: () => Navigator.of(context).pop(),
+        showAirspaces: _showAirspaces,
+        onAirspacesChanged: (v) {
+          setState(() => _showAirspaces = v);
+        },
+        showClassE: _showClassE,
+        onClassEChanged: (v) {
+          setState(() => _showClassE = v);
+        },
+        showAirways: _showAirways,
+        onAirwaysChanged: (v) {
+          setState(() => _showAirways = v);
+        },
+        showLowAirways: _showLowAirways,
+        onLowAirwaysChanged: (v) {
+          setState(() => _showLowAirways = v);
+        },
+        showHighAirways: _showHighAirways,
+        onHighAirwaysChanged: (v) {
+          setState(() => _showHighAirways = v);
+        },
+        showArtcc: _showArtcc,
+        onArtccChanged: (v) {
+          setState(() => _showArtcc = v);
+        },
+        airportsOnly: _airportsOnly,
+        onAirportsOnlyChanged: (v) {
+          setState(() => _airportsOnly = v);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final toolbarBottom = MediaQuery.of(context).padding.top + 90;
@@ -154,21 +201,49 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       }
     }
 
+    // When aeronautical overlay is active, fetch airspace/airway/ARTCC data
+    final showAeronautical = _activeOverlays.contains('aeronautical');
+    Map<String, dynamic>? airspaceGeoJson;
+    Map<String, dynamic>? airwayGeoJson;
+    Map<String, dynamic>? artccGeoJson;
+    if (showAeronautical && _currentBounds != null) {
+      if (_showAirspaces) {
+        airspaceGeoJson =
+            ref.watch(mapAirspacesProvider(_currentBounds!)).value;
+      }
+      if (_showAirways) {
+        airwayGeoJson =
+            ref.watch(mapAirwaysProvider(_currentBounds!)).value;
+      }
+      if (_showArtcc) {
+        artccGeoJson =
+            ref.watch(mapArtccProvider(_currentBounds!)).value;
+      }
+    }
+
     // Build route line coordinates from active flight's routeString
+    // Uses the waypoint resolver which handles airports, navaids, and fixes
     final activeFlight = ref.watch(activeFlightProvider);
     final routeCoordinates = <List<double>>[];
     final routeStr = activeFlight?.routeString;
     final routeWaypoints = (routeStr != null && routeStr.trim().isNotEmpty)
         ? routeStr.trim().split(RegExp(r'\s+'))
         : <String>[];
-    for (final wp in routeWaypoints) {
-      final aptAsync = ref.watch(airportDetailProvider(wp));
-      final apt = aptAsync.value;
-      if (apt != null && apt['latitude'] != null && apt['longitude'] != null) {
-        routeCoordinates.add([
-          (apt['longitude'] as num).toDouble(),
-          (apt['latitude'] as num).toDouble(),
-        ]);
+    if (routeWaypoints.isNotEmpty) {
+      final resolvedAsync =
+          ref.watch(resolvedRouteProvider(routeWaypoints.join(',')));
+      final resolved = resolvedAsync.value;
+      if (resolved != null) {
+        for (final wp in resolved) {
+          if (wp is Map &&
+              wp['latitude'] != null &&
+              wp['longitude'] != null) {
+            routeCoordinates.add([
+              (wp['longitude'] as num).toDouble(),
+              (wp['latitude'] as num).toDouble(),
+            ]);
+          }
+        }
       }
     }
 
@@ -186,6 +261,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               airports: airports,
               routeCoordinates: routeCoordinates,
               controller: _mapController,
+              airspaceGeoJson: airspaceGeoJson,
+              airwayGeoJson: airwayGeoJson,
+              artccGeoJson: artccGeoJson,
             ),
           ),
 
@@ -196,6 +274,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
             child: MapSidebar(
               onZoomIn: _mapController.zoomIn,
               onZoomOut: _mapController.zoomOut,
+              onAeroSettingsTap: _showAeroSettingsPanel,
             ),
           ),
 
@@ -250,9 +329,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                       alignment: Alignment.topCenter,
                       child: MapSettingsPanel(
                         onClose: _toggleSettings,
-                        airportsOnly: _airportsOnly,
-                        onAirportsOnlyChanged: (v) =>
-                            setState(() => _airportsOnly = v),
                       ),
                     ),
                   ),

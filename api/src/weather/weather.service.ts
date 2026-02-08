@@ -304,8 +304,7 @@ export class WeatherService {
         if (!candidateId || candidateId === faaId) continue;
 
         const candidateHasData = parsedMaps.some(
-          (m) =>
-            m.data.has(candidateId) && m.data.get(candidateId)!.length > 0,
+          (m) => m.data.has(candidateId) && m.data.get(candidateId)!.length > 0,
         );
 
         if (candidateHasData) {
@@ -402,10 +401,10 @@ export class WeatherService {
 
         // Determine column positions by finding each altitude number's position
         colPositions = matches.map((m, idx) => {
-          const start = m.index!;
+          const start = m.index;
           const end =
             idx < matches.length - 1
-              ? matches[idx + 1].index!
+              ? matches[idx + 1].index
               : line.length + 10;
           return { start, end };
         });
@@ -432,7 +431,9 @@ export class WeatherService {
       for (let j = 0; j < altitudes.length; j++) {
         const alt = altitudes[j];
         const { start, end } = colPositions[j];
-        const rawValue = line.substring(start, Math.min(end, line.length)).trim();
+        const rawValue = line
+          .substring(start, Math.min(end, line.length))
+          .trim();
 
         const decoded = this.decodeWindValue(rawValue, alt);
         stationAltitudes.push({
@@ -601,10 +602,7 @@ export class WeatherService {
           type: n.keyword ?? '',
           icaoId: n.icaoId ?? icao,
           facilityDesignator: n.facilityDesignator ?? '',
-          text:
-            n.traditionalMessageFrom4thWord ??
-            n.traditionalMessage ??
-            '',
+          text: n.traditionalMessageFrom4thWord ?? n.traditionalMessage ?? '',
           effectiveStart: this.parseNotamDate(n.startDate),
           effectiveEnd: this.parseNotamDate(n.endDate),
           classification: n.featureName ?? '',
@@ -632,9 +630,7 @@ export class WeatherService {
     if (!dateStr) return null;
     // Handle "MM/DD/YYYY HHMM" or "MM/DD/YYYY HHMMest" formats
     const clean = dateStr.replace(/EST$/i, '').trim();
-    const match = clean.match(
-      /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2})(\d{2})$/,
-    );
+    const match = clean.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2})(\d{2})$/);
     if (!match) return null;
     const [, month, day, year, hour, minute] = match;
     return `${year}-${month}-${day}T${hour}:${minute}:00Z`;

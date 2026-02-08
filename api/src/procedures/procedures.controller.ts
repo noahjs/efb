@@ -39,10 +39,7 @@ export class ProceduresController {
       id,
     );
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="${fileName}"`,
-    );
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
     res.sendFile(filePath);
   }
 }

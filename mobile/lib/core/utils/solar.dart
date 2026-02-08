@@ -5,10 +5,18 @@ import 'dart:math';
 class SolarTimes {
   final DateTime sunrise;
   final DateTime sunset;
+  final DateTime? civilDawn;
+  final DateTime? civilDusk;
 
-  SolarTimes({required this.sunrise, required this.sunset});
+  SolarTimes({
+    required this.sunrise,
+    required this.sunset,
+    this.civilDawn,
+    this.civilDusk,
+  });
 
-  /// Compute sunrise/sunset in UTC for the given [date], [latitude], and [longitude].
+  /// Compute sunrise/sunset and civil twilight in UTC for the given [date],
+  /// [latitude], and [longitude].
   /// Returns null if the sun never rises or never sets (polar regions).
   static SolarTimes? forDate({
     required DateTime date,
@@ -48,25 +56,40 @@ class SolarTimes {
             0.5 * varY * varY * sin(4 * _rad(geomMeanLongSun)) -
             1.25 * eccentEarthOrbit * eccentEarthOrbit * sin(2 * _rad(geomMeanAnomSun)));
 
-    // Hour angle for official sunrise/sunset (zenith = 90.833 degrees)
-    final cosHA = (cos(_rad(90.833)) / (cos(_rad(latitude)) * cos(_rad(sunDeclin)))) -
-        tan(_rad(latitude)) * tan(_rad(sunDeclin));
-
-    if (cosHA > 1 || cosHA < -1) {
-      return null; // No sunrise/sunset (polar day or night)
-    }
-
-    final ha = _deg(acos(cosHA));
-
     // Solar noon in minutes from midnight UTC
     final solarNoon = (720 - 4 * longitude - eqOfTime);
-    final sunriseMinutes = solarNoon - ha * 4;
-    final sunsetMinutes = solarNoon + ha * 4;
+
+    // Hour angle for official sunrise/sunset (zenith = 90.833 degrees)
+    final cosHASun = _cosHourAngle(90.833, latitude, sunDeclin);
+    if (cosHASun == null) return null;
+    final haSun = _deg(acos(cosHASun));
+
+    // Hour angle for civil twilight (zenith = 96.0 degrees)
+    final cosHACivil = _cosHourAngle(96.0, latitude, sunDeclin);
+    DateTime? civilDawn;
+    DateTime? civilDusk;
+    if (cosHACivil != null) {
+      final haCivil = _deg(acos(cosHACivil));
+      civilDawn = _minutesToDateTime(date, solarNoon - haCivil * 4);
+      civilDusk = _minutesToDateTime(date, solarNoon + haCivil * 4);
+    }
 
     return SolarTimes(
-      sunrise: _minutesToDateTime(date, sunriseMinutes),
-      sunset: _minutesToDateTime(date, sunsetMinutes),
+      sunrise: _minutesToDateTime(date, solarNoon - haSun * 4),
+      sunset: _minutesToDateTime(date, solarNoon + haSun * 4),
+      civilDawn: civilDawn,
+      civilDusk: civilDusk,
     );
+  }
+
+  /// Returns cosHA for a given zenith angle, or null if no event occurs.
+  static double? _cosHourAngle(
+      double zenith, double latitude, double sunDeclin) {
+    final cosHA =
+        (cos(_rad(zenith)) / (cos(_rad(latitude)) * cos(_rad(sunDeclin)))) -
+            tan(_rad(latitude)) * tan(_rad(sunDeclin));
+    if (cosHA > 1 || cosHA < -1) return null;
+    return cosHA;
   }
 
   static double _julianDate(int year, int month, int day) {

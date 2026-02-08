@@ -1,11 +1,14 @@
-import {
-  IsOptional,
-  IsString,
-  IsNumber,
-  IsIn,
-} from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsIn } from 'class-validator';
 
 export class CreateFlightDto {
+  @IsOptional()
+  @IsNumber()
+  aircraft_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  performance_profile_id?: number;
+
   @IsOptional()
   @IsString()
   departure_identifier?: string;

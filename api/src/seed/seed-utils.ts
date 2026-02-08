@@ -36,11 +36,7 @@ export function downloadFile(url: string, dest: string): Promise<void> {
         if (response.statusCode && response.statusCode >= 400) {
           file.close();
           fs.unlinkSync(dest);
-          reject(
-            new Error(
-              `HTTP ${response.statusCode} downloading ${url}`,
-            ),
-          );
+          reject(new Error(`HTTP ${response.statusCode} downloading ${url}`));
           return;
         }
 
@@ -158,11 +154,15 @@ export async function ensureNasrData(nasrDir: string): Promise<void> {
   // Extract nested CSV ZIP (e.g. CSV_Data/22_Jan_2026_CSV.zip)
   const csvDataDir = path.join(nasrDir, 'CSV_Data');
   if (fs.existsSync(csvDataDir)) {
-    const nestedZips = fs.readdirSync(csvDataDir).filter(f => f.endsWith('.zip'));
+    const nestedZips = fs
+      .readdirSync(csvDataDir)
+      .filter((f) => f.endsWith('.zip'));
     for (const z of nestedZips) {
       const nestedPath = path.join(csvDataDir, z);
       console.log(`Extracting ${z}...`);
-      execSync(`unzip -o "${nestedPath}" -d "${csvDataDir}"`, { stdio: 'pipe' });
+      execSync(`unzip -o "${nestedPath}" -d "${csvDataDir}"`, {
+        stdio: 'pipe',
+      });
     }
   }
 

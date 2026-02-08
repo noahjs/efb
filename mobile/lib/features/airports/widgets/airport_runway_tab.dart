@@ -389,6 +389,7 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final airportAsync = ref.watch(airportDetailProvider(widget.airportId));
+    final metarAsync = ref.watch(metarProvider(widget.airportId));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -438,6 +439,7 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
               // Clamp index in case data changed
               final endIndex = _selectedEndIndex.clamp(0, ends.length - 1);
               final end = ends[endIndex];
+              final endId = end['identifier'] as String? ?? '';
 
               final length = runway['length'];
               final width = runway['width'];
@@ -466,33 +468,77 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
               final lng = end['longitude'];
               final displaced = end['displaced_threshold'];
 
-              return ListView(
-                controller: scrollController,
+              // Compute wind components for selected runway end
+              final metar = metarAsync.whenData((d) => d).value;
+              final windDir = metar?['wdir'] as num?;
+              final windSpd = metar?['wspd'] as num?;
+              final windGust = metar?['wgst'] as num?;
+
+              int? headwindComp, crosswindComp, gustHead, gustCross;
+              bool isHeadwind = true;
+              if (windDir != null &&
+                  windSpd != null &&
+                  heading != null) {
+                final angleDiff =
+                    (windDir.toDouble() - (heading as num).toDouble()) *
+                        pi /
+                        180;
+                final hw = windSpd.toDouble() * cos(angleDiff);
+                final xw =
+                    (windSpd.toDouble() * sin(angleDiff)).abs();
+                isHeadwind = hw >= 0;
+                headwindComp = hw.abs().round();
+                crosswindComp = xw.round();
+                if (windGust != null) {
+                  gustHead =
+                      (windGust.toDouble() * cos(angleDiff)).abs().round();
+                  gustCross =
+                      (windGust.toDouble() * sin(angleDiff)).abs().round();
+                }
+              }
+
+              return Column(
                 children: [
-                  // Header with back button
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    color: AppColors.toolbarBackground,
+                  // Drag handle
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 4),
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.textMuted.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                     child: Row(
                       children: [
                         GestureDetector(
                           onTap: () => Navigator.pop(context),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.arrow_back_ios,
-                                  size: 16, color: AppColors.primary),
-                              SizedBox(width: 4),
-                              Text('Back',
-                                  style: TextStyle(
-                                      color: AppColors.primary, fontSize: 14)),
-                            ],
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              widget.airportId,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
                           ),
                         ),
                         const Spacer(),
-                        Text(
+                        const Text(
                           'Runway Details',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
@@ -503,14 +549,13 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                       ],
                     ),
                   ),
-
                   // Runway end toggle
                   if (ends.length >= 2)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Row(
                         children: List.generate(ends.length, (i) {
-                          final endId =
+                          final eid =
                               ends[i]['identifier'] as String? ?? '??';
                           final isSelected = i == endIndex;
                           return Expanded(
@@ -526,18 +571,16 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                                   decoration: BoxDecoration(
                                     color: isSelected
                                         ? AppColors.primary
-                                            .withValues(alpha: 0.15)
                                         : AppColors.surface,
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(
                                       color: isSelected
                                           ? AppColors.primary
-                                              .withValues(alpha: 0.5)
                                           : AppColors.divider,
                                     ),
                                   ),
                                   child: Text(
-                                    'Rwy $endId',
+                                    'Rwy $eid',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 15,
@@ -545,7 +588,7 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                                           ? FontWeight.w700
                                           : FontWeight.w500,
                                       color: isSelected
-                                          ? AppColors.primary
+                                          ? Colors.white
                                           : AppColors.textSecondary,
                                     ),
                                   ),
@@ -556,76 +599,105 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                         }),
                       ),
                     ),
-
-                  const SizedBox(height: 8),
-
-                  _DetailSection(title: 'RUNWAY DETAILS', items: [
-                    _DetailRow(label: 'Dimensions', value: dims),
-                    if (surfaceText.isNotEmpty)
-                      _DetailRow(label: 'Surface', value: surfaceText),
-                    if (glideslope != null && glideslope.isNotEmpty)
-                      _DetailRow(
-                          label: 'Glideslope Ind.', value: glideslope),
-                    if (slope != null)
-                      _DetailRow(label: 'Slope', value: '$slope%'),
-                    if (heading != null)
-                      _DetailRow(label: 'Heading', value: '$heading°M'),
-                    if (trafficPattern != null && trafficPattern.isNotEmpty)
-                      _DetailRow(
-                        label: 'Traffic Pattern',
-                        value: trafficPattern,
-                        valueColor: AppColors.error,
-                      ),
-                  ]),
-
-                  if (elevation != null)
-                    _DetailSection(title: 'ELEVATION', items: [
-                      _DetailRow(
-                          label: 'Touchdown',
-                          value: '${_fmtNum(elevation)}\' MSL'),
-                    ]),
-
-                  if (tora != null ||
-                      toda != null ||
-                      asda != null ||
-                      lda != null)
-                    _DetailSection(title: 'DECLARED DISTANCES', items: [
-                      if (tora != null)
-                        _DetailRow(
-                            label: 'TORA', value: '${_fmtNum(tora)}\''),
-                      if (toda != null)
-                        _DetailRow(
-                            label: 'TODA', value: '${_fmtNum(toda)}\''),
-                      if (asda != null)
-                        _DetailRow(
-                            label: 'ASDA', value: '${_fmtNum(asda)}\''),
-                      if (lda != null)
-                        _DetailRow(
-                            label: 'LDA', value: '${_fmtNum(lda)}\''),
-                    ]),
-
-                  if (displaced != null && displaced > 0)
-                    _DetailSection(title: 'THRESHOLD', items: [
-                      _DetailRow(
-                          label: 'Displaced',
-                          value: '${_fmtNum(displaced)}\''),
-                    ]),
-
-                  _DetailSection(title: 'LIGHTING', items: [
-                    _DetailRow(label: 'Approach', value: lightApproach),
-                    _DetailRow(label: 'Edge', value: lightEdge),
-                  ]),
-
-                  if (lat != null && lng != null)
-                    _DetailSection(title: 'COORDINATES', items: [
-                      _DetailRow(
-                        label: '',
-                        value:
-                            '${lat.toStringAsFixed(4)}°${lat >= 0 ? 'N' : 'S'} / ${lng.abs().toStringAsFixed(4)}°${lng >= 0 ? 'E' : 'W'}',
-                      ),
-                    ]),
-
-                  const SizedBox(height: 32),
+                  // Scrollable content
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        _DetailSection(
+                            title: 'RUNWAY DETAILS - $endId',
+                            items: [
+                              _DetailRow(label: 'Dimensions', value: dims),
+                              if (surfaceText.isNotEmpty)
+                                _DetailRow(
+                                    label: 'Surface', value: surfaceText),
+                              if (glideslope != null && glideslope.isNotEmpty)
+                                _DetailRow(
+                                    label: 'Glideslope Ind.',
+                                    value: glideslope),
+                              if (slope != null)
+                                _DetailRow(label: 'Slope', value: '$slope%'),
+                              if (heading != null)
+                                _DetailRow(
+                                    label: 'Heading', value: '$heading°M'),
+                              if (trafficPattern != null &&
+                                  trafficPattern.isNotEmpty)
+                                _DetailRow(
+                                  label: 'Traffic Pattern',
+                                  value: '$trafficPattern traffic',
+                                  valueColor: Colors.green,
+                                ),
+                              if (headwindComp != null)
+                                _WindRow(
+                                  headwind: headwindComp,
+                                  crosswind: crosswindComp!,
+                                  gustHeadwind: gustHead,
+                                  gustCrosswind: gustCross,
+                                  isHeadwind: isHeadwind,
+                                ),
+                            ]),
+                        if (elevation != null)
+                          _DetailSection(
+                              title: 'ELEVATION - $endId',
+                              items: [
+                                _DetailRow(
+                                    label: 'Touchdown',
+                                    value: '${_fmtNum(elevation)}\' MSL'),
+                              ]),
+                        if (tora != null ||
+                            toda != null ||
+                            asda != null ||
+                            lda != null)
+                          _DetailSection(
+                              title: 'DECLARED DISTANCES - $endId',
+                              items: [
+                                if (tora != null)
+                                  _DetailRow(
+                                      label: 'TORA',
+                                      value: '${_fmtNum(tora)}\''),
+                                if (toda != null)
+                                  _DetailRow(
+                                      label: 'TODA',
+                                      value: '${_fmtNum(toda)}\''),
+                                if (asda != null)
+                                  _DetailRow(
+                                      label: 'ASDA',
+                                      value: '${_fmtNum(asda)}\''),
+                                if (lda != null)
+                                  _DetailRow(
+                                      label: 'LDA',
+                                      value: '${_fmtNum(lda)}\''),
+                              ]),
+                        if (displaced != null && displaced > 0)
+                          _DetailSection(
+                              title: 'THRESHOLD - $endId',
+                              items: [
+                                _DetailRow(
+                                    label: 'Displaced',
+                                    value: '${_fmtNum(displaced)}\''),
+                              ]),
+                        _DetailSection(
+                            title: 'LIGHTING - $endId',
+                            items: [
+                              _DetailRow(
+                                  label: 'Approach', value: lightApproach),
+                              _DetailRow(label: 'Edge', value: lightEdge),
+                            ]),
+                        if (lat != null && lng != null)
+                          _DetailSection(
+                              title: 'COORDINATES - $endId',
+                              items: [
+                                _DetailRow(
+                                  label: '',
+                                  value:
+                                      '${lat.toStringAsFixed(4)}°${lat >= 0 ? 'N' : 'S'} / ${lng.abs().toStringAsFixed(4)}°${lng >= 0 ? 'E' : 'W'}',
+                                ),
+                              ]),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
                 ],
               );
             },
@@ -648,7 +720,7 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
 
 class _DetailSection extends StatelessWidget {
   final String title;
-  final List<_DetailRow> items;
+  final List<Widget> items;
 
   const _DetailSection({required this.title, required this.items});
 
@@ -713,6 +785,76 @@ class _DetailRow extends StatelessWidget {
               color: valueColor ?? AppColors.textPrimary,
               fontWeight: FontWeight.w500,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WindRow extends StatelessWidget {
+  final int headwind;
+  final int crosswind;
+  final int? gustHeadwind;
+  final int? gustCrosswind;
+  final bool isHeadwind;
+
+  const _WindRow({
+    required this.headwind,
+    required this.crosswind,
+    this.gustHeadwind,
+    this.gustCrosswind,
+    this.isHeadwind = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final headColor = isHeadwind ? AppColors.vfr : AppColors.error;
+    final crossColor = crosswind <= 15 ? AppColors.textSecondary : AppColors.error;
+
+    final headStr = gustHeadwind != null && gustHeadwind != headwind
+        ? '$headwind-$gustHeadwind kts'
+        : '$headwind kts';
+    final crossStr = gustCrosswind != null && gustCrosswind != crosswind
+        ? '$crosswind-$gustCrosswind kts'
+        : '$crosswind kts';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider, width: 0.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Text(
+            'Wind',
+            style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+          ),
+          const Spacer(),
+          // Crosswind component
+          Icon(
+            Icons.arrow_back,
+            size: 14,
+            color: crossColor,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            crossStr,
+            style: TextStyle(fontSize: 14, color: crossColor),
+          ),
+          const SizedBox(width: 12),
+          // Headwind/tailwind component
+          Icon(
+            isHeadwind ? Icons.arrow_downward : Icons.arrow_upward,
+            size: 14,
+            color: headColor,
+          ),
+          const SizedBox(width: 2),
+          Text(
+            headStr,
+            style: TextStyle(fontSize: 14, color: headColor),
           ),
         ],
       ),

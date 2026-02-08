@@ -66,22 +66,31 @@ async function seedAirports(ds: DataSource): Promise<number> {
 
       airports.push({
         identifier: identifier.trim(),
-        icao_identifier:
-          (r['ICAO_ID'] || '').trim() || undefined,
+        icao_identifier: (r['ICAO_ID'] || '').trim() || undefined,
         name: (r['ARPT_NAME'] || '').trim(),
         city: (r['CITY'] || '').trim() || undefined,
         state: (r['STATE_CODE'] || '').trim() || undefined,
         latitude: parseFloat(r['LAT_DECIMAL'] || '') || undefined,
         longitude: parseFloat(r['LONG_DECIMAL'] || '') || undefined,
         elevation: parseFloat(r['ELEV'] || '0') || undefined,
-        magnetic_variation:
-          (r['MAG_VARN'] || '').trim() || undefined,
-        ownership_type:
-          (r['OWNERSHIP_TYPE_CODE'] || '').trim() || undefined,
-        facility_type:
-          (r['SITE_TYPE_CODE'] || '').trim() || undefined,
-        status:
-          (r['ARPT_STATUS'] || '').trim() || 'O',
+        magnetic_variation: (r['MAG_VARN'] || '').trim() || undefined,
+        ownership_type: (r['OWNERSHIP_TYPE_CODE'] || '').trim() || undefined,
+        facility_type: (r['SITE_TYPE_CODE'] || '').trim() || undefined,
+        status: (r['ARPT_STATUS'] || '').trim() || 'O',
+        tpa: parseInt(r['TPA'] || '', 10) || undefined,
+        fuel_types: (r['FUEL_TYPES'] || '').trim() || undefined,
+        facility_use: (r['FACILITY_USE_CODE'] || '').trim() || undefined,
+        artcc_id: (r['RESP_ARTCC_ID'] || '').trim() || undefined,
+        artcc_name: (r['ARTCC_NAME'] || '').trim() || undefined,
+        fss_id: (r['FSS_ID'] || '').trim() || undefined,
+        fss_name: (r['FSS_NAME'] || '').trim() || undefined,
+        notam_id: (r['NOTAM_ID'] || '').trim() || undefined,
+        sectional_chart: (r['CHART_NAME'] || '').trim() || undefined,
+        customs_flag: (r['CUST_FLAG'] || '').trim() || undefined,
+        landing_rights_flag: (r['LNDG_RIGHTS_FLAG'] || '').trim() || undefined,
+        lighting_schedule: (r['LGT_SKED'] || '').trim() || undefined,
+        beacon_schedule: (r['BCN_LGT_SKED'] || '').trim() || undefined,
+        nasr_effective_date: (r['EFF_DATE'] || '').trim() || undefined,
       });
     }
 
@@ -94,7 +103,9 @@ async function seedAirports(ds: DataSource): Promise<number> {
   return count;
 }
 
-async function seedRunways(ds: DataSource): Promise<{ runways: number; ends: number }> {
+async function seedRunways(
+  ds: DataSource,
+): Promise<{ runways: number; ends: number }> {
   const rwyFile = findFile(NASR_DIR, 'APT_RWY.csv');
   const rwyEndFile = findFile(NASR_DIR, 'APT_RWY_END.csv');
   if (!rwyFile || !rwyEndFile) {
@@ -179,9 +190,11 @@ async function seedRunways(ds: DataSource): Promise<{ runways: number; ends: num
         asda: parseInt(r['ACLT_STOP_DIST_AVBL'] || '', 10) || undefined,
         lda: parseInt(r['LNDG_DIST_AVBL'] || '', 10) || undefined,
         glideslope: (r['VGSI_CODE'] || '').trim() || undefined,
-        lighting_approach: (r['APCH_LGT_SYSTEM_CODE'] || '').trim() || undefined,
+        lighting_approach:
+          (r['APCH_LGT_SYSTEM_CODE'] || '').trim() || undefined,
         traffic_pattern: rightTraffic === 'Y' ? 'Right' : 'Left',
-        displaced_threshold: parseInt(r['DISPLACED_THR_LEN'] || '', 10) || undefined,
+        displaced_threshold:
+          parseInt(r['DISPLACED_THR_LEN'] || '', 10) || undefined,
       });
     }
 
@@ -209,16 +222,18 @@ async function seedFrequencies(ds: DataSource): Promise<number> {
 
   console.log(`  Reading ${twrFile} (TWR3 records)...`);
   const content = fs.readFileSync(twrFile, 'utf-8');
-  const lines = content.split('\n').filter(l => l.startsWith('TWR3'));
+  const lines = content.split('\n').filter((l) => l.startsWith('TWR3'));
   console.log(`  Found ${lines.length} TWR3 records`);
 
   // Build set of valid airport identifiers to filter out non-airport facilities
   const airportIds = new Set<string>(
-    (await ds.getRepository(Airport)
-      .createQueryBuilder('a')
-      .select('a.identifier')
-      .getMany()
-    ).map(a => a.identifier),
+    (
+      await ds
+        .getRepository(Airport)
+        .createQueryBuilder('a')
+        .select('a.identifier')
+        .getMany()
+    ).map((a) => a.identifier),
   );
 
   const repo = ds.getRepository(Frequency);
@@ -252,7 +267,9 @@ async function seedFrequencies(ds: DataSource): Promise<number> {
     for (let p = 0; p < 9; p++) {
       const offset = PAIR_START + p * PAIR_LEN;
       const freqStr = line.substring(offset, offset + FREQ_LEN).trim();
-      const useStr = line.substring(offset + FREQ_LEN, offset + PAIR_LEN).trim();
+      const useStr = line
+        .substring(offset + FREQ_LEN, offset + PAIR_LEN)
+        .trim();
 
       if (!freqStr) continue;
 
@@ -274,6 +291,105 @@ async function seedFrequencies(ds: DataSource): Promise<number> {
     const batch = freqs.slice(i, i + batchSize);
     await repo.save(batch as Frequency[]);
     count += batch.length;
+  }
+
+  return count;
+}
+
+async function seedContacts(ds: DataSource): Promise<number> {
+  const conFile = findFile(NASR_DIR, 'APT_CON.csv');
+  if (!conFile) {
+    console.log('  APT_CON.csv not found, skipping contacts...');
+    return 0;
+  }
+
+  console.log(`  Reading ${conFile}...`);
+  const records = await parsePipeDelimited(conFile);
+  console.log(`  Parsed ${records.length} contact records`);
+
+  const repo = ds.getRepository(Airport);
+
+  // Build map: ARPT_ID → { manager_*, owner_* }
+  const contactMap = new Map<string, Partial<Airport>>();
+
+  for (const r of records) {
+    const aptId = (r['ARPT_ID'] || '').trim();
+    const title = (r['TITLE'] || '').trim().toUpperCase();
+    if (!aptId || (!title.includes('MANAGER') && !title.includes('OWNER')))
+      continue;
+
+    const name = (r['NAME'] || '').trim() || undefined;
+    const phone = (r['PHONE_NO'] || '').trim() || undefined;
+
+    // Compose address
+    const parts: string[] = [];
+    const addr1 = (r['ADDRESS1'] || '').trim();
+    if (addr1) parts.push(addr1);
+    const city = (r['TITLE_CITY'] || '').trim();
+    const state = (r['STATE'] || '').trim();
+    const zip = (r['ZIP_CODE'] || '').trim();
+    const cityStateZip =
+      [city, state].filter(Boolean).join(', ') + (zip ? ` ${zip}` : '');
+    if (cityStateZip.trim()) parts.push(cityStateZip.trim());
+    const address = parts.join(', ') || undefined;
+
+    if (!contactMap.has(aptId)) contactMap.set(aptId, {});
+    const entry = contactMap.get(aptId)!;
+
+    if (title.includes('MANAGER')) {
+      entry.manager_name = name;
+      entry.manager_phone = phone;
+      entry.manager_address = address;
+    } else if (title.includes('OWNER')) {
+      entry.owner_name = name;
+      entry.owner_phone = phone;
+      entry.owner_address = address;
+    }
+  }
+
+  // Batch update airports
+  let count = 0;
+  const entries = Array.from(contactMap.entries());
+  const batchSize = 500;
+  for (let i = 0; i < entries.length; i += batchSize) {
+    const batch = entries.slice(i, i + batchSize);
+    for (const [aptId, data] of batch) {
+      await repo.update(aptId, data);
+      count++;
+    }
+  }
+
+  return count;
+}
+
+async function seedTowerHours(ds: DataSource): Promise<number> {
+  const atcFile = findFile(NASR_DIR, 'ATC_BASE.csv');
+  if (!atcFile) {
+    console.log('  ATC_BASE.csv not found, skipping tower hours...');
+    return 0;
+  }
+
+  console.log(`  Reading ${atcFile}...`);
+  const records = await parsePipeDelimited(atcFile);
+  console.log(`  Parsed ${records.length} ATC records`);
+
+  const repo = ds.getRepository(Airport);
+
+  // Build set of valid airport identifiers
+  const airportIds = new Set<string>(
+    (await repo.createQueryBuilder('a').select('a.identifier').getMany()).map(
+      (a) => a.identifier,
+    ),
+  );
+
+  let count = 0;
+  for (const r of records) {
+    const facilityId = (r['FACILITY_ID'] || '').trim();
+    const towerHrs = (r['TWR_HRS'] || '').trim();
+    if (!facilityId || !towerHrs || !airportIds.has(facilityId)) continue;
+
+    await repo.update(facilityId, { tower_hours: towerHrs });
+    count++;
   }
 
   return count;
@@ -305,6 +421,24 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
       elevation: 5673,
       facility_type: 'AIRPORT',
       status: 'O',
+      tpa: 6673,
+      fuel_types: '100LL,JET-A',
+      facility_use: 'PU',
+      artcc_id: 'ZDV',
+      artcc_name: 'DENVER',
+      fss_id: 'DEN',
+      fss_name: 'DENVER',
+      notam_id: 'BJC',
+      sectional_chart: 'DENVER',
+      customs_flag: 'N',
+      landing_rights_flag: 'N',
+      lighting_schedule: 'SS-SR',
+      beacon_schedule: 'SS-SR',
+      nasr_effective_date: '2026/01/22',
+      tower_hours: '0600-2200',
+      manager_name: 'PAUL QUINNETT',
+      manager_phone: '(303) 271-4850',
+      manager_address: '11755 AIRPORT WAY, BROOMFIELD, CO 80021',
     },
     {
       identifier: 'DEN',
@@ -584,13 +718,25 @@ async function main() {
 
   // Clear existing data (CASCADE needed for Postgres foreign key constraints)
   console.log('Clearing existing data...');
-  await ds.query('TRUNCATE TABLE runway_ends, runways, frequencies, airports CASCADE');
+  await ds.query(
+    'TRUNCATE TABLE runway_ends, runways, frequencies, airports CASCADE',
+  );
   console.log('  Done.\n');
 
   // Seed airports
   console.log('Seeding airports...');
   const airportCount = await seedAirports(ds);
   console.log(`  Imported ${airportCount} airports.\n`);
+
+  // Seed contacts (must be after airports)
+  console.log('Seeding contacts...');
+  const contactCount = await seedContacts(ds);
+  console.log(`  Updated ${contactCount} airports with contacts.\n`);
+
+  // Seed tower hours (must be after airports)
+  console.log('Seeding tower hours...');
+  const towerCount = await seedTowerHours(ds);
+  console.log(`  Updated ${towerCount} airports with tower hours.\n`);
 
   // Seed runways + runway ends
   console.log('Seeding runways...');
@@ -605,6 +751,8 @@ async function main() {
   // Summary
   console.log('=== Seed Complete ===');
   console.log(`  Airports:     ${airportCount}`);
+  console.log(`  Contacts:     ${contactCount}`);
+  console.log(`  Tower Hours:  ${towerCount}`);
   console.log(`  Runways:      ${rwyCount}`);
   console.log(`  Runway Ends:  ${endCount}`);
   console.log(`  Frequencies:  ${freqCount}`);

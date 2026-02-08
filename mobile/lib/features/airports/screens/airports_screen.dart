@@ -1,86 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../services/api_client.dart';
+import '../../../services/airport_providers.dart';
 
-class AirportsScreen extends StatefulWidget {
+class AirportsScreen extends ConsumerStatefulWidget {
   const AirportsScreen({super.key});
 
   @override
-  State<AirportsScreen> createState() => _AirportsScreenState();
+  ConsumerState<AirportsScreen> createState() => _AirportsScreenState();
 }
 
-class _AirportsScreenState extends State<AirportsScreen> {
+class _AirportsScreenState extends ConsumerState<AirportsScreen> {
   final _searchController = TextEditingController();
   final _focusNode = FocusNode();
+  bool _isSearching = false;
+  List<dynamic>? _searchResults;
+  bool _searchLoading = false;
 
-  // Sample airports for prototype
-  static const _sampleAirports = [
-    _AirportListItem(
-      id: 'KAPA',
-      name: 'Centennial',
-      city: 'Denver, CO',
-      elevation: '5,885\'',
-    ),
-    _AirportListItem(
-      id: 'KBJC',
-      name: 'Rocky Mountain Metro',
-      city: 'Denver, CO',
-      elevation: '5,673\'',
-    ),
-    _AirportListItem(
-      id: 'KDEN',
-      name: 'Denver Intl',
-      city: 'Denver, CO',
-      elevation: '5,431\'',
-    ),
-    _AirportListItem(
-      id: 'KFNL',
-      name: 'Northern Colorado Regional',
-      city: 'Fort Collins, CO',
-      elevation: '5,016\'',
-    ),
-    _AirportListItem(
-      id: 'KCFO',
-      name: 'Colorado Springs / Peterson Field',
-      city: 'Colorado Springs, CO',
-      elevation: '6,187\'',
-    ),
-    _AirportListItem(
-      id: 'KBDU',
-      name: 'Boulder Municipal',
-      city: 'Boulder, CO',
-      elevation: '5,288\'',
-    ),
-    _AirportListItem(
-      id: 'KEIK',
-      name: 'Erie Municipal',
-      city: 'Erie, CO',
-      elevation: '5,130\'',
-    ),
-    _AirportListItem(
-      id: 'KLMO',
-      name: 'Vance Brand',
-      city: 'Longmont, CO',
-      elevation: '5,055\'',
-    ),
-  ];
+  void _onSearchChanged(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _isSearching = false;
+        _searchResults = null;
+      });
+      return;
+    }
 
-  List<_AirportListItem> _filtered = _sampleAirports;
-
-  void _onSearchChanged(String query) {
     setState(() {
-      if (query.isEmpty) {
-        _filtered = _sampleAirports;
-      } else {
-        final q = query.toUpperCase();
-        _filtered = _sampleAirports
-            .where((a) =>
-                a.id.contains(q) ||
-                a.name.toUpperCase().contains(q) ||
-                a.city.toUpperCase().contains(q))
-            .toList();
-      }
+      _isSearching = true;
+      _searchLoading = true;
     });
+
+    try {
+      final client = ref.read(apiClientProvider);
+      final result = await client.searchAirports(query: query, limit: 25);
+      if (mounted && _searchController.text == query) {
+        setState(() {
+          _searchResults = result['items'] as List<dynamic>?;
+          _searchLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _searchLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _toggleStar(String identifier, bool isStarred) async {
+    final client = ref.read(apiClientProvider);
+    try {
+      if (isStarred) {
+        await client.unstarAirport(identifier);
+      } else {
+        await client.starAirport(identifier);
+      }
+      ref.invalidate(starredAirportsProvider);
+    } catch (_) {
+      // ignore
+    }
   }
 
   @override
@@ -92,6 +74,11 @@ class _AirportsScreenState extends State<AirportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final starredAsync = ref.watch(starredAirportsProvider);
+    final starredIdsAsync = ref.watch(starredAirportIdsProvider);
+    final starredIds =
+        starredIdsAsync.whenOrNull(data: (ids) => ids) ?? <String>{};
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -104,12 +91,6 @@ class _AirportsScreenState extends State<AirportsScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.star_border,
-                          color: AppColors.textMuted, size: 24),
-                      const SizedBox(width: 8),
-                      const Icon(Icons.star,
-                          color: Colors.amber, size: 24),
-                      const Spacer(),
                       const Text(
                         'Airports',
                         style: TextStyle(
@@ -119,19 +100,31 @@ class _AirportsScreenState extends State<AirportsScreen> {
                         ),
                       ),
                       const Spacer(),
-                      const Icon(Icons.person_outline,
-                          color: AppColors.textPrimary, size: 24),
-                      const SizedBox(width: 12),
-                      const Icon(Icons.my_location,
-                          color: AppColors.textPrimary, size: 24),
+                      if (_isSearching)
+                        TextButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            _focusNode.unfocus();
+                            setState(() {
+                              _isSearching = false;
+                              _searchResults = null;
+                            });
+                          },
+                          child: const Text('Cancel',
+                              style: TextStyle(color: AppColors.accent)),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // Search bar
                   TextField(
                     controller: _searchController,
                     focusNode: _focusNode,
                     onChanged: _onSearchChanged,
+                    onTap: () {
+                      if (_searchController.text.isNotEmpty) {
+                        setState(() => _isSearching = true);
+                      }
+                    },
                     style: const TextStyle(color: AppColors.textPrimary),
                     decoration: InputDecoration(
                       hintText: 'Search by identifier, name, or city',
@@ -153,92 +146,252 @@ class _AirportsScreenState extends State<AirportsScreen> {
               ),
             ),
 
-            // Airport list
+            // Content
             Expanded(
-              child: ListView.separated(
-                itemCount: _filtered.length,
-                separatorBuilder: (_, _) => const Divider(height: 0.5),
-                itemBuilder: (context, index) {
-                  final airport = _filtered[index];
-                  return ListTile(
-                    onTap: () => context.push('/airports/${airport.id}'),
-                    leading: Container(
-                      width: 56,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                            color: AppColors.divider, width: 0.5),
-                      ),
-                      child: const Icon(Icons.flight_takeoff,
-                          color: AppColors.textMuted, size: 18),
-                    ),
-                    title: Row(
-                      children: [
-                        Text(
-                          airport.id,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            airport.name,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    subtitle: Row(
-                      children: [
-                        Text(
-                          airport.city,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Text(
-                          'Elev: ${airport.elevation}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    trailing: const Icon(Icons.chevron_right,
-                        color: AppColors.textMuted),
-                  );
-                },
-              ),
+              child: _isSearching
+                  ? _buildSearchResults(starredIds)
+                  : _buildStarredList(starredAsync, starredIds),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _AirportListItem {
-  final String id;
-  final String name;
-  final String city;
-  final String elevation;
+  Widget _buildStarredList(
+      AsyncValue<List<dynamic>> starredAsync, Set<String> starredIds) {
+    return starredAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline,
+                color: AppColors.textMuted, size: 32),
+            const SizedBox(height: 8),
+            const Text('Unable to load starred airports',
+                style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () => ref.invalidate(starredAirportsProvider),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Retry'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.accent),
+            ),
+          ],
+        ),
+      ),
+      data: (airports) {
+        if (airports.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star_border,
+                      color: AppColors.textMuted, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No starred airports',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Search for airports to add them to your list',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
 
-  const _AirportListItem({
-    required this.id,
-    required this.name,
-    required this.city,
-    required this.elevation,
-  });
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(starredAirportsProvider);
+            await ref.read(starredAirportsProvider.future);
+          },
+          child: ListView.separated(
+            itemCount: airports.length,
+            separatorBuilder: (_, _) => const Divider(height: 0.5),
+            itemBuilder: (context, index) {
+              final airport = airports[index] as Map<String, dynamic>;
+              final identifier = airport['identifier'] ?? '';
+              final icao = airport['icao_identifier'] ?? '';
+              final displayId =
+                  icao.isNotEmpty ? icao : identifier;
+              final name = airport['name'] ?? '';
+              final city = airport['city'] ?? '';
+              final state = airport['state'] ?? '';
+              final elevation = airport['elevation'];
+              final location =
+                  [city, state].where((s) => s.isNotEmpty).join(', ');
+
+              return ListTile(
+                onTap: () => context.push('/airports/$displayId'),
+                title: Row(
+                  children: [
+                    Text(
+                      displayId,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Row(
+                  children: [
+                    if (location.isNotEmpty)
+                      Text(
+                        location,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    if (location.isNotEmpty && elevation != null)
+                      const SizedBox(width: 12),
+                    if (elevation != null)
+                      Text(
+                        'Elev: ${(elevation as num).round()}\'',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                  ],
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.star, color: Colors.amber, size: 22),
+                  onPressed: () => _toggleStar(identifier, true),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchResults(Set<String> starredIds) {
+    if (_searchLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final results = _searchResults;
+    if (results == null) {
+      return const Center(
+        child: Text(
+          'Search for airports by identifier, name, or city',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    if (results.isEmpty) {
+      return const Center(
+        child: Text(
+          'No airports found',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: results.length,
+      separatorBuilder: (_, _) => const Divider(height: 0.5),
+      itemBuilder: (context, index) {
+        final airport = results[index] as Map<String, dynamic>;
+        final identifier = airport['identifier'] ?? '';
+        final icao = airport['icao_identifier'] ?? '';
+        final displayId = icao.isNotEmpty ? icao : identifier;
+        final name = airport['name'] ?? '';
+        final city = airport['city'] ?? '';
+        final state = airport['state'] ?? '';
+        final elevation = airport['elevation'];
+        final location =
+            [city, state].where((s) => s.isNotEmpty).join(', ');
+        final isStarred = starredIds.contains(identifier);
+
+        return ListTile(
+          onTap: () => context.push('/airports/$displayId'),
+          title: Row(
+            children: [
+              Text(
+                displayId,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          subtitle: Row(
+            children: [
+              if (location.isNotEmpty)
+                Text(
+                  location,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              if (location.isNotEmpty && elevation != null)
+                const SizedBox(width: 12),
+              if (elevation != null)
+                Text(
+                  'Elev: ${(elevation as num).round()}\'',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+          trailing: IconButton(
+            icon: Icon(
+              isStarred ? Icons.star : Icons.star_border,
+              color: isStarred ? Colors.amber : AppColors.textMuted,
+              size: 22,
+            ),
+            onPressed: () => _toggleStar(identifier, isStarred),
+          ),
+        );
+      },
+    );
+  }
 }

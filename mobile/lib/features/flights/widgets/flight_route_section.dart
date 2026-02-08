@@ -4,6 +4,21 @@ import 'flight_route_map.dart';
 import 'flight_section_header.dart';
 import 'flight_field_row.dart';
 import 'flight_edit_dialogs.dart';
+import 'preferred_route_sheet.dart';
+
+/// Try to parse an altitude string like "4000", "FL350", "350" into feet.
+int? _parseAltitude(String? alt) {
+  if (alt == null || alt.isEmpty) return null;
+  final cleaned = alt.toUpperCase().replaceAll(RegExp(r'[^0-9]'), '');
+  if (cleaned.isEmpty) return null;
+  final num = int.tryParse(cleaned);
+  if (num == null) return null;
+  // If original had "FL" or the number is small (e.g. 350 = FL350), multiply
+  if (alt.toUpperCase().contains('FL') || (num > 0 && num <= 600)) {
+    return num * 100;
+  }
+  return num;
+}
 
 class FlightRouteSection extends StatelessWidget {
   final Flight flight;
@@ -59,13 +74,33 @@ class FlightRouteSection extends StatelessWidget {
           label: 'Routes',
           value: 'Find Routes',
           showChevron: true,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Route finder coming in a future update'),
-                duration: Duration(seconds: 2),
-              ),
+          onTap: () async {
+            final dep = flight.departureIdentifier;
+            final dest = flight.destinationIdentifier;
+            if (dep == null ||
+                dep.isEmpty ||
+                dest == null ||
+                dest.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Set departure and destination first'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              return;
+            }
+            final result = await showPreferredRouteSheet(
+              context,
+              origin: dep,
+              destination: dest,
             );
+            if (result != null) {
+              final altFt = _parseAltitude(result.altitude);
+              onChanged(flight.copyWith(
+                routeString: result.routeString,
+                cruiseAltitude: altFt ?? flight.cruiseAltitude,
+              ));
+            }
           },
         ),
         FlightFieldRow(

@@ -65,6 +65,15 @@ export class NavaidsController {
     );
   }
 
+  // --- Waypoint Resolution ---
+
+  @Get('waypoints/resolve')
+  async resolveRoute(@Query('ids') ids: string) {
+    if (!ids) return [];
+    const identifiers = ids.split(',').map((s) => s.trim()).filter(Boolean);
+    return this.navaidsService.resolveRoute(identifiers);
+  }
+
   @Get('fixes/bounds')
   async fixesInBounds(
     @Query('minLat') minLat: string,

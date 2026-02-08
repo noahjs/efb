@@ -70,7 +70,9 @@ function getCandidateCycles(): string[] {
       c -= 13;
       y += 1;
     }
-    candidates.push(`${String(y).padStart(2, '0')}${String(c).padStart(2, '0')}`);
+    candidates.push(
+      `${String(y).padStart(2, '0')}${String(c).padStart(2, '0')}`,
+    );
   }
 
   return candidates;
@@ -116,7 +118,7 @@ async function findMetafileUrl(): Promise<string> {
 
   throw new Error(
     'Could not find d-TPP metafile at any known URL. ' +
-    'The FAA servers may be temporarily unavailable.',
+      'The FAA servers may be temporarily unavailable.',
   );
 }
 
@@ -148,7 +150,9 @@ async function main() {
 
   const root = parsed.digital_tpp;
   if (!root) {
-    console.error('ERROR: Unexpected XML structure — missing <digital_tpp> root');
+    console.error(
+      'ERROR: Unexpected XML structure — missing <digital_tpp> root',
+    );
     process.exit(1);
   }
 

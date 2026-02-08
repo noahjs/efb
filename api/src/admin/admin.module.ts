@@ -11,7 +11,17 @@ import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Airport, Runway, Frequency, Navaid, Fix, Procedure, DtppCycle])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Airport,
+      Runway,
+      Frequency,
+      Navaid,
+      Fix,
+      Procedure,
+      DtppCycle,
+    ]),
+  ],
   controllers: [AdminController],
   providers: [AdminService],
 })

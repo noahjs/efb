@@ -20,22 +20,27 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed": "ts-node -r tsconfig-paths/register src/seed/seed.ts",
     "seed:navaids": "ts-node -r tsconfig-paths/register src/seed/seed-navaids.ts",
-    "seed:procedures": "ts-node -r tsconfig-paths/register src/seed/seed-procedures.ts"
+    "seed:procedures": "ts-node -r tsconfig-paths/register src/seed/seed-procedures.ts",
+    "seed:routes": "ts-node -r tsconfig-paths/register src/seed/seed-routes.ts",
+    "seed:aircraft": "ts-node -r tsconfig-paths/register src/seed/seed-aircraft.ts",
+    "seed:airspaces": "ts-node -r tsconfig-paths/register src/seed/seed-airspaces.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/mapped-types": "^2.1.0",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/typeorm": "^11.0.0",
     "axios": "^1.13.4",
-    "pg": "^8.13.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "csv-parse": "^6.1.0",
     "fast-xml-parser": "^5.3.4",
+    "pg": "^8.13.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "shapefile": "^0.6.6",
     "typeorm": "^0.3.28"
   },
   "devDependencies": {

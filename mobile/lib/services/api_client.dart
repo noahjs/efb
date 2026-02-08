@@ -168,6 +168,23 @@ class ApiClient {
     return '${_dio.options.baseUrl}/procedures/$airportId/pdf/$procedureId';
   }
 
+  // --- Users / Starred Airports ---
+
+  Future<List<dynamic>> getStarredAirports() async {
+    final response = await _dio.get('/users/me/starred-airports');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> starAirport(String identifier) async {
+    final response =
+        await _dio.put('/users/me/starred-airports/$identifier');
+    return response.data;
+  }
+
+  Future<void> unstarAirport(String identifier) async {
+    await _dio.delete('/users/me/starred-airports/$identifier');
+  }
+
   // --- Flights ---
 
   Future<Map<String, dynamic>> getFlights({
@@ -205,6 +222,233 @@ class ApiClient {
 
   Future<Map<String, dynamic>> copyFlight(int id) async {
     final response = await _dio.post('/flights/$id/copy');
+    return response.data;
+  }
+
+  // --- Aircraft ---
+
+  Future<Map<String, dynamic>> getAircraftList({
+    String? query,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await _dio.get('/aircraft', queryParameters: {
+      if (query != null && query.isNotEmpty) 'q': query,
+      'limit': limit,
+      'offset': offset,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getAircraft(int id) async {
+    final response = await _dio.get('/aircraft/$id');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>?> getDefaultAircraft() async {
+    try {
+      final response = await _dio.get('/aircraft/default');
+      if (response.data == null || response.data == '') return null;
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> createAircraft(
+      Map<String, dynamic> data) async {
+    final response = await _dio.post('/aircraft', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateAircraft(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.put('/aircraft/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteAircraft(int id) async {
+    await _dio.delete('/aircraft/$id');
+  }
+
+  Future<Map<String, dynamic>> setDefaultAircraft(int id) async {
+    final response = await _dio.put('/aircraft/$id/default');
+    return response.data;
+  }
+
+  // --- Aircraft Performance Profiles ---
+
+  Future<List<dynamic>> getProfiles(int aircraftId) async {
+    final response = await _dio.get('/aircraft/$aircraftId/profiles');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createProfile(
+      int aircraftId, Map<String, dynamic> data) async {
+    final response =
+        await _dio.post('/aircraft/$aircraftId/profiles', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateProfile(
+      int aircraftId, int profileId, Map<String, dynamic> data) async {
+    final response =
+        await _dio.put('/aircraft/$aircraftId/profiles/$profileId', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteProfile(int aircraftId, int profileId) async {
+    await _dio.delete('/aircraft/$aircraftId/profiles/$profileId');
+  }
+
+  Future<Map<String, dynamic>> setDefaultProfile(
+      int aircraftId, int profileId) async {
+    final response =
+        await _dio.put('/aircraft/$aircraftId/profiles/$profileId/default');
+    return response.data;
+  }
+
+  // --- Aircraft Fuel Tanks ---
+
+  Future<List<dynamic>> getFuelTanks(int aircraftId) async {
+    final response = await _dio.get('/aircraft/$aircraftId/fuel-tanks');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createFuelTank(
+      int aircraftId, Map<String, dynamic> data) async {
+    final response =
+        await _dio.post('/aircraft/$aircraftId/fuel-tanks', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateFuelTank(
+      int aircraftId, int tankId, Map<String, dynamic> data) async {
+    final response = await _dio
+        .put('/aircraft/$aircraftId/fuel-tanks/$tankId', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteFuelTank(int aircraftId, int tankId) async {
+    await _dio.delete('/aircraft/$aircraftId/fuel-tanks/$tankId');
+  }
+
+  // --- Aeronautical (Airspaces, Airways, ARTCC) ---
+
+  Future<Map<String, dynamic>> getAirspacesInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    List<String>? classes,
+  }) async {
+    try {
+      final response =
+          await _dio.get('/airspaces/bounds', queryParameters: {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+        if (classes != null) 'classes': classes.join(','),
+      });
+      return response.data;
+    } catch (_) {
+      return {'type': 'FeatureCollection', 'features': []};
+    }
+  }
+
+  Future<Map<String, dynamic>> getAirwaysInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    List<String>? types,
+  }) async {
+    try {
+      final response = await _dio.get('/airways/bounds', queryParameters: {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+        if (types != null) 'types': types.join(','),
+      });
+      return response.data;
+    } catch (_) {
+      return {'type': 'FeatureCollection', 'features': []};
+    }
+  }
+
+  Future<Map<String, dynamic>> getArtccInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  }) async {
+    try {
+      final response = await _dio.get('/artcc/bounds', queryParameters: {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+      });
+      return response.data;
+    } catch (_) {
+      return {'type': 'FeatureCollection', 'features': []};
+    }
+  }
+
+  // --- Waypoint Resolution ---
+
+  Future<List<dynamic>> resolveWaypoints(List<String> identifiers) async {
+    try {
+      final response = await _dio.get('/waypoints/resolve', queryParameters: {
+        'ids': identifiers.join(','),
+      });
+      return response.data;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  // --- Preferred Routes ---
+
+  Future<List<dynamic>> getPreferredRoutes({
+    required String origin,
+    required String destination,
+    String? type,
+  }) async {
+    final response = await _dio.get('/routes/preferred', queryParameters: {
+      'origin': origin,
+      'destination': destination,
+      if (type != null) 'type': type,
+    });
+    return response.data;
+  }
+
+  Future<List<dynamic>> getPreferredRoutesFrom(String origin,
+      {String? type}) async {
+    final response =
+        await _dio.get('/routes/preferred/from/$origin', queryParameters: {
+      if (type != null) 'type': type,
+    });
+    return response.data;
+  }
+
+  // --- Aircraft Equipment ---
+
+  Future<Map<String, dynamic>?> getEquipment(int aircraftId) async {
+    try {
+      final response = await _dio.get('/aircraft/$aircraftId/equipment');
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> upsertEquipment(
+      int aircraftId, Map<String, dynamic> data) async {
+    final response =
+        await _dio.put('/aircraft/$aircraftId/equipment', data: data);
     return response.data;
   }
 }

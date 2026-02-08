@@ -189,7 +189,13 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(this.scriptsDir, '..', 'src', 'seed', 'seed.ts');
+    const seedScript = path.join(
+      this.scriptsDir,
+      '..',
+      'src',
+      'seed',
+      'seed.ts',
+    );
     this.runScript(
       'npx',
       ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
@@ -213,7 +219,13 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(this.scriptsDir, '..', 'src', 'seed', 'seed-navaids.ts');
+    const seedScript = path.join(
+      this.scriptsDir,
+      '..',
+      'src',
+      'seed',
+      'seed-navaids.ts',
+    );
     this.runScript(
       'npx',
       ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
@@ -237,7 +249,13 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(this.scriptsDir, '..', 'src', 'seed', 'seed-procedures.ts');
+    const seedScript = path.join(
+      this.scriptsDir,
+      '..',
+      'src',
+      'seed',
+      'seed-procedures.ts',
+    );
     this.runScript(
       'npx',
       ['ts-node', '-r', 'tsconfig-paths/register', seedScript],

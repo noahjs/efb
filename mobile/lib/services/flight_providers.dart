@@ -49,3 +49,14 @@ class FlightService {
 final flightServiceProvider = Provider<FlightService>((ref) {
   return FlightService(ref.watch(apiClientProvider));
 });
+
+/// Provider for preferred routes between two airports
+final preferredRoutesProvider = FutureProvider.family<List<Map<String, dynamic>>,
+    ({String origin, String destination})>((ref, params) async {
+  final api = ref.watch(apiClientProvider);
+  final results = await api.getPreferredRoutes(
+    origin: params.origin,
+    destination: params.destination,
+  );
+  return results.cast<Map<String, dynamic>>();
+});

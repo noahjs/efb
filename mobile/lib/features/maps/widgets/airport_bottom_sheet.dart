@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../services/api_client.dart';
 import '../../../services/airport_providers.dart';
 
 class AirportBottomSheet extends ConsumerWidget {
@@ -91,10 +92,9 @@ class AirportBottomSheet extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Identifier + name
+                // Identifier + name + star
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Text(
                       airportId,
@@ -104,7 +104,12 @@ class AirportBottomSheet extends ConsumerWidget {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 6),
+                    _StarIcon(
+                      airportId: airportId,
+                      faaIdentifier: airport['identifier'] ?? airportId,
+                    ),
+                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         name,
@@ -225,6 +230,42 @@ class AirportBottomSheet extends ConsumerWidget {
       }
     }
     return result;
+  }
+}
+
+class _StarIcon extends ConsumerWidget {
+  final String airportId;
+  final String faaIdentifier;
+
+  const _StarIcon({required this.airportId, required this.faaIdentifier});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final starredIdsAsync = ref.watch(starredAirportIdsProvider);
+    final starredIds =
+        starredIdsAsync.whenOrNull(data: (ids) => ids) ?? <String>{};
+    final isStarred = starredIds.contains(faaIdentifier);
+
+    return GestureDetector(
+      onTap: () async {
+        final client = ref.read(apiClientProvider);
+        try {
+          if (isStarred) {
+            await client.unstarAirport(faaIdentifier);
+          } else {
+            await client.starAirport(airportId);
+          }
+          ref.invalidate(starredAirportsProvider);
+        } catch (_) {
+          // ignore
+        }
+      },
+      child: Icon(
+        isStarred ? Icons.star : Icons.star_border,
+        color: isStarred ? Colors.amber : AppColors.textMuted,
+        size: 24,
+      ),
+    );
   }
 }
 

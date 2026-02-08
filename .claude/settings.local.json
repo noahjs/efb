@@ -13,7 +13,10 @@
       "WebFetch(domain:aeronav.faa.gov)",
       "WebFetch(domain:api.faa.gov)",
       "WebFetch(domain:notams.aim.faa.gov)",
-      "Bash(nslookup:*)"
+      "Bash(nslookup:*)",
+      "Bash(tr:*)",
+      "Bash(npm run lint)",
+      "Bash(cut:*)"
     ]
   }
 }

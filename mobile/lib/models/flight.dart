@@ -1,5 +1,7 @@
 class Flight {
   final int? id;
+  final int? aircraftId;
+  final int? performanceProfileId;
   final String? departureIdentifier;
   final String? destinationIdentifier;
   final String? alternateIdentifier;
@@ -31,6 +33,8 @@ class Flight {
 
   const Flight({
     this.id,
+    this.aircraftId,
+    this.performanceProfileId,
     this.departureIdentifier,
     this.destinationIdentifier,
     this.alternateIdentifier,
@@ -64,6 +68,8 @@ class Flight {
   factory Flight.fromJson(Map<String, dynamic> json) {
     return Flight(
       id: json['id'] as int?,
+      aircraftId: json['aircraft_id'] as int?,
+      performanceProfileId: json['performance_profile_id'] as int?,
       departureIdentifier: json['departure_identifier'] as String?,
       destinationIdentifier: json['destination_identifier'] as String?,
       alternateIdentifier: json['alternate_identifier'] as String?,
@@ -99,6 +105,8 @@ class Flight {
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
+      'aircraft_id': aircraftId,
+      'performance_profile_id': performanceProfileId,
       'departure_identifier': departureIdentifier,
       'destination_identifier': destinationIdentifier,
       'alternate_identifier': alternateIdentifier,
@@ -124,6 +132,8 @@ class Flight {
 
   Flight copyWith({
     int? id,
+    int? aircraftId,
+    int? performanceProfileId,
     String? departureIdentifier,
     String? destinationIdentifier,
     String? alternateIdentifier,
@@ -155,6 +165,8 @@ class Flight {
   }) {
     return Flight(
       id: id ?? this.id,
+      aircraftId: aircraftId ?? this.aircraftId,
+      performanceProfileId: performanceProfileId ?? this.performanceProfileId,
       departureIdentifier: departureIdentifier ?? this.departureIdentifier,
       destinationIdentifier:
           destinationIdentifier ?? this.destinationIdentifier,

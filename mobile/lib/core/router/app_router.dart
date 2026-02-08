@@ -7,6 +7,12 @@ import '../../features/airports/screens/airport_detail_screen.dart';
 import '../../features/flights/flights_screen.dart';
 import '../../features/flights/flight_detail_screen.dart';
 import '../../features/aircraft/aircraft_screen.dart';
+import '../../features/aircraft/screens/aircraft_detail_screen.dart';
+import '../../features/aircraft/screens/aircraft_create_screen.dart';
+import '../../features/aircraft/screens/performance_profiles_screen.dart';
+import '../../features/aircraft/screens/performance_profile_edit_screen.dart';
+import '../../features/aircraft/screens/fuel_tanks_screen.dart';
+import '../../features/aircraft/screens/equipment_screen.dart';
 import '../../features/more/more_screen.dart';
 import '../widgets/app_shell.dart';
 
@@ -70,6 +76,61 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: AircraftScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'new',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const AircraftCreateScreen(),
+            ),
+            GoRoute(
+              path: ':id',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final id = int.parse(state.pathParameters['id']!);
+                return AircraftDetailScreen(aircraftId: id);
+              },
+              routes: [
+                GoRoute(
+                  path: 'profiles',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final id = int.parse(state.pathParameters['id']!);
+                    return PerformanceProfilesScreen(aircraftId: id);
+                  },
+                  routes: [
+                    GoRoute(
+                      path: ':pid',
+                      parentNavigatorKey: _rootNavigatorKey,
+                      builder: (context, state) {
+                        final id = int.parse(state.pathParameters['id']!);
+                        final pid = int.parse(state.pathParameters['pid']!);
+                        return PerformanceProfileEditScreen(
+                          aircraftId: id,
+                          profileId: pid,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  path: 'fuel-tanks',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final id = int.parse(state.pathParameters['id']!);
+                    return FuelTanksScreen(aircraftId: id);
+                  },
+                ),
+                GoRoute(
+                  path: 'equipment',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final id = int.parse(state.pathParameters['id']!);
+                    return EquipmentScreen(aircraftId: id);
+                  },
+                ),
+              ],
+            ),
+          ],
         ),
         GoRoute(
           path: '/more',
