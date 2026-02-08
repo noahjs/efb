@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EFB Admin</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header h1 span { color: #58a6ff; }
+    .header .status { font-size: 13px; color: #8b949e; }
+
+    /* Layout */
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .stat-card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+    .stat-card .value.green { color: #3fb950; }
+    .stat-card .value.blue { color: #58a6ff; }
+    .stat-card .value.amber { color: #d29922; }
+
+    /* Sections */
+    .section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .section-header h2 { font-size: 16px; font-weight: 600; }
+    .section-body { padding: 16px 20px; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #30363d; border-color: #8b949e; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: #238636; border-color: #238636; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-danger { background: #da3633; border-color: #da3633; color: #fff; }
+    .btn-danger:hover { background: #f85149; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* Charts grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 10px;
+    }
+    .chart-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .chart-card .name { font-weight: 500; }
+    .chart-card .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .badge-installed { background: #238636; color: #fff; }
+    .badge-available { background: #30363d; color: #8b949e; }
+    .chart-card .actions { display: flex; gap: 6px; align-items: center; }
+
+    /* Jobs list */
+    .job-card {
+      padding: 12px 16px;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: #0d1117;
+    }
+    .job-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .job-header .label { font-weight: 500; font-size: 14px; }
+    .job-status {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .job-status-running { background: #1f6feb; color: #fff; animation: pulse 1.5s infinite; }
+    .job-status-completed { background: #238636; color: #fff; }
+    .job-status-failed { background: #da3633; color: #fff; }
+    .job-status-idle { background: #30363d; color: #8b949e; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    .job-progress { font-size: 12px; color: #8b949e; margin-bottom: 6px; }
+    .job-log {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #010409;
+      border: 1px solid #21262d;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      color: #8b949e;
+      display: none;
+    }
+    .job-log.open { display: block; }
+    .job-log .stderr { color: #f85149; }
+    .job-toggle {
+      font-size: 12px;
+      color: #58a6ff;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .job-toggle:hover { text-decoration: underline; }
+    .job-time { font-size: 11px; color: #484f58; }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 32px; color: #484f58; font-size: 14px; }
+
+    /* Disk usage bar */
+    .disk-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #21262d; }
+    .disk-row:last-child { border-bottom: none; }
+    .disk-label { color: #8b949e; }
+    .disk-value { font-weight: 500; font-family: monospace; }
+
+    /* Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 100;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>EFB</span> Admin Console</h1>
+  <div class="status" id="refreshStatus">Loading...</div>
+</div>
+
+<div class="container">
+  <!-- Stats bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card">
+      <div class="label">Airports</div>
+      <div class="value green" id="statAirports">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Runways</div>
+      <div class="value blue" id="statRunways">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Frequencies</div>
+      <div class="value blue" id="statFreqs">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Charts Installed</div>
+      <div class="value amber" id="statCharts">--</div>
+    </div>
+  </div>
+
+  <!-- Data Management -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Airport Database</h2>
+      <button class="btn btn-primary" onclick="seedAirports()">
+        Seed Airports (FAA NASR)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Downloads the FAA NASR 28-day subscription data and populates the airport,
+        runway, and frequency tables. Currently loaded with sample Colorado airports.
+        Running this will import all ~20,000 US airports.
+      </p>
+    </div>
+  </div>
+
+  <!-- Disk Usage -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Disk Usage</h2>
+    </div>
+    <div class="section-body" id="diskUsage">
+      <div class="empty">Loading...</div>
+    </div>
+  </div>
+
+  <!-- VFR Charts -->
+  <div class="section">
+    <div class="section-header">
+      <h2>VFR Sectional Charts</h2>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-sm" onclick="filterCharts('all')">All</button>
+        <button class="btn btn-sm" onclick="filterCharts('installed')">Installed</button>
+        <button class="btn btn-sm" onclick="filterCharts('available')">Not Installed</button>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="charts-grid" id="chartsGrid">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Jobs -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Jobs</h2>
+      <button class="btn btn-sm" onclick="refreshData()">Refresh</button>
+    </div>
+    <div class="section-body" id="jobsList">
+      <div class="empty">No jobs yet</div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/admin';
+let currentFilter = 'all';
+let allCharts = [];
+let installedCharts = [];
+let pollingInterval = null;
+
+async function fetchJSON(url, opts = {}) {
+  const res = await fetch(url, opts);
+  return res.json();
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+async function refreshData() {
+  try {
+    const data = await fetchJSON(`${API}/overview`);
+    document.getElementById('statAirports').textContent = data.database.airports.toLocaleString();
+    document.getElementById('statRunways').textContent = data.database.runways.toLocaleString();
+    document.getElementById('statFreqs').textContent = data.database.frequencies.toLocaleString();
+    document.getElementById('statCharts').textContent =
+      `${data.charts.installedCount} / ${data.charts.totalAvailable}`;
+
+    allCharts = data.charts.available;
+    installedCharts = data.charts.installed;
+    renderCharts();
+    renderDiskUsage(data.disk);
+    renderJobs(data.jobs);
+
+    const hasRunning = data.jobs.some(j => j.status === 'running');
+    if (hasRunning && !pollingInterval) {
+      pollingInterval = setInterval(refreshData, 3000);
+    } else if (!hasRunning && pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+
+    document.getElementById('refreshStatus').textContent =
+      `Last updated: ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    document.getElementById('refreshStatus').textContent = 'Error loading data';
+  }
+}
+
+function renderDiskUsage(disk) {
+  const el = document.getElementById('diskUsage');
+  if (!disk || Object.keys(disk).length === 0) {
+    el.innerHTML = '<div class="empty">No data files yet</div>';
+    return;
+  }
+  const labels = {
+    database: 'SQLite Database',
+    chartsRaw: 'Chart Source Files (GeoTIFF)',
+    chartsTiles: 'Chart Tiles (PNG)',
+  };
+  el.innerHTML = Object.entries(disk)
+    .map(([k, v]) => `
+      <div class="disk-row">
+        <span class="disk-label">${labels[k] || k}</span>
+        <span class="disk-value">${v}</span>
+      </div>
+    `).join('');
+}
+
+function renderCharts() {
+  const grid = document.getElementById('chartsGrid');
+  let charts = allCharts;
+  if (currentFilter === 'installed') charts = allCharts.filter(c => installedCharts.includes(c));
+  if (currentFilter === 'available') charts = allCharts.filter(c => !installedCharts.includes(c));
+
+  if (charts.length === 0) {
+    grid.innerHTML = '<div class="empty">No charts match filter</div>';
+    return;
+  }
+
+  grid.innerHTML = charts.map(name => {
+    const installed = installedCharts.includes(name);
+    const displayName = name.replace(/_/g, ' ');
+    return `
+      <div class="chart-card">
+        <div>
+          <span class="name">${displayName}</span>
+          <span class="badge ${installed ? 'badge-installed' : 'badge-available'}">
+            ${installed ? 'Installed' : 'Available'}
+          </span>
+        </div>
+        <div class="actions">
+          ${installed
+            ? `<button class="btn btn-danger btn-sm" onclick="deleteChart('${name}')">Delete</button>`
+            : `<button class="btn btn-primary btn-sm" onclick="processChart('${name}')">Install</button>`
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function filterCharts(filter) {
+  currentFilter = filter;
+  renderCharts();
+}
+
+function renderJobs(jobs) {
+  const el = document.getElementById('jobsList');
+  if (!jobs || jobs.length === 0) {
+    el.innerHTML = '<div class="empty">No jobs have been run yet. Use the actions above to start one.</div>';
+    return;
+  }
+
+  // Sort: running first, then by most recent
+  jobs.sort((a, b) => {
+    if (a.status === 'running' && b.status !== 'running') return -1;
+    if (b.status === 'running' && a.status !== 'running') return 1;
+    return (b.startedAt || '').localeCompare(a.startedAt || '');
+  });
+
+  el.innerHTML = jobs.map(job => {
+    const logHtml = job.log.map(line => {
+      const cls = line.startsWith('[stderr]') ? 'stderr' : '';
+      return `<div class="${cls}">${escapeHtml(line)}</div>`;
+    }).join('');
+
+    const startTime = job.startedAt ? new Date(job.startedAt).toLocaleTimeString() : '';
+    const endTime = job.completedAt ? new Date(job.completedAt).toLocaleTimeString() : '';
+    const duration = job.startedAt && job.completedAt
+      ? formatDuration(new Date(job.completedAt) - new Date(job.startedAt))
+      : job.startedAt && job.status === 'running'
+        ? formatDuration(Date.now() - new Date(job.startedAt))
+        : '';
+
+    return `
+      <div class="job-card">
+        <div class="job-header">
+          <span class="label">${escapeHtml(job.label)}</span>
+          <span class="job-status job-status-${job.status}">${job.status.toUpperCase()}</span>
+        </div>
+        ${job.progress && job.status === 'running' ? `<div class="job-progress">${escapeHtml(job.progress)}</div>` : ''}
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="job-time">Started: ${startTime}${endTime ? ` | Ended: ${endTime}` : ''}${duration ? ` | Duration: ${duration}` : ''}</span>
+          <button class="job-toggle" onclick="toggleLog('${job.id}')">Toggle Log</button>
+        </div>
+        <div class="job-log" id="log-${job.id}">${logHtml}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleLog(jobId) {
+  const el = document.getElementById(`log-${jobId}`);
+  if (el) {
+    el.classList.toggle('open');
+    if (el.classList.contains('open')) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatDuration(ms) {
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remainSecs = secs % 60;
+  return `${mins}m ${remainSecs}s`;
+}
+
+async function seedAirports() {
+  toast('Starting airport seed job...');
+  await fetchJSON(`${API}/seed/airports`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function processChart(name) {
+  toast(`Starting chart processing: ${name.replace(/_/g, ' ')}...`);
+  await fetchJSON(`${API}/charts/process/${name}`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function deleteChart(name) {
+  if (!confirm(`Delete chart tiles for ${name.replace(/_/g, ' ')}? This removes tiles and raw files.`)) return;
+  toast(`Deleting ${name.replace(/_/g, ' ')}...`);
+  await fetchJSON(`${API}/charts/${name}`, { method: 'DELETE' });
+  setTimeout(refreshData, 500);
+}
+
+// Initial load
+refreshData();
+</script>
+</body>
+</html>
