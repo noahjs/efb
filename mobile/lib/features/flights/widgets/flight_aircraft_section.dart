@@ -6,7 +6,6 @@ import '../../../models/aircraft.dart';
 import '../../../services/aircraft_providers.dart';
 import 'flight_section_header.dart';
 import 'flight_field_row.dart';
-import 'flight_edit_dialogs.dart';
 
 class FlightAircraftSection extends ConsumerWidget {
   final Flight flight;
@@ -32,21 +31,6 @@ class FlightAircraftSection extends ConsumerWidget {
           value: '$tailDisplay  $typeDisplay',
           showChevron: true,
           onTap: () => _showAircraftPicker(context, ref),
-        ),
-        FlightFieldRow(
-          label: 'Aircraft Type',
-          value: flight.aircraftType ?? 'Select',
-          onTap: () async {
-            final result = await showTextEditSheet(
-              context,
-              title: 'Aircraft Type',
-              currentValue: flight.aircraftType ?? '',
-              hintText: 'e.g. C172',
-            );
-            if (result != null) {
-              onChanged(flight.copyWith(aircraftType: result.toUpperCase()));
-            }
-          },
         ),
         FlightFieldRow(
           label: 'Performance Profile',

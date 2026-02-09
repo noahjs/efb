@@ -8,8 +8,16 @@ class FlightSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
+      width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      margin: const EdgeInsets.only(top: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border(
+          top: BorderSide(color: AppColors.divider, width: 0.5),
+        ),
+      ),
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(

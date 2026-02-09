@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import 'flight_section_header.dart';
 
 class FlightActionsSection extends StatelessWidget {
   final bool isNewFlight;
@@ -23,19 +22,7 @@ class FlightActionsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const FlightSectionHeader(title: 'Actions'),
-        _ActionTile(
-          label: 'Pack',
-          icon: Icons.inventory_2_outlined,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Pack coming in a future update'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          },
-        ),
+        const SizedBox(height: 16),
         _ActionTile(
           label: 'Add Next Flight',
           icon: Icons.add_circle_outline,

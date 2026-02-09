@@ -10,6 +10,7 @@ import '../../services/api_client.dart';
 import '../../services/airport_providers.dart';
 import '../../services/aeronautical_providers.dart';
 import '../../services/map_flight_provider.dart';
+import '../imagery/imagery_providers.dart';
 import 'widgets/map_toolbar.dart';
 import 'widgets/map_sidebar.dart';
 import 'widgets/map_bottom_bar.dart';
@@ -632,6 +633,13 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       }
     }
 
+    // When TFR overlay is active, fetch TFR GeoJSON
+    final showTfrs = _activeOverlays.contains('tfrs');
+    Map<String, dynamic>? tfrGeoJson;
+    if (showTfrs) {
+      tfrGeoJson = ref.watch(tfrsProvider).value;
+    }
+
     // Build route line coordinates from active flight's routeString
     // Uses the waypoint resolver which handles airports, navaids, and fixes
     final activeFlight = ref.watch(activeFlightProvider);
@@ -676,6 +684,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               airspaceGeoJson: airspaceGeoJson,
               airwayGeoJson: airwayGeoJson,
               artccGeoJson: artccGeoJson,
+              tfrGeoJson: tfrGeoJson,
             ),
           ),
 

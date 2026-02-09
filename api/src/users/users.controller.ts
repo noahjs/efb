@@ -4,9 +4,11 @@ import {
   Put,
   Delete,
   Param,
+  Body,
   NotFoundException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 @Controller('users')
 export class UsersController {
@@ -19,6 +21,11 @@ export class UsersController {
       throw new NotFoundException('Demo user not found. Run the seed script.');
     }
     return user;
+  }
+
+  @Put('me')
+  async updateProfile(@Body() dto: UpdateUserDto) {
+    return this.usersService.updateProfile(dto);
   }
 
   @Get('me/starred-airports')

@@ -78,9 +78,70 @@ final progChartProvider =
   );
 });
 
-/// Fetches advisory GeoJSON by type (gairmets, sigmets, cwas).
-final advisoriesProvider =
-    FutureProvider.family<Map<String, dynamic>?, String>((ref, type) async {
+/// Parameters for an Icing Chart image request.
+class IcingChartParams {
+  final String icingParam;
+  final String level;
+  final int forecastHour;
+
+  const IcingChartParams({
+    required this.icingParam,
+    this.level = 'max',
+    this.forecastHour = 0,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is IcingChartParams &&
+          icingParam == other.icingParam &&
+          level == other.level &&
+          forecastHour == other.forecastHour;
+
+  @override
+  int get hashCode =>
+      icingParam.hashCode ^ level.hashCode ^ forecastHour.hashCode;
+}
+
+/// Fetches an Icing Chart image as raw bytes.
+final icingChartProvider =
+    FutureProvider.family<Uint8List?, IcingChartParams>((ref, params) async {
   final api = ref.watch(apiClientProvider);
-  return api.getAdvisories(type);
+  return api.getIcingChart(
+    params.icingParam,
+    level: params.level,
+    forecastHour: params.forecastHour,
+  );
+});
+
+/// Parameters for an advisory request.
+class AdvisoryParams {
+  final String type;
+  final int? forecastHour;
+
+  const AdvisoryParams({required this.type, this.forecastHour});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AdvisoryParams &&
+          type == other.type &&
+          forecastHour == other.forecastHour;
+
+  @override
+  int get hashCode => type.hashCode ^ forecastHour.hashCode;
+}
+
+/// Fetches advisory GeoJSON by type (gairmets, sigmets, cwas).
+/// For gairmets, supports an optional forecastHour (0, 3, 6, 9, 12).
+final advisoriesProvider = FutureProvider.family<Map<String, dynamic>?,
+    AdvisoryParams>((ref, params) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getAdvisories(params.type, forecastHour: params.forecastHour);
+});
+
+/// Fetches TFR GeoJSON from the backend.
+final tfrsProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getTfrs();
 });

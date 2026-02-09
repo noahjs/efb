@@ -100,6 +100,24 @@ export class Flight {
   @Column({ type: 'varchar', default: 'not_filed' })
   filing_status: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  filing_reference: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  filing_version_stamp: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  filed_at: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  filing_format: string;
+
+  @Column({ type: 'real', nullable: true })
+  endurance_hours: number;
+
+  @Column({ type: 'text', nullable: true })
+  remarks: string;
+
   // Computed (populated by future milestones)
   @Column({ type: 'float', nullable: true })
   distance_nm: number;

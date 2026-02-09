@@ -72,6 +72,29 @@ class _AdvisoryMapState extends State<AdvisoryMap> {
   }
 
   @override
+  void didUpdateWidget(covariant AdvisoryMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.geojson != widget.geojson) {
+      _updateSourceData();
+    }
+  }
+
+  void _updateSourceData() {
+    final enriched = enrichGeoJson(widget.geojson);
+    final geojsonStr =
+        jsonEncode(enriched).replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (map && map.getSource('advisories')) {
+          map.getSource('advisories').setData(JSON.parse('$geojsonStr'));
+        }
+      })();
+    ''');
+  }
+
+  @override
   void dispose() {
     _onAdvisoryTapJs = null;
     _evalJs('''
@@ -165,7 +188,7 @@ class _AdvisoryMapState extends State<AdvisoryMap> {
             var unique = [];
             for (var i = 0; i < features.length; i++) {
               var p = features[i].properties;
-              var key = (p.hazard || '') + '|' + (p.tag || p.seriesId || p.cwsu || '') + '|' + (p.validTime || p.validTimeFrom || '');
+              var key = p.notamNumber ? 'tfr:' + p.notamNumber : (p.hazard || '') + '|' + (p.tag || p.seriesId || p.cwsu || '') + '|' + (p.validTime || p.validTimeFrom || '');
               if (!seen[key]) {
                 seen[key] = true;
                 unique.push(p);

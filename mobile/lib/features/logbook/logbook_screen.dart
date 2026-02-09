@@ -32,6 +32,11 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
             onPressed: () => context.go('/logbook/experience'),
           ),
           IconButton(
+            icon: const Icon(Icons.verified),
+            color: AppColors.accent,
+            onPressed: () => context.go('/endorsements'),
+          ),
+          IconButton(
             icon: const Icon(Icons.add),
             color: AppColors.accent,
             onPressed: () => context.go('/logbook/new'),

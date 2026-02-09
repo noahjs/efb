@@ -11,7 +11,7 @@ class FlightWeightsSection extends StatelessWidget {
     return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        FlightSectionHeader(title: 'Weights'),
+        FlightSectionHeader(title: 'Weights (lbs)'),
         FlightFieldRow(
           label: 'Zero Fuel Weight',
           value: '--',

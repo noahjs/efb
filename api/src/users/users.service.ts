@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import { StarredAirport } from './entities/starred-airport.entity';
 import { AirportsService } from '../airports/airports.service';
+import { UpdateUserDto } from './dto/update-user.dto';
 
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -58,6 +59,18 @@ export class UsersService {
     });
 
     return airport;
+  }
+
+  async updateProfile(dto: UpdateUserDto) {
+    const user = await this.getDemoUser();
+    if (!user) {
+      throw new NotFoundException('Demo user not found. Run the seed script.');
+    }
+    const filtered = Object.fromEntries(
+      Object.entries(dto).filter(([, v]) => v !== undefined),
+    );
+    Object.assign(user, filtered);
+    return this.userRepo.save(user);
   }
 
   async unstarAirport(airportIdentifier: string) {

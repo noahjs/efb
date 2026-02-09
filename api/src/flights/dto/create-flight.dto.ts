@@ -90,4 +90,29 @@ export class CreateFlightDto {
   @IsString()
   @IsIn(['not_filed', 'filed', 'accepted', 'closed'])
   filing_status?: string;
+
+  @IsOptional()
+  @IsString()
+  filing_reference?: string;
+
+  @IsOptional()
+  @IsString()
+  filing_version_stamp?: string;
+
+  @IsOptional()
+  @IsString()
+  filed_at?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['domestic', 'icao'])
+  filing_format?: string;
+
+  @IsOptional()
+  @IsNumber()
+  endurance_hours?: number;
+
+  @IsOptional()
+  @IsString()
+  remarks?: string;
 }

@@ -19,6 +19,7 @@ class PlatformMapView extends StatefulWidget {
   final Map<String, dynamic>? airspaceGeoJson;
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
+  final Map<String, dynamic>? tfrGeoJson;
 
   const PlatformMapView({
     super.key,
@@ -34,6 +35,7 @@ class PlatformMapView extends StatefulWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
+    this.tfrGeoJson,
   });
 
   @override
@@ -45,6 +47,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   bool _airportSourceReady = false;
   bool _routeSourceReady = false;
   bool _aeroSourceReady = false;
+  bool _tfrSourceReady = false;
 
   static const _vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
 
@@ -88,6 +91,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         oldWidget.airwayGeoJson != widget.airwayGeoJson ||
         oldWidget.artccGeoJson != widget.artccGeoJson) {
       _updateAeronauticalSources();
+    }
+    if (oldWidget.tfrGeoJson != widget.tfrGeoJson) {
+      _updateTfrSource();
     }
   }
 
@@ -280,6 +286,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       'airspace-fill': 'airspace',
       'artcc-lines': 'artcc',
       'airway-lines': 'airway',
+      'tfr-fill': 'tfr',
     };
 
     final allFeatures = <Map<String, dynamic>>[];
@@ -317,6 +324,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (_mapboxMap == null) return;
     await _addVfrTiles(_mapboxMap!);
     await _addAeronauticalLayers(_mapboxMap!);
+    await _addTfrLayers(_mapboxMap!);
     await _addAirportLayers(_mapboxMap!);
     await _addRouteLayer(_mapboxMap!);
     await _applyFlightCategoryMode(widget.showFlightCategory);
@@ -324,6 +332,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     _updateAirportsSource();
     _updateRouteSource();
     _updateAeronauticalSources();
+    _updateTfrSource();
     // Fire initial bounds
     _fireBounds();
   }
@@ -622,6 +631,64 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           .setStyleSourceProperty('artcc', 'data', artccData);
     } catch (e) {
       debugPrint('Failed to update aeronautical sources: $e');
+    }
+  }
+
+  /// Creates TFR GeoJSON source and layers (fill + outline with data-driven color).
+  Future<void> _addTfrLayers(MapboxMap map) async {
+    const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
+
+    try {
+      await map.style
+          .addSource(GeoJsonSource(id: 'tfrs', data: emptyGeoJson));
+
+      // TFR fill — data-driven color from 'color' property
+      await map.style.addLayer(FillLayer(
+        id: 'tfr-fill',
+        sourceId: 'tfrs',
+        fillColor: const Color(0xFFFF5252).toARGB32(),
+        fillOpacity: 0.15,
+      ));
+
+      // Override fill-color with data-driven expression
+      await map.style.setStyleLayerProperty(
+        'tfr-fill',
+        'fill-color',
+        ['get', 'color'],
+      );
+
+      // TFR outline — data-driven color
+      await map.style.addLayer(LineLayer(
+        id: 'tfr-outline',
+        sourceId: 'tfrs',
+        lineColor: const Color(0xFFFF5252).toARGB32(),
+        lineWidth: 2.0,
+        lineOpacity: 0.8,
+      ));
+
+      await map.style.setStyleLayerProperty(
+        'tfr-outline',
+        'line-color',
+        ['get', 'color'],
+      );
+
+      _tfrSourceReady = true;
+    } catch (e) {
+      debugPrint('Failed to add TFR layers: $e');
+    }
+  }
+
+  Future<void> _updateTfrSource() async {
+    if (!_tfrSourceReady || _mapboxMap == null) return;
+
+    try {
+      final tfrData = widget.tfrGeoJson != null
+          ? jsonEncode(widget.tfrGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('tfrs', 'data', tfrData);
+    } catch (e) {
+      debugPrint('Failed to update TFR source: $e');
     }
   }
 

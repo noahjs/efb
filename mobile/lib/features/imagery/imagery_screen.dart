@@ -130,8 +130,14 @@ class ImageryScreen extends ConsumerWidget {
     switch (type) {
       case 'gfa':
         return Icons.cloud_outlined;
+      case 'prog':
+        return Icons.show_chart;
       case 'geojson':
         return Icons.map_outlined;
+      case 'icing':
+        return Icons.ac_unit;
+      case 'tfr':
+        return Icons.warning_amber_outlined;
       default:
         return Icons.image_outlined;
     }
@@ -147,6 +153,16 @@ class ImageryScreen extends ConsumerWidget {
       final region = params['region'] as String? ?? 'us';
       final name = product['name'] as String? ?? 'GFA';
       context.push('/imagery/gfa?type=$gfaType&region=$region&name=$name');
+    } else if (type == 'prog' && params != null) {
+      final progType = params['progType'] as String? ?? 'low';
+      final name = product['name'] as String? ?? 'Prog Chart';
+      context.push('/imagery/prog?type=$progType&name=$name');
+    } else if (type == 'icing' && params != null) {
+      final icingParam = params['icingParam'] as String? ?? 'prob';
+      final name = product['name'] as String? ?? 'Icing';
+      context.push('/imagery/icing?param=$icingParam&name=$name');
+    } else if (type == 'tfr') {
+      context.push('/imagery/tfrs');
     } else if (type == 'geojson') {
       if (id == 'pireps') {
         context.push('/imagery/pireps');

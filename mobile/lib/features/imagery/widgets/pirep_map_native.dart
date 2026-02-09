@@ -5,6 +5,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
+import 'pirep_symbols.dart';
 
 /// Native (iOS/Android) PIREP map using mapbox_maps_flutter.
 class PirepMap extends StatefulWidget {
@@ -47,29 +48,28 @@ class _PirepMapState extends State<PirepMap> {
         GeoJsonSource(id: 'pireps', data: geojsonStr),
       );
 
-      // Base circles — default gray, override with data-driven color
-      await map.style.addLayer(CircleLayer(
-        id: 'pirep-circles',
+      // Symbol layer using Unicode characters for PIREP symbols
+      await map.style.addLayer(SymbolLayer(
+        id: 'pirep-symbols',
         sourceId: 'pireps',
-        circleRadius: 6.0,
-        circleColor: const Color(0xFFB0B4BC).toARGB32(),
-        circleStrokeWidth: 1.5,
-        circleStrokeColor: Colors.white.withValues(alpha: 0.6).toARGB32(),
-        circleOpacity: 0.85,
+        textField: '{symbol}',
+        textSize: 16.0,
+        textAllowOverlap: true,
+        textIgnorePlacement: true,
+        textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
       ));
-
-      // Override circle-color with data-driven expression
+      // Data-driven text color from feature property
       await map.style.setStyleLayerProperty(
-        'pirep-circles',
-        'circle-color',
+        'pirep-symbols',
+        'text-color',
         ['get', 'color'],
       );
 
-      // Urgent PIREPs get a larger outer ring
+      // Urgent PIREPs get a red outer ring
       await map.style.addLayer(CircleLayer(
         id: 'pirep-urgent-ring',
         sourceId: 'pireps',
-        circleRadius: 10.0,
+        circleRadius: 12.0,
         circleColor: const Color(0x00000000).toARGB32(),
         circleStrokeWidth: 2.0,
         circleStrokeColor: AppColors.error.toARGB32(),
@@ -88,9 +88,10 @@ class _PirepMapState extends State<PirepMap> {
       final props =
           Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
 
-      final tbInt = (props['tbInt1'] as String? ?? '').toUpperCase();
       final airepType = props['airepType'] as String? ?? '';
-      props['color'] = _turbulenceColorHex(tbInt);
+      final iconName = pirepIconName(props);
+      props['symbol'] = _symbolChar(iconName);
+      props['color'] = _symbolColorHex(iconName);
       props['isUrgent'] = airepType == 'URGENT PIREP';
 
       feature['properties'] = props;
@@ -103,29 +104,24 @@ class _PirepMapState extends State<PirepMap> {
     };
   }
 
-  String _turbulenceColorHex(String intensity) {
-    switch (intensity) {
-      case 'NEG':
-      case 'SMTH':
-      case 'SMOOTH':
-        return '#4CAF50';
-      case 'LGT':
-      case 'LIGHT':
-      case 'LGT-MOD':
-        return '#29B6F6';
-      case 'MOD':
-      case 'MODERATE':
-      case 'MOD-SEV':
-        return '#FFC107';
-      case 'SEV':
-      case 'SEVERE':
-      case 'SEV-EXTM':
-      case 'EXTM':
-      case 'EXTREME':
-        return '#FF5252';
-      default:
-        return '#B0B4BC';
+  /// Map icon name to a Unicode character.
+  String _symbolChar(String iconName) {
+    if (iconName.contains('turb')) {
+      return iconName.endsWith('-lgt') ? '\u25BD' : '\u25BC'; // ▽ or ▼
     }
+    if (iconName.contains('ice')) {
+      return iconName.endsWith('-lgt') ? '\u25C7' : '\u25C6'; // ◇ or ◆
+    }
+    return '\u25CF'; // ●
+  }
+
+  /// Map icon name to a hex color string.
+  String _symbolColorHex(String iconName) {
+    if (iconName.endsWith('-lgt')) return '#29B6F6';
+    if (iconName.endsWith('-mod')) return '#FFC107';
+    if (iconName.endsWith('-sev')) return '#FF5252';
+    if (iconName == 'pirep-neg') return '#4CAF50';
+    return '#B0B4BC';
   }
 
   Future<void> _onMapTap(MapContentGestureContext context) async {
@@ -139,7 +135,7 @@ class _PirepMapState extends State<PirepMap> {
       final results = await map.queryRenderedFeatures(
         RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
         RenderedQueryOptions(
-            layerIds: ['pirep-circles', 'pirep-urgent-ring']),
+            layerIds: ['pirep-symbols', 'pirep-urgent-ring']),
       );
 
       if (results.isNotEmpty && results.first != null) {

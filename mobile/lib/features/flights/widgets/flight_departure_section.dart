@@ -101,11 +101,6 @@ class FlightDepartureSection extends StatelessWidget {
             }
           },
         ),
-        FlightFieldRow(
-          label: 'ETA',
-          value: '--',
-          onTap: null,
-        ),
       ],
     );
   }

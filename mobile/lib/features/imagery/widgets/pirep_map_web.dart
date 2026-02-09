@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
 import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
+import 'pirep_symbols.dart';
 
 @JS('_efbPirepTap')
 external set _onPirepTapJs(JSFunction? fn);
@@ -80,31 +81,6 @@ class _PirepMapState extends State<PirepMap> {
     super.dispose();
   }
 
-  String _turbulenceColorHex(String intensity) {
-    switch (intensity.toUpperCase()) {
-      case 'NEG':
-      case 'SMTH':
-      case 'SMOOTH':
-        return '#4CAF50';
-      case 'LGT':
-      case 'LIGHT':
-      case 'LGT-MOD':
-        return '#29B6F6';
-      case 'MOD':
-      case 'MODERATE':
-      case 'MOD-SEV':
-        return '#FFC107';
-      case 'SEV':
-      case 'SEVERE':
-      case 'SEV-EXTM':
-      case 'EXTM':
-      case 'EXTREME':
-        return '#FF5252';
-      default:
-        return '#B0B4BC';
-    }
-  }
-
   Map<String, dynamic> _enrichGeoJson(Map<String, dynamic> original) {
     final features = (original['features'] as List<dynamic>?) ?? [];
     final enrichedFeatures = features.map((f) {
@@ -112,9 +88,10 @@ class _PirepMapState extends State<PirepMap> {
       final props =
           Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
 
-      final tbInt = (props['tbInt1'] as String? ?? '').toUpperCase();
       final airepType = props['airepType'] as String? ?? '';
-      props['color'] = _turbulenceColorHex(tbInt);
+      final iconName = pirepIconName(props);
+      props['symbol'] = _symbolChar(iconName);
+      props['color'] = _symbolColorHex(iconName);
       props['isUrgent'] = airepType == 'URGENT PIREP';
 
       feature['properties'] = props;
@@ -125,6 +102,24 @@ class _PirepMapState extends State<PirepMap> {
       'type': 'FeatureCollection',
       'features': enrichedFeatures,
     };
+  }
+
+  String _symbolChar(String iconName) {
+    if (iconName.contains('turb')) {
+      return iconName.endsWith('-lgt') ? '\u25BD' : '\u25BC';
+    }
+    if (iconName.contains('ice')) {
+      return iconName.endsWith('-lgt') ? '\u25C7' : '\u25C6';
+    }
+    return '\u25CF';
+  }
+
+  String _symbolColorHex(String iconName) {
+    if (iconName.endsWith('-lgt')) return '#29B6F6';
+    if (iconName.endsWith('-mod')) return '#FFC107';
+    if (iconName.endsWith('-sev')) return '#FF5252';
+    if (iconName == 'pirep-neg') return '#4CAF50';
+    return '#B0B4BC';
   }
 
   void _initMap(String containerId) {
@@ -153,26 +148,31 @@ class _PirepMapState extends State<PirepMap> {
           var data = JSON.parse('$geojsonStr');
           map.addSource('pireps', { type: 'geojson', data: data });
 
+          // Symbol layer using Unicode text characters
           map.addLayer({
-            id: 'pirep-circles',
-            type: 'circle',
+            id: 'pirep-symbols',
+            type: 'symbol',
             source: 'pireps',
+            layout: {
+              'text-field': ['get', 'symbol'],
+              'text-size': 16,
+              'text-allow-overlap': true,
+              'text-ignore-placement': true,
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+            },
             paint: {
-              'circle-radius': 6,
-              'circle-color': ['get', 'color'],
-              'circle-stroke-width': 1.5,
-              'circle-stroke-color': 'rgba(255,255,255,0.6)',
-              'circle-opacity': 0.85
+              'text-color': ['get', 'color']
             }
           });
 
+          // Urgent ring layer
           map.addLayer({
             id: 'pirep-urgent-ring',
             type: 'circle',
             source: 'pireps',
             filter: ['==', ['get', 'isUrgent'], true],
             paint: {
-              'circle-radius': 10,
+              'circle-radius': 12,
               'circle-color': 'transparent',
               'circle-stroke-width': 2,
               'circle-stroke-color': '#FF5252',
@@ -180,7 +180,7 @@ class _PirepMapState extends State<PirepMap> {
             }
           });
 
-          map.on('click', 'pirep-circles', function(e) {
+          map.on('click', 'pirep-symbols', function(e) {
             if (e.features && e.features.length > 0) {
               var props = JSON.stringify(e.features[0].properties);
               if (window._efbPirepTap) window._efbPirepTap(props);
@@ -188,16 +188,16 @@ class _PirepMapState extends State<PirepMap> {
           });
 
           map.on('click', function(e) {
-            var features = map.queryRenderedFeatures(e.point, { layers: ['pirep-circles'] });
+            var features = map.queryRenderedFeatures(e.point, { layers: ['pirep-symbols'] });
             if (!features || features.length === 0) {
               if (window._efbPirepTap) window._efbPirepTap('');
             }
           });
 
-          map.on('mouseenter', 'pirep-circles', function() {
+          map.on('mouseenter', 'pirep-symbols', function() {
             map.getCanvas().style.cursor = 'pointer';
           });
-          map.on('mouseleave', 'pirep-circles', function() {
+          map.on('mouseleave', 'pirep-symbols', function() {
             map.getCanvas().style.cursor = '';
           });
         });

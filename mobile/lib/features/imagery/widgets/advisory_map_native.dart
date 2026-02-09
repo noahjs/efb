@@ -29,9 +29,37 @@ class _AdvisoryMapState extends State<AdvisoryMap> {
     MapboxOptions.setAccessToken(mapboxAccessToken);
   }
 
+  bool _sourceAdded = false;
+
   void _onMapCreated(MapboxMap map) {
     _map = map;
     map.setOnMapTapListener(_onMapTap);
+  }
+
+  @override
+  void didUpdateWidget(covariant AdvisoryMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.geojson != widget.geojson && _sourceAdded) {
+      _updateSourceData();
+    }
+  }
+
+  Future<void> _updateSourceData() async {
+    final map = _map;
+    if (map == null) return;
+
+    final enriched = enrichGeoJson(widget.geojson);
+    final geojsonStr = jsonEncode(enriched);
+
+    try {
+      await map.style.setStyleSourceProperty(
+        'advisories',
+        'data',
+        geojsonStr,
+      );
+    } catch (e) {
+      debugPrint('Failed to update advisory source data: $e');
+    }
   }
 
   void _onStyleLoaded(StyleLoadedEventData data) async {
@@ -92,6 +120,8 @@ class _AdvisoryMapState extends State<AdvisoryMap> {
         'line-color',
         ['get', 'color'],
       );
+
+      _sourceAdded = true;
     } catch (e) {
       debugPrint('Failed to add advisory layers: $e');
     }
@@ -121,7 +151,9 @@ class _AdvisoryMapState extends State<AdvisoryMap> {
           if (props is Map) {
             final m = Map<String, dynamic>.from(props);
             // Deduplicate — fill + outline return the same feature twice
-            final key = '${m['hazard']}|${m['tag'] ?? m['seriesId'] ?? m['cwsu'] ?? ''}|${m['validTime'] ?? m['validTimeFrom'] ?? ''}';
+            final key = m['notamNumber'] != null
+                ? 'tfr:${m['notamNumber']}'
+                : '${m['hazard']}|${m['tag'] ?? m['seriesId'] ?? m['cwsu'] ?? ''}|${m['validTime'] ?? m['validTimeFrom'] ?? ''}';
             if (seen.add(key)) allProps.add(m);
           }
         }
@@ -162,8 +194,11 @@ Map<String, dynamic> enrichGeoJson(Map<String, dynamic> original) {
     final props =
         Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
 
-    final hazard = (props['hazard'] as String? ?? '').toUpperCase();
-    props['color'] = hazardColorHex(hazard);
+    // Preserve existing color (e.g. TFRs set color on the backend)
+    if (props['color'] == null || props['color'] == '') {
+      final hazard = (props['hazard'] as String? ?? '').toUpperCase();
+      props['color'] = hazardColorHex(hazard);
+    }
 
     feature['properties'] = props;
     return feature;

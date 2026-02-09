@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../imagery_providers.dart';
 import 'advisory_map.dart';
+import 'feature_detail_panel.dart';
 
-class AdvisoryViewer extends ConsumerWidget {
+class AdvisoryViewer extends ConsumerStatefulWidget {
   final String advisoryType;
   final String name;
 
@@ -16,78 +17,145 @@ class AdvisoryViewer extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dataAsync = ref.watch(advisoriesProvider(advisoryType));
+  ConsumerState<AdvisoryViewer> createState() => _AdvisoryViewerState();
+}
+
+class _AdvisoryViewerState extends ConsumerState<AdvisoryViewer> {
+  /// null means "Current" (no forecast filter), otherwise 0/3/6/9/12.
+  int? _selectedForecastHour;
+
+  bool get _isGairmet => widget.advisoryType == 'gairmets';
+
+  AdvisoryParams get _params => AdvisoryParams(
+        type: widget.advisoryType,
+        forecastHour: _isGairmet ? _selectedForecastHour : null,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final dataAsync = ref.watch(advisoriesProvider(_params));
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(name),
+        title: Text(widget.name),
         backgroundColor: AppColors.toolbarBackground,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(advisoriesProvider(advisoryType)),
+            onPressed: () => ref.invalidate(advisoriesProvider(_params)),
           ),
         ],
       ),
-      body: dataAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off,
-                  size: 48, color: AppColors.textMuted),
-              const SizedBox(height: 16),
-              const Text(
-                'Unable to load advisories',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () =>
-                    ref.invalidate(advisoriesProvider(advisoryType)),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-        data: (data) {
-          if (data == null) {
-            return const Center(
-              child: Text('No data available',
-                  style: TextStyle(color: AppColors.textSecondary)),
-            );
-          }
-
-          final features = (data['features'] as List<dynamic>?) ?? [];
-
-          if (features.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.check_circle_outline,
-                      size: 48, color: AppColors.success),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No active $name',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
+      body: Column(
+        children: [
+          if (_isGairmet) _buildForecastSelector(),
+          Expanded(
+            child: dataAsync.when(
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (_, _) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.cloud_off,
+                        size: 48, color: AppColors.textMuted),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Unable to load advisories',
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () =>
+                          ref.invalidate(advisoriesProvider(_params)),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
-            );
-          }
+              data: (data) {
+                if (data == null) {
+                  return const Center(
+                    child: Text('No data available',
+                        style: TextStyle(color: AppColors.textSecondary)),
+                  );
+                }
 
-          return _AdvisoryMapBody(
-            geojson: data,
-            advisoryType: advisoryType,
-          );
-        },
+                final features =
+                    (data['features'] as List<dynamic>?) ?? [];
+
+                if (features.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_circle_outline,
+                            size: 48, color: AppColors.success),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No active ${widget.name}',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return _AdvisoryMapBody(
+                  geojson: data,
+                  advisoryType: widget.advisoryType,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForecastSelector() {
+    const options = <int?>[null, 0, 3, 6, 9, 12];
+    const labels = ['Current', '0 HR', '3 HR', '6 HR', '9 HR', '12 HR'];
+
+    return Container(
+      color: AppColors.toolbarBackground,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (int i = 0; i < options.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: ChoiceChip(
+                label: Text(
+                  labels[i],
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _selectedForecastHour == options[i]
+                        ? AppColors.textPrimary
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                selected: _selectedForecastHour == options[i],
+                selectedColor: AppColors.primary.withValues(alpha: 0.3),
+                backgroundColor: AppColors.surface,
+                side: BorderSide(
+                  color: _selectedForecastHour == options[i]
+                      ? AppColors.primary
+                      : AppColors.divider,
+                ),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onSelected: (_) {
+                  setState(() => _selectedForecastHour = options[i]);
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -233,9 +301,14 @@ class _AdvisoryMapBodyState extends State<_AdvisoryMapBody> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: _AdvisoryDetailPanel(
-              advisories: _selectedAdvisories,
-              advisoryType: widget.advisoryType,
+            child: FeatureDetailPanel(
+              features: _selectedAdvisories,
+              label: 'advisory',
+              labelPlural: 'advisories',
+              itemBuilder: (props) => _AdvisoryDetailItem(
+                properties: props,
+                advisoryType: widget.advisoryType,
+              ),
               onClose: () => setState(() => _selectedAdvisories = []),
             ),
           ),
@@ -303,85 +376,6 @@ String _hazardColorHex(String hazard) {
       return '#FF9800';
     default:
       return '#B0B4BC';
-  }
-}
-
-class _AdvisoryDetailPanel extends StatelessWidget {
-  final List<Map<String, dynamic>> advisories;
-  final String advisoryType;
-  final VoidCallback onClose;
-
-  const _AdvisoryDetailPanel({
-    required this.advisories,
-    required this.advisoryType,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.4,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.4),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header with count and close button
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-              child: Row(
-                children: [
-                  Text(
-                    '${advisories.length} advisor${advisories.length == 1 ? 'y' : 'ies'} at this location',
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close,
-                        size: 20, color: AppColors.textMuted),
-                    onPressed: onClose,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ],
-              ),
-            ),
-            // Advisory list
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                itemCount: advisories.length,
-                separatorBuilder: (_, _) => const Divider(
-                  color: AppColors.surfaceLight,
-                  height: 16,
-                ),
-                itemBuilder: (_, index) => _AdvisoryDetailItem(
-                  properties: advisories[index],
-                  advisoryType: advisoryType,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -494,7 +488,7 @@ class _AdvisoryDetailItem extends StatelessWidget {
       final base = properties['base'];
       final top = properties['top'];
       if (base != null || top != null) {
-        badges.add(_infoBadge(
+        badges.add(infoBadge(
           Icons.height,
           _formatAltitudeRange(base, top),
         ));
@@ -505,7 +499,7 @@ class _AdvisoryDetailItem extends StatelessWidget {
       final altHigh = properties['altitudeHi1'] ?? properties['altitudeHi2'] ??
           properties['top'];
       if (altLow != null || altHigh != null) {
-        badges.add(_infoBadge(
+        badges.add(infoBadge(
           Icons.height,
           _formatAltitudeRange(altLow, altHigh),
         ));
@@ -515,13 +509,13 @@ class _AdvisoryDetailItem extends StatelessWidget {
     // Forecast hour (G-AIRMETs)
     final forecast = properties['forecast'];
     if (forecast != null) {
-      badges.add(_infoBadge(Icons.schedule, '+${_numToInt(forecast)}HR'));
+      badges.add(infoBadge(Icons.schedule, '+${_numToInt(forecast)}HR'));
     }
 
     // Due-to text (G-AIRMETs)
     final dueTo = _str(properties['dueTo']);
     if (dueTo.isNotEmpty) {
-      badges.add(_infoBadge(Icons.info_outline, dueTo));
+      badges.add(infoBadge(Icons.info_outline, dueTo));
     }
 
     if (badges.isEmpty) return const SizedBox.shrink();
@@ -561,30 +555,6 @@ class _AdvisoryDetailItem extends StatelessWidget {
             height: 1.4,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _infoBadge(IconData icon, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: AppColors.textMuted),
-          const SizedBox(width: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-            ),
-          ),
-        ],
       ),
     );
   }

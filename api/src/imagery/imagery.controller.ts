@@ -55,9 +55,51 @@ export class ImageryController {
     res.send(buffer);
   }
 
+  @Get('icing/:param')
+  async getIcingChart(
+    @Param('param') param: string,
+    @Query('level') level: string,
+    @Query('forecastHour') forecastHour: string,
+    @Res() res: Response,
+  ) {
+    const effectiveLevel = level || 'max';
+    const hour = parseInt(forecastHour, 10) || 0;
+    const buffer = await this.imageryService.getIcingChart(
+      param,
+      effectiveLevel,
+      hour,
+    );
+
+    if (!buffer) {
+      res.status(404).json({ error: 'Icing chart not found' });
+      return;
+    }
+
+    res.set({
+      'Content-Type': 'image/gif',
+      'Cache-Control': 'public, max-age=1800',
+    });
+    res.send(buffer);
+  }
+
+  @Get('tfrs')
+  async getTfrs() {
+    return this.imageryService.getTfrs();
+  }
+
   @Get('advisories/:type')
-  async getAdvisories(@Param('type') type: string) {
-    return this.imageryService.getAdvisories(type);
+  async getAdvisories(
+    @Param('type') type: string,
+    @Query('fore') fore?: string,
+  ) {
+    const forecastHour =
+      fore != null ? parseInt(fore, 10) : undefined;
+    return this.imageryService.getAdvisories(
+      type,
+      forecastHour != null && !isNaN(forecastHour)
+        ? forecastHour
+        : undefined,
+    );
   }
 
   @Get('pireps')

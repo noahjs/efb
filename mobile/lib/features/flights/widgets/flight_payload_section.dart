@@ -23,10 +23,10 @@ class FlightPayloadSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const FlightSectionHeader(title: 'Payload'),
+        const FlightSectionHeader(title: 'Payload (lbs)'),
         FlightFieldRow(
           label: 'People',
-          value: '${flight.peopleCount}',
+          value: '${flight.peopleCount} x ${flight.avgPersonWeight.toStringAsFixed(0)} lbs',
           onTap: () async {
             final result = await showNumberEditSheet(
               context,
@@ -38,27 +38,6 @@ class FlightPayloadSection extends StatelessWidget {
               onChanged(flight.copyWith(peopleCount: result.toInt()));
             }
           },
-        ),
-        FlightFieldRow(
-          label: 'Avg Person Weight',
-          value: '${flight.avgPersonWeight.toStringAsFixed(0)} lbs',
-          onTap: () async {
-            final result = await showNumberEditSheet(
-              context,
-              title: 'Average Person Weight',
-              currentValue: flight.avgPersonWeight,
-              hintText: 'e.g. 170',
-              suffix: 'lbs',
-            );
-            if (result != null) {
-              onChanged(flight.copyWith(avgPersonWeight: result));
-            }
-          },
-        ),
-        FlightFieldRow(
-          label: 'People Weight',
-          value: '${totalPeopleWeight.toStringAsFixed(0)} lbs',
-          valueColor: AppColors.textSecondary,
         ),
         FlightFieldRow(
           label: 'Cargo',

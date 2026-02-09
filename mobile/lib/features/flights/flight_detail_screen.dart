@@ -69,6 +69,17 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
     });
   }
 
+  Future<void> _refreshFlight() async {
+    if (_flight.id == null) return;
+    try {
+      final api = ref.read(apiClientProvider);
+      final json = await api.getFlight(_flight.id!);
+      if (mounted) {
+        setState(() => _flight = Flight.fromJson(json));
+      }
+    } catch (_) {}
+  }
+
   Future<void> _saveField(Flight updated) async {
     setState(() {
       _flight = updated;
@@ -212,29 +223,6 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                   onAddNext: () => context.go('/flights/new'),
                   onLogToLogbook: _handleLogToLogbook,
                 ),
-                if (_flight.id != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: GestureDetector(
-                      onTap: () => _showCalculationDebug(),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.bug_report,
-                              size: 14, color: AppColors.textMuted),
-                          const SizedBox(width: 6),
-                          Text(
-                            'View Calculation Debug',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 const SizedBox(height: 24),
               ],
             ),
@@ -242,16 +230,10 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
         ],
       ),
       bottomNavigationBar: FlightFilingBar(
-        filingStatus: _flight.filingStatus,
+        flight: _flight,
+        api: ref.read(apiClientProvider),
+        onFlightUpdated: _refreshFlight,
       ),
-    );
-  }
-
-  void _showCalculationDebug() {
-    showCalculationDebugSheet(
-      context,
-      _flight.id!,
-      ref.read(apiClientProvider),
     );
   }
 

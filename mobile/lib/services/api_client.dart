@@ -172,6 +172,19 @@ class ApiClient {
     return '${_dio.options.baseUrl}/procedures/$airportId/pdf/$procedureId';
   }
 
+  // --- Users / Profile ---
+
+  Future<Map<String, dynamic>> getProfile() async {
+    final response = await _dio.get('/users/me');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateUserProfile(
+      Map<String, dynamic> data) async {
+    final response = await _dio.put('/users/me', data: data);
+    return response.data;
+  }
+
   // --- Users / Starred Airports ---
 
   Future<List<dynamic>> getStarredAirports() async {
@@ -567,11 +580,41 @@ class ApiClient {
     }
   }
 
-  Future<Map<String, dynamic>?> getAdvisories(String type) async {
+  Future<Uint8List?> getIcingChart(String param,
+      {String level = 'max', int forecastHour = 0}) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/icing/$param',
+        queryParameters: {'level': level, 'forecastHour': forecastHour},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAdvisories(String type,
+      {int? forecastHour}) async {
     try {
       final response = await _dio.get(
         '/imagery/advisories/$type',
+        queryParameters: {
+          if (forecastHour != null) 'fore': forecastHour,
+        },
         options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getTfrs() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/tfrs',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
       );
       return response.data;
     } catch (_) {
@@ -646,6 +689,42 @@ class ApiClient {
     return response.data;
   }
 
+  // --- Endorsements ---
+
+  Future<Map<String, dynamic>> getEndorsements({
+    String? query,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await _dio.get('/endorsements', queryParameters: {
+      if (query != null && query.isNotEmpty) 'q': query,
+      'limit': limit,
+      'offset': offset,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getEndorsement(int id) async {
+    final response = await _dio.get('/endorsements/$id');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createEndorsement(
+      Map<String, dynamic> data) async {
+    final response = await _dio.post('/endorsements', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateEndorsement(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.put('/endorsements/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteEndorsement(int id) async {
+    await _dio.delete('/endorsements/$id');
+  }
+
   // --- Registry ---
 
   Future<Map<String, dynamic>?> lookupRegistry(String nNumber) async {
@@ -673,6 +752,38 @@ class ApiClient {
       int aircraftId, Map<String, dynamic> data) async {
     final response =
         await _dio.put('/aircraft/$aircraftId/equipment', data: data);
+    return response.data;
+  }
+
+  // --- Filing ---
+
+  Future<Map<String, dynamic>> validateFiling(int flightId) async {
+    final response = await _dio.get('/filing/$flightId/validate');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> fileFlight(int flightId) async {
+    final response = await _dio.post('/filing/$flightId/file');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> amendFlight(int flightId) async {
+    final response = await _dio.post('/filing/$flightId/amend');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> cancelFiling(int flightId) async {
+    final response = await _dio.post('/filing/$flightId/cancel');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> closeFiling(int flightId) async {
+    final response = await _dio.post('/filing/$flightId/close');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getFilingStatus(int flightId) async {
+    final response = await _dio.get('/filing/$flightId/status');
     return response.data;
   }
 }

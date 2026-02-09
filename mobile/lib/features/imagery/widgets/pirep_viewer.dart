@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
 import 'pirep_map.dart';
+import 'pirep_symbols.dart';
 
 /// Provider for PIREP data.
 final _pirepDataProvider =
@@ -150,13 +151,26 @@ class _PirepMapBodyState extends State<_PirepMapBody> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _legendDot(const Color(0xFF4CAF50), 'Smooth/NEG'),
+                _legendSymbol(PirepShape.circle, const Color(0xFF4CAF50),
+                    true, 'Smooth/NEG'),
                 const SizedBox(height: 4),
-                _legendDot(const Color(0xFF29B6F6), 'Light'),
+                _legendSymbol(PirepShape.triangle, const Color(0xFF29B6F6),
+                    false, 'Turb Light'),
                 const SizedBox(height: 4),
-                _legendDot(const Color(0xFFFFC107), 'Moderate'),
+                _legendSymbol(PirepShape.triangle, const Color(0xFFFFC107),
+                    true, 'Turb Mod'),
                 const SizedBox(height: 4),
-                _legendDot(const Color(0xFFFF5252), 'Severe'),
+                _legendSymbol(PirepShape.triangle, const Color(0xFFFF5252),
+                    true, 'Turb Sev'),
+                const SizedBox(height: 6),
+                _legendSymbol(PirepShape.diamond, const Color(0xFF29B6F6),
+                    false, 'Ice Light'),
+                const SizedBox(height: 4),
+                _legendSymbol(PirepShape.diamond, const Color(0xFFFFC107),
+                    true, 'Ice Mod'),
+                const SizedBox(height: 4),
+                _legendSymbol(PirepShape.diamond, const Color(0xFFFF5252),
+                    true, 'Ice Sev'),
               ],
             ),
           ),
@@ -177,17 +191,15 @@ class _PirepMapBodyState extends State<_PirepMapBody> {
     );
   }
 
-  Widget _legendDot(Color color, String label) {
+  Widget _legendSymbol(
+      PirepShape shape, Color color, bool filled, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+        CustomPaint(
+          size: const Size(14, 14),
+          painter: PirepSymbolPainter(
+              shape: shape, color: color, filled: filled),
         ),
         const SizedBox(width: 6),
         Text(

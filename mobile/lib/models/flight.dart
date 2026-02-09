@@ -22,6 +22,12 @@ class Flight {
   final double? fuelBurnRate;
   final double fuelAtShutdownGallons;
   final String filingStatus;
+  final String? filingReference;
+  final String? filingVersionStamp;
+  final String? filedAt;
+  final String? filingFormat;
+  final double? enduranceHours;
+  final String? remarks;
   final double? distanceNm;
   final int? eteMinutes;
   final double? flightFuelGallons;
@@ -55,6 +61,12 @@ class Flight {
     this.fuelBurnRate,
     this.fuelAtShutdownGallons = 0,
     this.filingStatus = 'not_filed',
+    this.filingReference,
+    this.filingVersionStamp,
+    this.filedAt,
+    this.filingFormat,
+    this.enduranceHours,
+    this.remarks,
     this.distanceNm,
     this.eteMinutes,
     this.flightFuelGallons,
@@ -91,6 +103,12 @@ class Flight {
       fuelAtShutdownGallons:
           (json['fuel_at_shutdown_gallons'] as num?)?.toDouble() ?? 0,
       filingStatus: (json['filing_status'] as String?) ?? 'not_filed',
+      filingReference: json['filing_reference'] as String?,
+      filingVersionStamp: json['filing_version_stamp'] as String?,
+      filedAt: json['filed_at'] as String?,
+      filingFormat: json['filing_format'] as String?,
+      enduranceHours: (json['endurance_hours'] as num?)?.toDouble(),
+      remarks: json['remarks'] as String?,
       distanceNm: (json['distance_nm'] as num?)?.toDouble(),
       eteMinutes: json['ete_minutes'] as int?,
       flightFuelGallons: (json['flight_fuel_gallons'] as num?)?.toDouble(),
@@ -128,6 +146,8 @@ class Flight {
       'fuel_burn_rate': fuelBurnRate,
       'fuel_at_shutdown_gallons': fuelAtShutdownGallons,
       'filing_status': filingStatus,
+      'endurance_hours': enduranceHours,
+      'remarks': remarks,
     };
   }
 
@@ -135,6 +155,10 @@ class Flight {
   Map<String, dynamic> toFullJson() {
     return {
       ...toJson(),
+      'filing_reference': filingReference,
+      'filing_version_stamp': filingVersionStamp,
+      'filed_at': filedAt,
+      'filing_format': filingFormat,
       'distance_nm': distanceNm,
       'ete_minutes': eteMinutes,
       'flight_fuel_gallons': flightFuelGallons,
@@ -170,6 +194,12 @@ class Flight {
     double? fuelBurnRate,
     double? fuelAtShutdownGallons,
     String? filingStatus,
+    String? filingReference,
+    String? filingVersionStamp,
+    String? filedAt,
+    String? filingFormat,
+    double? enduranceHours,
+    String? remarks,
     double? distanceNm,
     int? eteMinutes,
     double? flightFuelGallons,
@@ -205,6 +235,12 @@ class Flight {
       fuelAtShutdownGallons:
           fuelAtShutdownGallons ?? this.fuelAtShutdownGallons,
       filingStatus: filingStatus ?? this.filingStatus,
+      filingReference: filingReference ?? this.filingReference,
+      filingVersionStamp: filingVersionStamp ?? this.filingVersionStamp,
+      filedAt: filedAt ?? this.filedAt,
+      filingFormat: filingFormat ?? this.filingFormat,
+      enduranceHours: enduranceHours ?? this.enduranceHours,
+      remarks: remarks ?? this.remarks,
       distanceNm: distanceNm ?? this.distanceNm,
       eteMinutes: eteMinutes ?? this.eteMinutes,
       flightFuelGallons: flightFuelGallons ?? this.flightFuelGallons,

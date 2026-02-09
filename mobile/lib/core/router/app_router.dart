@@ -19,10 +19,16 @@ import '../../features/imagery/imagery_screen.dart';
 import '../../features/imagery/widgets/gfa_viewer.dart';
 import '../../features/imagery/widgets/advisory_viewer.dart';
 import '../../features/imagery/widgets/pirep_viewer.dart';
+import '../../features/imagery/widgets/icing_viewer.dart';
+import '../../features/imagery/widgets/prog_viewer.dart';
+import '../../features/imagery/widgets/tfr_viewer.dart';
 import '../../features/logbook/logbook_screen.dart';
 import '../../features/logbook/logbook_entry_screen.dart';
 import '../../features/logbook/logbook_experience_report_screen.dart';
+import '../../features/logbook/endorsements_screen.dart';
+import '../../features/logbook/endorsement_detail_screen.dart';
 import '../../features/more/more_screen.dart';
+import '../../features/more/pilot_profile_screen.dart';
 import '../widgets/app_shell.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
@@ -213,9 +219,36 @@ final appRouter = GoRouter(
               },
             ),
             GoRoute(
+              path: 'prog',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final type =
+                    state.uri.queryParameters['type'] ?? 'low';
+                final name =
+                    state.uri.queryParameters['name'] ?? 'Prog Chart';
+                return ProgViewer(progType: type, name: name);
+              },
+            ),
+            GoRoute(
+              path: 'icing',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final param =
+                    state.uri.queryParameters['param'] ?? 'prob';
+                final name =
+                    state.uri.queryParameters['name'] ?? 'Icing';
+                return IcingViewer(icingParam: param, name: name);
+              },
+            ),
+            GoRoute(
               path: 'pireps',
               parentNavigatorKey: _rootNavigatorKey,
               builder: (context, state) => const PirepViewer(),
+            ),
+            GoRoute(
+              path: 'tfrs',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const TfrViewer(),
             ),
           ],
         ),
@@ -248,6 +281,28 @@ final appRouter = GoRouter(
           ],
         ),
         GoRoute(
+          path: '/endorsements',
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: EndorsementsScreen(),
+          ),
+          routes: [
+            GoRoute(
+              path: 'new',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) =>
+                  const EndorsementDetailScreen(endorsementId: null),
+            ),
+            GoRoute(
+              path: ':id',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final id = int.parse(state.pathParameters['id']!);
+                return EndorsementDetailScreen(endorsementId: id);
+              },
+            ),
+          ],
+        ),
+        GoRoute(
           path: '/weight-balance',
           pageBuilder: (context, state) => NoTransitionPage(
             child: Scaffold(
@@ -270,6 +325,13 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) => const NoTransitionPage(
             child: MoreScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'profile',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const PilotProfileScreen(),
+            ),
+          ],
         ),
       ],
     ),

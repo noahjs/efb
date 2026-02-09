@@ -20,6 +20,7 @@ class PlatformMapView extends StatefulWidget {
   final Map<String, dynamic>? airspaceGeoJson;
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
+  final Map<String, dynamic>? tfrGeoJson;
 
   const PlatformMapView({
     super.key,
@@ -35,6 +36,7 @@ class PlatformMapView extends StatefulWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
+    this.tfrGeoJson,
   });
 
   @override

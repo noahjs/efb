@@ -136,24 +136,6 @@ class FlightRouteSection extends StatelessWidget {
             }
           },
         ),
-        FlightFieldRow(
-          label: 'True Airspeed',
-          value: flight.trueAirspeed != null
-              ? '${flight.trueAirspeed} kts'
-              : 'Set',
-          onTap: () async {
-            final result = await showNumberEditSheet(
-              context,
-              title: 'True Airspeed',
-              currentValue: flight.trueAirspeed?.toDouble(),
-              hintText: 'e.g. 120',
-              suffix: 'kts',
-            );
-            if (result != null) {
-              onChanged(flight.copyWith(trueAirspeed: result.toInt()));
-            }
-          },
-        ),
       ],
     );
   }

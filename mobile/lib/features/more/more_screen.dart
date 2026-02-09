@@ -224,8 +224,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
           _MenuItem(
             icon: Icons.person_outline,
             iconColor: const Color(0xFF42A5F5),
-            label: 'Account',
-            onTap: () => _showComingSoon('Account'),
+            label: 'Pilot Profile',
+            onTap: () => context.go('/more/profile'),
           ),
           _MenuItem(
             icon: Icons.help_outline,

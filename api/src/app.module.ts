@@ -35,8 +35,10 @@ import { CalculateModule } from './calculate/calculate.module';
 import { ImageryModule } from './imagery/imagery.module';
 import { LogbookModule } from './logbook/logbook.module';
 import { LogbookEntry } from './logbook/entities/logbook-entry.entity';
+import { Endorsement } from './logbook/entities/endorsement.entity';
 import { FaaRegistryAircraft } from './registry/entities/faa-registry-aircraft.entity';
 import { RegistryModule } from './registry/registry.module';
+import { FilingModule } from './filing/filing.module';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -65,6 +67,7 @@ import { dbConfig } from './db.config';
         AirwaySegment,
         ArtccBoundary,
         LogbookEntry,
+        Endorsement,
         FaaRegistryAircraft,
       ],
     }),
@@ -83,6 +86,7 @@ import { dbConfig } from './db.config';
     ImageryModule,
     LogbookModule,
     RegistryModule,
+    FilingModule,
   ],
 })
 export class AppModule {}
