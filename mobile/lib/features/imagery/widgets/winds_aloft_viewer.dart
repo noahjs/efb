@@ -26,21 +26,8 @@ class _WindsAloftViewerState extends ConsumerState<WindsAloftViewer> {
     ('45K', '450'),
   ];
 
-  static const _areas = [
-    ('NE', 'a'),
-    ('SE', 'b1'),
-    ('N.Cen', 'c'),
-    ('S.Cen', 'd'),
-    ('Rockies', 'e'),
-    ('Pacific', 'f'),
-    ('Gr.Basin', 'g'),
-    ('Alaska', 'h'),
-    ('Hawaii', 'j'),
-  ];
-
   int _selectedHour = 6;
   String _selectedLevel = '100';
-  String _selectedArea = 'a';
 
   String _validTimeLabel(int forecastHour) {
     final now = DateTime.now().toUtc();
@@ -55,7 +42,6 @@ class _WindsAloftViewerState extends ConsumerState<WindsAloftViewer> {
   Widget build(BuildContext context) {
     final params = WindsAloftChartParams(
       level: _selectedLevel,
-      area: _selectedArea,
       forecastHour: _selectedHour,
     );
     final imageAsync = ref.watch(windsAloftChartProvider(params));
@@ -125,49 +111,6 @@ class _WindsAloftViewerState extends ConsumerState<WindsAloftViewer> {
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 13,
-              ),
-            ),
-          ),
-          // Area selector
-          Container(
-            color: AppColors.surface,
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _areas.map((entry) {
-                  final (label, code) = entry;
-                  final isSelected = code == _selectedArea;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedArea = code),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.primary
-                              : AppColors.surfaceLight,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          label,
-                          style: TextStyle(
-                            color: isSelected
-                                ? Colors.white
-                                : AppColors.textSecondary,
-                            fontSize: 13,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
               ),
             ),
           ),

@@ -2,7 +2,7 @@
  * FAA d-TPP (Terminal Procedures Publication) Seed Script
  *
  * Downloads the current d-TPP metafile XML and imports procedure metadata
- * (~17,000 records) into the SQLite database.
+ * (~17,000 records) into the PostgreSQL database.
  *
  * Usage: npx ts-node -r tsconfig-paths/register src/seed/seed-procedures.ts
  *

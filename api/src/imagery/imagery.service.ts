@@ -22,6 +22,99 @@ export class ImageryService {
     return {
       sections: [
         {
+          id: 'advisories',
+          title: 'ADVISORIES',
+          products: [
+            { id: 'gairmets', name: 'Graphical AIRMETs', type: 'geojson' },
+            { id: 'sigmets', name: 'SIGMETs', type: 'geojson' },
+            {
+              id: 'cwas',
+              name: 'Center Weather Advisories',
+              type: 'geojson',
+            },
+          ],
+        },
+        {
+          id: 'prog',
+          title: 'PROGNOSTIC CHARTS',
+          products: [
+            {
+              id: 'prog-sfc',
+              name: 'Surface Analysis',
+              type: 'prog',
+              params: { progType: 'sfc' },
+              forecastHours: [0],
+            },
+            {
+              id: 'prog-low',
+              name: 'Low-Level Prog',
+              type: 'prog',
+              params: { progType: 'low' },
+              forecastHours: [6, 12, 18, 24, 30, 36, 48, 60],
+            },
+          ],
+        },
+        {
+          id: 'icing',
+          title: 'ICING',
+          products: [
+            {
+              id: 'icing-prob',
+              name: 'Icing Probability',
+              type: 'icing',
+              params: { icingParam: 'prob' },
+              forecastHours: [0, 3, 6, 9, 12, 15, 18],
+            },
+            {
+              id: 'icing-sev',
+              name: 'Icing Severity',
+              type: 'icing',
+              params: { icingParam: 'sev' },
+              forecastHours: [0, 3, 6, 9, 12, 15, 18],
+            },
+          ],
+        },
+        {
+          id: 'winds',
+          title: 'WINDS ALOFT',
+          products: [
+            {
+              id: 'winds-aloft',
+              name: 'Winds & Temperatures Aloft',
+              type: 'winds',
+            },
+          ],
+        },
+        {
+          id: 'convective',
+          title: 'CONVECTIVE OUTLOOKS',
+          products: [
+            {
+              id: 'convective-outlook',
+              name: 'Convective Outlook',
+              type: 'convective',
+            },
+          ],
+        },
+        {
+          id: 'tfrs',
+          title: 'TFRs',
+          products: [
+            {
+              id: 'tfrs',
+              name: 'Temporary Flight Restrictions',
+              type: 'tfr',
+            },
+          ],
+        },
+        {
+          id: 'pireps',
+          title: 'PILOT WEATHER REPORTS',
+          products: [
+            { id: 'pireps', name: 'PIREPs', type: 'geojson' },
+          ],
+        },
+        {
           id: 'gfa',
           title: 'GRAPHICAL AVIATION FORECASTS',
           products: [
@@ -165,99 +258,6 @@ export class ImageryService {
               params: { gfaType: 'sfc', region: 'sw' },
               forecastHours: [3, 6, 9, 12, 15, 18],
             },
-          ],
-        },
-        {
-          id: 'advisories',
-          title: 'ADVISORIES',
-          products: [
-            { id: 'gairmets', name: 'Graphical AIRMETs', type: 'geojson' },
-            { id: 'sigmets', name: 'SIGMETs', type: 'geojson' },
-            {
-              id: 'cwas',
-              name: 'Center Weather Advisories',
-              type: 'geojson',
-            },
-          ],
-        },
-        {
-          id: 'prog',
-          title: 'PROGNOSTIC CHARTS',
-          products: [
-            {
-              id: 'prog-sfc',
-              name: 'Surface Analysis',
-              type: 'prog',
-              params: { progType: 'sfc' },
-              forecastHours: [0],
-            },
-            {
-              id: 'prog-low',
-              name: 'Low-Level Prog',
-              type: 'prog',
-              params: { progType: 'low' },
-              forecastHours: [6, 12, 18, 24, 30, 36, 48, 60],
-            },
-          ],
-        },
-        {
-          id: 'icing',
-          title: 'ICING',
-          products: [
-            {
-              id: 'icing-prob',
-              name: 'Icing Probability',
-              type: 'icing',
-              params: { icingParam: 'prob' },
-              forecastHours: [0, 3, 6, 9, 12, 15, 18],
-            },
-            {
-              id: 'icing-sev',
-              name: 'Icing Severity',
-              type: 'icing',
-              params: { icingParam: 'sev' },
-              forecastHours: [0, 3, 6, 9, 12, 15, 18],
-            },
-          ],
-        },
-        {
-          id: 'winds',
-          title: 'WINDS ALOFT',
-          products: [
-            {
-              id: 'winds-aloft',
-              name: 'Winds & Temperatures Aloft',
-              type: 'winds',
-            },
-          ],
-        },
-        {
-          id: 'convective',
-          title: 'CONVECTIVE OUTLOOKS',
-          products: [
-            {
-              id: 'convective-outlook',
-              name: 'Convective Outlook',
-              type: 'convective',
-            },
-          ],
-        },
-        {
-          id: 'tfrs',
-          title: 'TFRs',
-          products: [
-            {
-              id: 'tfrs',
-              name: 'Temporary Flight Restrictions',
-              type: 'tfr',
-            },
-          ],
-        },
-        {
-          id: 'pireps',
-          title: 'PILOT WEATHER REPORTS',
-          products: [
-            { id: 'pireps', name: 'PIREPs', type: 'geojson' },
           ],
         },
       ],

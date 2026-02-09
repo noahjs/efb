@@ -2,7 +2,7 @@
  * FAA NASR Data Seed Script
  *
  * Downloads the current FAA NASR 28-day subscription data and imports
- * airports, runways, runway ends, and frequencies into the SQLite database.
+ * airports, runways, runway ends, and frequencies into the PostgreSQL database.
  *
  * Usage: npx ts-node src/seed/seed.ts
  *

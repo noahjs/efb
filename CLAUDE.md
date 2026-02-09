@@ -8,7 +8,7 @@ EFB (Electronic Flight Bag) is a flight planning and situational awareness appli
 
 ## Repository Structure
 
-- `api/` — NestJS backend (TypeScript, SQLite via TypeORM, port 3001)
+- `api/` — NestJS backend (TypeScript, PostgreSQL via TypeORM, port 3001)
 - `mobile/` — Flutter frontend (Dart, Riverpod state management, GoRouter navigation)
 - `docs/` — Product development documents (product spec, module designs). Always consult these before implementing new features or making architectural decisions.
 
@@ -52,7 +52,7 @@ NestJS modular monolith with four main modules:
 - **TilesModule** — Serves VFR sectional chart tiles from filesystem (`data/charts/tiles/`). Handles TMS↔XYZ coordinate conversion.
 - **AdminModule** — Dashboard and job management for seeding airports and processing chart tiles.
 
-Database is SQLite at `data/efb.sqlite` with TypeORM (auto-synchronize enabled in dev). All API endpoints are prefixed with `/api`.
+Database is PostgreSQL (port 5433, user/pass/db: efb) with TypeORM (auto-synchronize enabled in dev). Run `docker compose up -d` to start the database. All API endpoints are prefixed with `/api`.
 
 ### Frontend
 
