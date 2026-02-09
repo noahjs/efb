@@ -144,21 +144,15 @@ export class ImageryController {
     @Param('type') type: string,
     @Query('fore') fore?: string,
   ) {
-    const forecastHour =
-      fore != null ? parseInt(fore, 10) : undefined;
+    const forecastHour = fore != null ? parseInt(fore, 10) : undefined;
     return this.imageryService.getAdvisories(
       type,
-      forecastHour != null && !isNaN(forecastHour)
-        ? forecastHour
-        : undefined,
+      forecastHour != null && !isNaN(forecastHour) ? forecastHour : undefined,
     );
   }
 
   @Get('pireps')
-  async getPireps(
-    @Query('bbox') bbox?: string,
-    @Query('age') age?: string,
-  ) {
+  async getPireps(@Query('bbox') bbox?: string, @Query('age') age?: string) {
     return this.imageryService.getPireps(
       bbox,
       age ? parseInt(age, 10) : undefined,

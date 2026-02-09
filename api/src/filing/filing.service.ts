@@ -53,8 +53,7 @@ export class FilingService {
       field: 'aircraft_identifier',
       label: 'Aircraft identifier',
       passed:
-        !!flight.aircraft_identifier &&
-        flight.aircraft_identifier.length <= 7,
+        !!flight.aircraft_identifier && flight.aircraft_identifier.length <= 7,
       value: flight.aircraft_identifier || undefined,
       severity: 'error',
     });
@@ -122,9 +121,7 @@ export class FilingService {
       field: 'true_airspeed',
       label: 'True airspeed',
       passed: !!flight.true_airspeed,
-      value: flight.true_airspeed
-        ? `${flight.true_airspeed} kt`
-        : undefined,
+      value: flight.true_airspeed ? `${flight.true_airspeed} kt` : undefined,
       severity: 'error',
     });
 
@@ -221,8 +218,7 @@ export class FilingService {
 
     // Endurance
     const enduranceHours =
-      flight.endurance_hours ||
-      this.computeEndurance(flight);
+      flight.endurance_hours || this.computeEndurance(flight);
     const endurance = this.formatHoursToHHMM(enduranceHours);
 
     return {

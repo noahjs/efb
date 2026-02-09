@@ -70,7 +70,10 @@ export class NavaidsController {
   @Get('waypoints/resolve')
   async resolveRoute(@Query('ids') ids: string) {
     if (!ids) return [];
-    const identifiers = ids.split(',').map((s) => s.trim()).filter(Boolean);
+    const identifiers = ids
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     return this.navaidsService.resolveRoute(identifiers);
   }
 

@@ -9,6 +9,32 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U efb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: ./api
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: efb
+      DB_PASS: efb
+      DB_NAME: efb
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
 
 volumes:
   pgdata:

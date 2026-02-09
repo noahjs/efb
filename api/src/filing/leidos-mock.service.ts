@@ -13,10 +13,7 @@ import {
 export class LeidosMockService implements LeidosClient {
   private readonly logger = new Logger(LeidosMockService.name);
   private counter = 1000;
-  private plans = new Map<
-    string,
-    { status: string; versionStamp: string }
-  >();
+  private plans = new Map<string, { status: string; versionStamp: string }>();
 
   async fileFlightPlan(
     request: LeidosFileRequest,
@@ -48,9 +45,7 @@ export class LeidosMockService implements LeidosClient {
   async amendFlightPlan(
     request: LeidosAmendRequest,
   ): Promise<LeidosFileResponse> {
-    this.logger.log(
-      `[MOCK] Amending flight plan ${request.flightIdentifier}`,
-    );
+    this.logger.log(`[MOCK] Amending flight plan ${request.flightIdentifier}`);
 
     await this.delay(600);
 
@@ -100,9 +95,7 @@ export class LeidosMockService implements LeidosClient {
   async closeFlightPlan(
     request: LeidosCloseRequest,
   ): Promise<LeidosFileResponse> {
-    this.logger.log(
-      `[MOCK] Closing flight plan ${request.flightIdentifier}`,
-    );
+    this.logger.log(`[MOCK] Closing flight plan ${request.flightIdentifier}`);
 
     await this.delay(400);
 
@@ -123,9 +116,7 @@ export class LeidosMockService implements LeidosClient {
     webUserName: string,
     flightIdentifier: string,
   ): Promise<LeidosStatusResponse> {
-    this.logger.log(
-      `[MOCK] Checking status for ${flightIdentifier}`,
-    );
+    this.logger.log(`[MOCK] Checking status for ${flightIdentifier}`);
 
     await this.delay(300);
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AirportsService } from '../airports/airports.service';
+import { WEATHER } from '../config/constants';
 
 interface WindsAloftAltitude {
   altitude: number;
@@ -37,18 +38,12 @@ interface MetarResponse {
 @Injectable()
 export class WeatherService {
   private readonly logger = new Logger(WeatherService.name);
-  private readonly AWC_BASE = 'https://aviationweather.gov/api/data';
 
   // Simple in-memory cache: key -> { data, expiresAt }
   private cache = new Map<string, { data: any; expiresAt: number }>();
-  private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-  private readonly WINDS_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
-  private readonly NOTAM_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-  private readonly GRID_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-  private readonly NWS_BASE = 'https://api.weather.gov';
   private readonly NWS_HEADERS = {
-    'User-Agent': '(EFB Flight App, contact@efb.app)',
+    'User-Agent': WEATHER.NWS_USER_AGENT,
     Accept: 'application/geo+json',
   };
 
@@ -64,7 +59,7 @@ export class WeatherService {
 
     try {
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/metar`, {
+        this.http.get(`${WEATHER.AWC_BASE_URL}/metar`, {
           params: { ids: icao, format: 'json', hours: 3 },
         }),
       );
@@ -88,7 +83,7 @@ export class WeatherService {
 
     try {
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/taf`, {
+        this.http.get(`${WEATHER.AWC_BASE_URL}/taf`, {
           params: { ids: icao, format: 'json' },
         }),
       );
@@ -118,7 +113,7 @@ export class WeatherService {
       // AWC bbox format: lat0, lon0, lat1, lon1
       const bbox = `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/metar`, {
+        this.http.get(`${WEATHER.AWC_BASE_URL}/metar`, {
           params: { bbox, format: 'json', hours: 3 },
         }),
       );
@@ -180,8 +175,8 @@ export class WeatherService {
     const nearby = await this.airportsService.findNearby(
       airport.latitude,
       airport.longitude,
-      50,
-      20,
+      WEATHER.TAF_SEARCH_RADIUS_NM,
+      WEATHER.TAF_SEARCH_LIMIT,
     );
 
     for (const candidate of nearby) {
@@ -233,7 +228,7 @@ export class WeatherService {
 
       const { data } = await firstValueFrom(
         this.http.get(
-          `${this.NWS_BASE}/gridpoints/${grid.gridId}/${grid.gridX},${grid.gridY}/forecast`,
+          `${WEATHER.NWS_BASE_URL}/gridpoints/${grid.gridId}/${grid.gridX},${grid.gridY}/forecast`,
           { headers: this.NWS_HEADERS },
         ),
       );
@@ -308,8 +303,8 @@ export class WeatherService {
       const nearby = await this.airportsService.findNearby(
         airport.latitude,
         airport.longitude,
-        100,
-        50,
+        WEATHER.WINDS_SEARCH_RADIUS_NM,
+        WEATHER.WINDS_SEARCH_LIMIT,
       );
 
       let found = false;
@@ -339,7 +334,7 @@ export class WeatherService {
           requestedStation: icao,
           forecasts: [],
         };
-        this.setCache(cacheKey, result, this.WINDS_CACHE_TTL_MS);
+        this.setCache(cacheKey, result, WEATHER.CACHE_TTL_WINDS_MS);
         return result;
       }
     }
@@ -363,7 +358,7 @@ export class WeatherService {
       forecasts,
     };
 
-    this.setCache(cacheKey, result, this.WINDS_CACHE_TTL_MS);
+    this.setCache(cacheKey, result, WEATHER.CACHE_TTL_WINDS_MS);
     return result;
   }
 
@@ -376,7 +371,7 @@ export class WeatherService {
 
     try {
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/windtemp`, {
+        this.http.get(`${WEATHER.AWC_BASE_URL}/windtemp`, {
           params: { region: 'us', level: 'low', fcst },
           responseType: 'text',
           transformResponse: [(d: any) => d], // prevent JSON parsing
@@ -385,7 +380,7 @@ export class WeatherService {
 
       const parsed = this.parseWindsAloftText(data as string);
       const result = { data: parsed };
-      this.setCache(cacheKey, result, this.WINDS_CACHE_TTL_MS);
+      this.setCache(cacheKey, result, WEATHER.CACHE_TTL_WINDS_MS);
       return result;
     } catch (error) {
       this.logger.error(`Failed to fetch winds aloft for fcst=${fcst}`, error);
@@ -565,7 +560,7 @@ export class WeatherService {
       params.append('longDegrees', '');
       params.append('longMinutes', '0');
       params.append('longSeconds', '0');
-      params.append('radius', '10');
+      params.append('radius', WEATHER.NOTAM_SEARCH_RADIUS_NM);
       params.append('sortColumns', '5 false');
       params.append('sortDirection', 'true');
       params.append('designatorForNotamNumberSearch', '');
@@ -590,21 +585,17 @@ export class WeatherService {
       params.append('filters', '');
 
       const { data } = await firstValueFrom(
-        this.http.post(
-          'https://notams.aim.faa.gov/notamSearch/search',
-          params.toString(),
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'User-Agent':
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-              Accept: 'application/json, text/plain, */*',
-              Origin: 'https://notams.aim.faa.gov',
-              Referer: 'https://notams.aim.faa.gov/notamSearch/',
-            },
-            timeout: 30000,
+        this.http.post(WEATHER.NOTAM_API_URL, params.toString(), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            Accept: 'application/json, text/plain, */*',
+            Origin: 'https://notams.aim.faa.gov',
+            Referer: 'https://notams.aim.faa.gov/notamSearch/',
           },
-        ),
+          timeout: WEATHER.TIMEOUT_NOTAM_MS,
+        }),
       );
 
       const rawList = data?.notamList ?? [];
@@ -630,7 +621,7 @@ export class WeatherService {
         notams,
       };
 
-      this.setCache(cacheKey, result, this.NOTAM_CACHE_TTL_MS);
+      this.setCache(cacheKey, result, WEATHER.CACHE_TTL_NOTAM_MS);
       return result;
     } catch (error) {
       this.logger.error(`Failed to fetch NOTAMs for ${icao}`, error);
@@ -662,7 +653,7 @@ export class WeatherService {
 
     const { data } = await firstValueFrom(
       this.http.get(
-        `${this.NWS_BASE}/points/${lat.toFixed(4)},${lon.toFixed(4)}`,
+        `${WEATHER.NWS_BASE_URL}/points/${lat.toFixed(4)},${lon.toFixed(4)}`,
         { headers: this.NWS_HEADERS },
       ),
     );
@@ -672,7 +663,7 @@ export class WeatherService {
       gridX: data.properties.gridX,
       gridY: data.properties.gridY,
     };
-    this.setCache(cacheKey, grid, this.GRID_CACHE_TTL_MS);
+    this.setCache(cacheKey, grid, WEATHER.CACHE_TTL_GRID_MS);
     return grid;
   }
 
@@ -688,7 +679,7 @@ export class WeatherService {
   private setCache(key: string, data: any, ttlMs?: number): void {
     this.cache.set(key, {
       data,
-      expiresAt: Date.now() + (ttlMs ?? this.CACHE_TTL_MS),
+      expiresAt: Date.now() + (ttlMs ?? WEATHER.CACHE_TTL_METAR_MS),
     });
   }
 }

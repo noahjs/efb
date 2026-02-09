@@ -52,7 +52,9 @@ export class ProceduresController {
   ) {
     const georef = await this.proceduresService.getGeoref(airportId, id);
     if (!georef) {
-      throw new NotFoundException('No georef data available for this procedure');
+      throw new NotFoundException(
+        'No georef data available for this procedure',
+      );
     }
     return georef;
   }

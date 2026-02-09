@@ -121,7 +121,15 @@ export class AdminService {
     const dtppCycle = cycles[0] || null;
 
     return {
-      database: { airports, runways, frequencies, navaids, fixes, procedures, registryAircraft },
+      database: {
+        airports,
+        runways,
+        frequencies,
+        navaids,
+        fixes,
+        procedures,
+        registryAircraft,
+      },
       dtppCycle,
       charts: {
         installed: charts,

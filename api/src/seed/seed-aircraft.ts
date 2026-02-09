@@ -20,7 +20,14 @@ async function main() {
 
   const ds = new DataSource({
     ...dbConfig,
-    entities: [Aircraft, PerformanceProfile, FuelTank, Equipment, User, StarredAirport],
+    entities: [
+      Aircraft,
+      PerformanceProfile,
+      FuelTank,
+      Equipment,
+      User,
+      StarredAirport,
+    ],
   });
 
   await ds.initialize();

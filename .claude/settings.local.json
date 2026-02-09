@@ -34,7 +34,14 @@
       "WebFetch(domain:www.1800wxbrief.com)",
       "WebFetch(domain:ais-faa.opendata.arcgis.com)",
       "Bash(npx jest:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(git check-ignore:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(ls:*)",
+      "Bash(test:*)"
     ]
   }
 }

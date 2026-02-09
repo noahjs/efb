@@ -168,7 +168,9 @@ describe('CalculateService', () => {
       expect(result.calculation_method).toBe('single_phase');
       // ETE should be roughly distance / TAS * 60 (within 1 min due to rounding)
       const expectedMinutes = (result.distance_nm! / 120) * 60;
-      expect(Math.abs(result.ete_minutes! - Math.round(expectedMinutes))).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(result.ete_minutes! - Math.round(expectedMinutes)),
+      ).toBeLessThanOrEqual(1);
     });
 
     it('should compute fuel gallons with burn rate', async () => {

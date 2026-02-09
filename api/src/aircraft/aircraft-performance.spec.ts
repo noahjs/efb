@@ -79,9 +79,7 @@ describe('Aircraft Performance', () => {
 
     it('should have correct temperature breakpoints in table', () => {
       const temps = new Set(
-        TBM960_TAKEOFF_DATA.flap_settings[0].table.map(
-          (p) => p.temperature_c,
-        ),
+        TBM960_TAKEOFF_DATA.flap_settings[0].table.map((p) => p.temperature_c),
       );
       expect([...temps].sort((a, b) => a - b)).toEqual([-20, 0, 20, 40]);
     });
@@ -203,9 +201,9 @@ describe('Aircraft Performance', () => {
     beforeEach(async () => {
       mockProfileRepo = {
         findOne: jest.fn().mockResolvedValue({ ...mockProfile }),
-        save: jest.fn().mockImplementation((profile) =>
-          Promise.resolve({ ...profile }),
-        ),
+        save: jest
+          .fn()
+          .mockImplementation((profile) => Promise.resolve({ ...profile })),
       };
 
       const module: TestingModule = await Test.createTestingModule({
@@ -262,17 +260,17 @@ describe('Aircraft Performance', () => {
     });
 
     it('should throw NotFoundException for unknown template type', async () => {
-      await expect(
-        service.applyTemplate(1, 1, 'cessna172'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.applyTemplate(1, 1, 'cessna172')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should throw NotFoundException for non-existent profile', async () => {
       mockProfileRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.applyTemplate(1, 999, 'tbm960'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.applyTemplate(1, 999, 'tbm960')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('should look up profile by both aircraftId and profileId', async () => {

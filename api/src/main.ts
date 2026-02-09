@@ -29,7 +29,8 @@ async function bootstrap() {
     }),
   );
 
-  await app.listen(3001);
-  console.log('EFB API running on http://localhost:3001');
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  console.log(`EFB API running on http://localhost:${port}`);
 }
 bootstrap();

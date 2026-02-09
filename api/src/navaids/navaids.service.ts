@@ -87,9 +87,12 @@ export class NavaidsService {
    * Resolve a waypoint identifier to coordinates.
    * Searches airports (by identifier and icao_identifier), then navaids, then fixes.
    */
-  async resolveWaypoint(
-    identifier: string,
-  ): Promise<{ identifier: string; latitude: number; longitude: number; type: string } | null> {
+  async resolveWaypoint(identifier: string): Promise<{
+    identifier: string;
+    latitude: number;
+    longitude: number;
+    type: string;
+  } | null> {
     const id = identifier.trim();
 
     // Try airport (FAA id or ICAO id) — case-insensitive

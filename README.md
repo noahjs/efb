@@ -68,8 +68,12 @@ The app connects to the backend at `http://localhost:3001/api` by default.
 
 ```
 efb/
-  api/                     # NestJS backend (TypeScript)
+  .env.example               # Environment variable reference
+  docker-compose.yml         # PostgreSQL + API containers
+  api/                       # NestJS backend (TypeScript)
+    Dockerfile               # Multi-stage production build
     src/
+      config/              # Centralized constants & configuration
       airports/            # Airport directory (search, nearby, bounds)
       aircraft/            # Aircraft profiles & performance data
       airspaces/           # Airspace boundaries
@@ -123,15 +127,43 @@ flutter build apk          # Build for Android
 
 ### Environment variables
 
+Copy `.env.example` to `.env` and edit as needed:
+
+```bash
+cp .env.example .env
+```
+
 The backend uses these environment variables (all optional, shown with defaults):
 
-| Variable  | Default     | Description           |
-|-----------|-------------|-----------------------|
-| `DB_HOST` | `localhost` | PostgreSQL host       |
-| `DB_PORT` | `5433`      | PostgreSQL port       |
-| `DB_USER` | `efb`       | PostgreSQL user       |
-| `DB_PASS` | `efb`       | PostgreSQL password   |
-| `DB_NAME` | `efb`       | PostgreSQL database   |
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3001` | API server port |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5433` | PostgreSQL port |
+| `DB_USER` | `efb` | PostgreSQL user |
+| `DB_PASS` | `efb` | PostgreSQL password |
+| `DB_NAME` | `efb` | PostgreSQL database |
+| `FILING_USE_MOCK` | `true` | Use mock flight filing (`false` for real Leidos API) |
+| `LEIDOS_VENDOR_USER` | *(empty)* | Leidos vendor username |
+| `LEIDOS_VENDOR_PASS` | *(empty)* | Leidos vendor password |
+| `LEIDOS_BASE_URL` | `https://lmfsweb.afss.com/Website/rest` | Leidos API base URL |
+
+### Running with Docker
+
+To run both the database and API in containers:
+
+```bash
+docker compose up -d
+```
+
+This builds the API image and starts it alongside PostgreSQL. The API is available at `http://localhost:3001`.
+
+To run only the database (and run the API locally for development):
+
+```bash
+docker compose up -d db
+cd api && npm run start:dev
+```
 
 ## Architecture
 

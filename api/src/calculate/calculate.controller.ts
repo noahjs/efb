@@ -1,10 +1,5 @@
 import { Controller, Post, Body } from '@nestjs/common';
-import {
-  IsOptional,
-  IsString,
-  IsNumber,
-  IsArray,
-} from 'class-validator';
+import { IsOptional, IsString, IsNumber, IsArray } from 'class-validator';
 import { CalculateService } from './calculate.service';
 
 class CalculateDto {

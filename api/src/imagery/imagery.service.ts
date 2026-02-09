@@ -1,20 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { IMAGERY } from '../config/constants';
 
 @Injectable()
 export class ImageryService {
   private readonly logger = new Logger(ImageryService.name);
-  private readonly AWC_BASE = 'https://aviationweather.gov';
-  private readonly SPC_BASE = 'https://www.spc.noaa.gov';
-  private readonly TFR_BASE = 'https://tfr.faa.gov';
 
   // Simple in-memory cache: key -> { data, expiresAt }
   private cache = new Map<string, { data: any; expiresAt: number }>();
-  private readonly GFA_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-  private readonly ADVISORY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
-  private readonly TFR_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
-  private readonly WINDS_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
   constructor(private readonly http: HttpService) {}
 
@@ -110,9 +104,7 @@ export class ImageryService {
         {
           id: 'pireps',
           title: 'PILOT WEATHER REPORTS',
-          products: [
-            { id: 'pireps', name: 'PIREPs', type: 'geojson' },
-          ],
+          products: [{ id: 'pireps', name: 'PIREPs', type: 'geojson' }],
         },
         {
           id: 'gfa',
@@ -274,7 +266,7 @@ export class ImageryService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
-    const url = `${this.AWC_BASE}/data/products/gfa/F${paddedHour}_gfa_${type}_${region}.png`;
+    const url = `${IMAGERY.AWC_BASE_URL}/data/products/gfa/F${paddedHour}_gfa_${type}_${region}.png`;
 
     try {
       const { data } = await firstValueFrom(
@@ -284,7 +276,7 @@ export class ImageryService {
       );
 
       const buffer = Buffer.from(data);
-      this.setCache(cacheKey, buffer, this.GFA_CACHE_TTL_MS);
+      this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
       this.logger.error(
@@ -305,10 +297,8 @@ export class ImageryService {
     if (cached) return cached;
 
     const filename =
-      type === 'sfc'
-        ? 'F000_wpc_sfc.gif'
-        : `F${paddedHour}_wpc_prog.gif`;
-    const url = `${this.AWC_BASE}/data/products/progs/${filename}`;
+      type === 'sfc' ? 'F000_wpc_sfc.gif' : `F${paddedHour}_wpc_prog.gif`;
+    const url = `${IMAGERY.AWC_BASE_URL}/data/products/progs/${filename}`;
 
     try {
       const { data } = await firstValueFrom(
@@ -318,7 +308,7 @@ export class ImageryService {
       );
 
       const buffer = Buffer.from(data);
-      this.setCache(cacheKey, buffer, this.GFA_CACHE_TTL_MS);
+      this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
       this.logger.error(
@@ -341,7 +331,7 @@ export class ImageryService {
 
     const product = forecastHour === 0 ? 'cip' : 'fip';
     const filename = `F${paddedHour}_${product}_${level}_${param}.gif`;
-    const url = `${this.AWC_BASE}/data/products/icing/${filename}`;
+    const url = `${IMAGERY.AWC_BASE_URL}/data/products/icing/${filename}`;
 
     try {
       const { data } = await firstValueFrom(
@@ -351,7 +341,7 @@ export class ImageryService {
       );
 
       const buffer = Buffer.from(data);
-      this.setCache(cacheKey, buffer, this.GFA_CACHE_TTL_MS);
+      this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
       this.logger.error(
@@ -372,7 +362,7 @@ export class ImageryService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
-    const url = `${this.AWC_BASE}/data/products/fax/F${paddedHour}_wind_${level}_${area}.gif`;
+    const url = `${IMAGERY.AWC_BASE_URL}/data/products/fax/F${paddedHour}_wind_${level}_${area}.gif`;
 
     try {
       const { data } = await firstValueFrom(
@@ -382,7 +372,7 @@ export class ImageryService {
       );
 
       const buffer = Buffer.from(data);
-      this.setCache(cacheKey, buffer, this.WINDS_CACHE_TTL_MS);
+      this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_WINDS_MS);
       return buffer;
     } catch (error) {
       this.logger.error(
@@ -411,7 +401,7 @@ export class ImageryService {
       filename = `day${day}probotlk_${issuance}_${type}.gif`;
     }
 
-    const url = `${this.SPC_BASE}/products/outlook/${filename}`;
+    const url = `${IMAGERY.SPC_BASE_URL}/products/outlook/${filename}`;
 
     try {
       const { data } = await firstValueFrom(
@@ -421,7 +411,7 @@ export class ImageryService {
       );
 
       const buffer = Buffer.from(data);
-      this.setCache(cacheKey, buffer, this.GFA_CACHE_TTL_MS);
+      this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
       this.logger.error(
@@ -460,10 +450,12 @@ export class ImageryService {
 
     try {
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/api/data/${endpoint}`, { params }),
+        this.http.get(`${IMAGERY.AWC_BASE_URL}/api/data/${endpoint}`, {
+          params,
+        }),
       );
 
-      this.setCache(cacheKey, data, this.ADVISORY_CACHE_TTL_MS);
+      this.setCache(cacheKey, data, IMAGERY.CACHE_TTL_ADVISORY_MS);
       return data;
     } catch (error) {
       this.logger.error(`Failed to fetch advisories: ${type}`, error);
@@ -472,15 +464,15 @@ export class ImageryService {
   }
 
   async getPireps(bbox?: string, age?: number): Promise<any> {
-    const effectiveBbox = bbox ?? '20,-130,55,-60';
-    const effectiveAge = age ?? 2;
+    const effectiveBbox = bbox ?? IMAGERY.PIREP_DEFAULT_BBOX;
+    const effectiveAge = age ?? IMAGERY.PIREP_DEFAULT_AGE_HOURS;
     const cacheKey = `pireps:${effectiveBbox}:${effectiveAge}`;
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
     try {
       const { data } = await firstValueFrom(
-        this.http.get(`${this.AWC_BASE}/api/data/pirep`, {
+        this.http.get(`${IMAGERY.AWC_BASE_URL}/api/data/pirep`, {
           params: {
             format: 'geojson',
             bbox: effectiveBbox,
@@ -489,7 +481,7 @@ export class ImageryService {
         }),
       );
 
-      this.setCache(cacheKey, data, this.ADVISORY_CACHE_TTL_MS);
+      this.setCache(cacheKey, data, IMAGERY.CACHE_TTL_ADVISORY_MS);
       return data;
     } catch (error) {
       this.logger.error('Failed to fetch PIREPs', error);
@@ -506,25 +498,22 @@ export class ImageryService {
       // Fetch GeoJSON polygons from FAA GeoServer WFS and metadata from TFR API in parallel
       const [wfsResponse, listResponse] = await Promise.all([
         firstValueFrom(
-          this.http.get(
-            `${this.TFR_BASE}/geoserver/TFR/ows`,
-            {
-              params: {
-                service: 'WFS',
-                version: '1.1.0',
-                request: 'GetFeature',
-                typeName: 'TFR:V_TFR_LOC',
-                maxFeatures: 300,
-                outputFormat: 'application/json',
-                srsname: 'EPSG:4326',
-              },
-              timeout: 30000,
+          this.http.get(`${IMAGERY.TFR_BASE_URL}/geoserver/TFR/ows`, {
+            params: {
+              service: 'WFS',
+              version: '1.1.0',
+              request: 'GetFeature',
+              typeName: 'TFR:V_TFR_LOC',
+              maxFeatures: 300,
+              outputFormat: 'application/json',
+              srsname: 'EPSG:4326',
             },
-          ),
+            timeout: IMAGERY.TIMEOUT_TFR_WFS_MS,
+          }),
         ),
         firstValueFrom(
-          this.http.get(`${this.TFR_BASE}/tfrapi/getTfrList`, {
-            timeout: 15000,
+          this.http.get(`${IMAGERY.TFR_BASE_URL}/tfrapi/getTfrList`, {
+            timeout: IMAGERY.TIMEOUT_TFR_LIST_MS,
           }),
         ).catch(() => ({ data: [] })),
       ]);
@@ -554,22 +543,25 @@ export class ImageryService {
       // Fetch full web text for all TFRs in parallel (batched, 10 at a time)
       const webTextMap = new Map<string, Record<string, string>>();
       const ids = Array.from(notamIds);
-      const batchSize = 10;
+      const batchSize = IMAGERY.TFR_BATCH_SIZE;
       for (let i = 0; i < ids.length; i += batchSize) {
         const batch = ids.slice(i, i + batchSize);
         const results = await Promise.allSettled(
           batch.map((id) =>
             firstValueFrom(
-              this.http.get(`${this.TFR_BASE}/tfrapi/getWebText`, {
+              this.http.get(`${IMAGERY.TFR_BASE_URL}/tfrapi/getWebText`, {
                 params: { notamId: id },
-                timeout: 10000,
+                timeout: IMAGERY.TIMEOUT_TFR_TEXT_MS,
               }),
             ),
           ),
         );
         for (let j = 0; j < batch.length; j++) {
           const result = results[j];
-          if (result.status === 'fulfilled' && Array.isArray(result.value.data)) {
+          if (
+            result.status === 'fulfilled' &&
+            Array.isArray(result.value.data)
+          ) {
             const html = result.value.data[0]?.text ?? '';
             webTextMap.set(batch[j], this.parseTfrWebText(html));
           }
@@ -613,7 +605,7 @@ export class ImageryService {
       });
 
       const geojson = { type: 'FeatureCollection', features };
-      this.setCache(cacheKey, geojson, this.TFR_CACHE_TTL_MS);
+      this.setCache(cacheKey, geojson, IMAGERY.CACHE_TTL_TFR_MS);
       return geojson;
     } catch (error) {
       this.logger.error('Failed to fetch TFRs', error);
@@ -628,7 +620,11 @@ export class ImageryService {
 
     // Strip HTML tags
     const stripHtml = (s: string) =>
-      s.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
+      s
+        .replace(/<[^>]+>/g, '')
+        .replace(/&[a-z]+;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
     // Extract table rows: <TR>...<TD>label</TD><TD>value</TD>...</TR>
     const rowRegex = /<TR[^>]*>([\s\S]*?)<\/TR>/gi;
@@ -641,7 +637,10 @@ export class ImageryService {
       );
 
       // Handle single-cell rows with "Label: Value" pattern (e.g. "Altitude: ...")
-      if (cells.length === 1 || (cells.length >= 1 && cells.filter((c) => c).length === 1)) {
+      if (
+        cells.length === 1 ||
+        (cells.length >= 1 && cells.filter((c) => c).length === 1)
+      ) {
         const text = cells.find((c) => c) ?? '';
         const altMatch = text.match(/^Altitude:\s*(.+)/i);
         if (altMatch) {
@@ -652,7 +651,12 @@ export class ImageryService {
 
       if (cells.length < 2) continue;
 
-      const label = cells.slice(0, -1).join(' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      const label = cells
+        .slice(0, -1)
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
       const value = cells[cells.length - 1];
 
       if (label.includes('location') && !label.includes('latitude')) {

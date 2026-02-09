@@ -20,12 +20,9 @@ import { dbConfig } from '../db.config';
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const REGISTRY_DIR = path.join(DATA_DIR, 'registry');
-const REGISTRY_URL =
-  'https://registry.faa.gov/database/ReleasableAircraft.zip';
+const REGISTRY_URL = 'https://registry.faa.gov/database/ReleasableAircraft.zip';
 
-function parseRegistryCsv(
-  filePath: string,
-): Promise<Record<string, string>[]> {
+function parseRegistryCsv(filePath: string): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
     const records: Record<string, string>[] = [];
     createReadStream(filePath)
@@ -193,7 +190,9 @@ async function main() {
     }
 
     if (i % 10000 === 0 && i > 0) {
-      console.log(`  Processed ${i.toLocaleString()} / ${masterRecords.length.toLocaleString()} records...`);
+      console.log(
+        `  Processed ${i.toLocaleString()} / ${masterRecords.length.toLocaleString()} records...`,
+      );
     }
   }
 

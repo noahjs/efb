@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, ILike } from 'typeorm';
 import { Airport, Runway, Frequency } from './entities';
+import { AIRPORTS } from '../config/constants';
 
 @Injectable()
 export class AirportsService {
@@ -14,7 +15,12 @@ export class AirportsService {
     private frequencyRepo: Repository<Frequency>,
   ) {}
 
-  async search(query?: string, state?: string, limit = 50, offset = 0) {
+  async search(
+    query?: string,
+    state?: string,
+    limit = AIRPORTS.SEARCH_DEFAULT_LIMIT,
+    offset = 0,
+  ) {
     const qb = this.airportRepo.createQueryBuilder('airport');
 
     if (query) {
@@ -42,7 +48,12 @@ export class AirportsService {
     });
   }
 
-  async findNearby(lat: number, lng: number, radiusNm = 30, limit = 20) {
+  async findNearby(
+    lat: number,
+    lng: number,
+    radiusNm = AIRPORTS.NEARBY_DEFAULT_RADIUS_NM,
+    limit = AIRPORTS.NEARBY_DEFAULT_LIMIT,
+  ) {
     // Simple bounding-box approximation: 1 degree ~= 60nm
     const degRange = radiusNm / 60;
 
@@ -112,7 +123,7 @@ export class AirportsService {
     maxLat: number,
     minLng: number,
     maxLng: number,
-    limit = 200,
+    limit = AIRPORTS.BOUNDS_QUERY_LIMIT,
   ) {
     return this.airportRepo
       .createQueryBuilder('airport')
@@ -131,7 +142,7 @@ export class AirportsService {
     lat2: number,
     lon2: number,
   ): number {
-    const R = 3440.065; // Earth radius in nautical miles
+    const R = AIRPORTS.EARTH_RADIUS_NM;
     const dLat = this.toRad(lat2 - lat1);
     const dLon = this.toRad(lon2 - lon1);
     const a =

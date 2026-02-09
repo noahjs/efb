@@ -49,7 +49,7 @@ describe('WeatherService', () => {
       const matches = [...headerLine.matchAll(/\d+/g)];
       let dataLine = 'TST ';
       for (let i = 0; i < windValues.length; i++) {
-        const pos = matches[i]?.index ?? (4 + i * 6);
+        const pos = matches[i]?.index ?? 4 + i * 6;
         while (dataLine.length < pos) dataLine += ' ';
         dataLine += windValues[i];
       }
@@ -445,9 +445,7 @@ BJC 1810    1820-08
     });
 
     it('should return error result on HTTP failure', async () => {
-      mockHttp.post.mockReturnValue(
-        throwError(() => new Error('timeout')),
-      );
+      mockHttp.post.mockReturnValue(throwError(() => new Error('timeout')));
       mockAirportsService.findById.mockResolvedValue({
         identifier: 'APA',
       });

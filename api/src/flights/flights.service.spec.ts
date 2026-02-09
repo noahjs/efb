@@ -3,7 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { FlightsService } from './flights.service';
 import { Flight } from './entities/flight.entity';
-import { CalculateService, CalculateResult } from '../calculate/calculate.service';
+import {
+  CalculateService,
+  CalculateResult,
+} from '../calculate/calculate.service';
 
 describe('FlightsService', () => {
   let service: FlightsService;
@@ -18,8 +21,18 @@ describe('FlightsService', () => {
     calculation_method: 'single_phase',
     phases: null,
     waypoints: [
-      { identifier: 'APA', latitude: 39.57, longitude: -104.85, type: 'airport' },
-      { identifier: 'DEN', latitude: 39.86, longitude: -104.67, type: 'airport' },
+      {
+        identifier: 'APA',
+        latitude: 39.57,
+        longitude: -104.85,
+        type: 'airport',
+      },
+      {
+        identifier: 'DEN',
+        latitude: 39.86,
+        longitude: -104.67,
+        type: 'airport',
+      },
     ],
     calculated_at: '2025-03-15T14:00:00.000Z',
   };
@@ -59,12 +72,12 @@ describe('FlightsService', () => {
     mockFlightRepo = {
       findOne: jest.fn().mockResolvedValue({ ...mockFlight }),
       create: jest.fn().mockImplementation((dto) => ({ ...dto })),
-      save: jest.fn().mockImplementation((flight) =>
-        Promise.resolve({ ...flight, id: flight.id ?? 2 }),
-      ),
-      remove: jest.fn().mockImplementation((flight) =>
-        Promise.resolve(flight),
-      ),
+      save: jest
+        .fn()
+        .mockImplementation((flight) =>
+          Promise.resolve({ ...flight, id: flight.id ?? 2 }),
+        ),
+      remove: jest.fn().mockImplementation((flight) => Promise.resolve(flight)),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
 

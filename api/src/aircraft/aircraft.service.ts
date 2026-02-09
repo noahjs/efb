@@ -166,10 +166,7 @@ export class AircraftService {
     if (!profile)
       throw new NotFoundException(`Profile #${profileId} not found`);
 
-    const templates: Record<
-      string,
-      { takeoff: object; landing: object }
-    > = {
+    const templates: Record<string, { takeoff: object; landing: object }> = {
       tbm960: {
         takeoff: TBM960_TAKEOFF_DATA,
         landing: TBM960_LANDING_DATA,

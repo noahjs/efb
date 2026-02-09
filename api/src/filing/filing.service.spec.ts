@@ -127,7 +127,9 @@ describe('FilingService', () => {
     it('should return ready=true when all required fields are present', async () => {
       const result = await service.validateForFiling(1);
       expect(result.ready).toBe(true);
-      expect(result.checks.every((c) => c.severity === 'error' ? c.passed : true)).toBe(true);
+      expect(
+        result.checks.every((c) => (c.severity === 'error' ? c.passed : true)),
+      ).toBe(true);
     });
 
     it('should fail when aircraft_identifier is missing', async () => {
@@ -138,7 +140,9 @@ describe('FilingService', () => {
 
       const result = await service.validateForFiling(1);
       expect(result.ready).toBe(false);
-      const check = result.checks.find((c) => c.field === 'aircraft_identifier');
+      const check = result.checks.find(
+        (c) => c.field === 'aircraft_identifier',
+      );
       expect(check?.passed).toBe(false);
     });
 
@@ -162,7 +166,9 @@ describe('FilingService', () => {
 
       const result = await service.validateForFiling(1);
       expect(result.ready).toBe(true);
-      const check = result.checks.find((c) => c.field === 'alternate_identifier');
+      const check = result.checks.find(
+        (c) => c.field === 'alternate_identifier',
+      );
       expect(check?.passed).toBe(false);
       expect(check?.severity).toBe('warning');
     });
@@ -266,10 +272,13 @@ describe('FilingService', () => {
       expect(result.filingStatus).toBe('filed');
       expect(result.filingReference).toBe('FP1001');
       expect(mockLeidosClient.fileFlightPlan).toHaveBeenCalledTimes(1);
-      expect(mockFlightsService.update).toHaveBeenCalledWith(1, expect.objectContaining({
-        filing_status: 'filed',
-        filing_reference: 'FP1001',
-      }));
+      expect(mockFlightsService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          filing_status: 'filed',
+          filing_reference: 'FP1001',
+        }),
+      );
     });
 
     it('should reject filing if already filed', async () => {

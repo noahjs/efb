@@ -33,8 +33,12 @@ function generateTable(
         // Weight factor: scale from min weight
         const weightFactor = Math.pow(wt / 5000, 1.8);
 
-        const roll = Math.round(baseRoll * altFactor * tempFactor * weightFactor);
-        const dist = Math.round(baseDist * altFactor * tempFactor * weightFactor);
+        const roll = Math.round(
+          baseRoll * altFactor * tempFactor * weightFactor,
+        );
+        const dist = Math.round(
+          baseDist * altFactor * tempFactor * weightFactor,
+        );
 
         // V-speeds scale ~sqrt(weight ratio)
         const vFactor = Math.sqrt(wt / 5000);

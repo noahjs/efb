@@ -16,7 +16,12 @@ export class LogbookService {
     query?: string,
     limit = 50,
     offset = 0,
-  ): Promise<{ items: LogbookEntry[]; total: number; limit: number; offset: number }> {
+  ): Promise<{
+    items: LogbookEntry[];
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
     const qb = this.entryRepo.createQueryBuilder('entry');
 
     if (query) {
@@ -49,7 +54,10 @@ export class LogbookService {
     const now = new Date();
 
     const totalEntries = allEntries.length;
-    const totalTime = allEntries.reduce((sum, e) => sum + (e.total_time || 0), 0);
+    const totalTime = allEntries.reduce(
+      (sum, e) => sum + (e.total_time || 0),
+      0,
+    );
 
     const timeInPeriod = (days: number) => {
       const cutoff = new Date(now);
@@ -110,22 +118,43 @@ export class LogbookService {
     const sumGroup = (groupEntries: LogbookEntry[], aircraftType: string) => ({
       aircraftType,
       flightCount: groupEntries.length,
-      totalTime: round1(groupEntries.reduce((s, e) => s + (e.total_time || 0), 0)),
-      dayLandings: groupEntries.reduce((s, e) => s + (e.day_landings_full_stop || 0), 0),
-      nightLandings: groupEntries.reduce((s, e) => s + (e.night_landings_full_stop || 0), 0),
+      totalTime: round1(
+        groupEntries.reduce((s, e) => s + (e.total_time || 0), 0),
+      ),
+      dayLandings: groupEntries.reduce(
+        (s, e) => s + (e.day_landings_full_stop || 0),
+        0,
+      ),
+      nightLandings: groupEntries.reduce(
+        (s, e) => s + (e.night_landings_full_stop || 0),
+        0,
+      ),
       allLandings: groupEntries.reduce((s, e) => s + (e.all_landings || 0), 0),
       pic: round1(groupEntries.reduce((s, e) => s + (e.pic || 0), 0)),
       sic: round1(groupEntries.reduce((s, e) => s + (e.sic || 0), 0)),
-      crossCountry: round1(groupEntries.reduce((s, e) => s + (e.cross_country || 0), 0)),
-      actualInstrument: round1(groupEntries.reduce((s, e) => s + (e.actual_instrument || 0), 0)),
-      simulatedInstrument: round1(groupEntries.reduce((s, e) => s + (e.simulated_instrument || 0), 0)),
+      crossCountry: round1(
+        groupEntries.reduce((s, e) => s + (e.cross_country || 0), 0),
+      ),
+      actualInstrument: round1(
+        groupEntries.reduce((s, e) => s + (e.actual_instrument || 0), 0),
+      ),
+      simulatedInstrument: round1(
+        groupEntries.reduce((s, e) => s + (e.simulated_instrument || 0), 0),
+      ),
       night: round1(groupEntries.reduce((s, e) => s + (e.night || 0), 0)),
       solo: round1(groupEntries.reduce((s, e) => s + (e.solo || 0), 0)),
-      dualGiven: round1(groupEntries.reduce((s, e) => s + (e.dual_given || 0), 0)),
-      dualReceived: round1(groupEntries.reduce((s, e) => s + (e.dual_received || 0), 0)),
+      dualGiven: round1(
+        groupEntries.reduce((s, e) => s + (e.dual_given || 0), 0),
+      ),
+      dualReceived: round1(
+        groupEntries.reduce((s, e) => s + (e.dual_received || 0), 0),
+      ),
       holds: groupEntries.reduce((s, e) => s + (e.holds || 0), 0),
       dayTakeoffs: groupEntries.reduce((s, e) => s + (e.day_takeoffs || 0), 0),
-      nightTakeoffs: groupEntries.reduce((s, e) => s + (e.night_takeoffs || 0), 0),
+      nightTakeoffs: groupEntries.reduce(
+        (s, e) => s + (e.night_takeoffs || 0),
+        0,
+      ),
     });
 
     const rows = Array.from(groups.entries())

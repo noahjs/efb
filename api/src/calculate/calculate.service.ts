@@ -85,9 +85,11 @@ export class CalculateService {
       .split(/\s+/)
       .filter(Boolean);
     const identifiers: string[] = [];
-    if (input.departure_identifier) identifiers.push(input.departure_identifier);
+    if (input.departure_identifier)
+      identifiers.push(input.departure_identifier);
     identifiers.push(...routeIds);
-    if (input.destination_identifier) identifiers.push(input.destination_identifier);
+    if (input.destination_identifier)
+      identifiers.push(input.destination_identifier);
 
     if (identifiers.length < 2) {
       return {
@@ -134,7 +136,9 @@ export class CalculateService {
       });
     }
     const depElev = await this.getAirportElevation(input.departure_identifier);
-    const destElev = await this.getAirportElevation(input.destination_identifier);
+    const destElev = await this.getAirportElevation(
+      input.destination_identifier,
+    );
 
     const hasFullProfile =
       profile &&
@@ -162,9 +166,7 @@ export class CalculateService {
         if (climbDist + descentDist <= totalNm) {
           const cruiseDist = totalNm - climbDist - descentDist;
           const cruiseTimeMin =
-            profile.cruise_tas > 0
-              ? (cruiseDist / profile.cruise_tas) * 60
-              : 0;
+            profile.cruise_tas > 0 ? (cruiseDist / profile.cruise_tas) * 60 : 0;
           const cruiseFuel = profile.cruise_fuel_burn
             ? profile.cruise_fuel_burn * (cruiseTimeMin / 60)
             : 0;
@@ -315,35 +317,30 @@ export class CalculateService {
     }
 
     if (debug) {
-      steps.push({ label: 'Total Distance', value: `${totalNm.toFixed(1)} nm` });
+      steps.push({
+        label: 'Total Distance',
+        value: `${totalNm.toFixed(1)} nm`,
+      });
     }
 
     const distanceNm = Math.round(totalNm * 10) / 10;
 
     // Try 3-phase calculation
-    const threePhase = await this.tryThreePhase(
-      input,
-      totalNm,
-      steps,
-      debug,
-    );
+    const threePhase = await this.tryThreePhase(input, totalNm, steps, debug);
 
     if (threePhase) {
       const eteMinutes = Math.round(
         threePhase.reduce((s, p) => s + p.time_minutes, 0),
       );
       const fuelGallons =
-        Math.round(
-          threePhase.reduce((s, p) => s + p.fuel_gallons, 0) * 10,
-        ) / 10;
+        Math.round(threePhase.reduce((s, p) => s + p.fuel_gallons, 0) * 10) /
+        10;
 
       let eta: string | null = null;
       if (input.etd) {
         const etdDate = new Date(input.etd);
         if (!isNaN(etdDate.getTime())) {
-          eta = new Date(
-            etdDate.getTime() + eteMinutes * 60_000,
-          ).toISOString();
+          eta = new Date(etdDate.getTime() + eteMinutes * 60_000).toISOString();
         }
       }
 
@@ -378,7 +375,15 @@ export class CalculateService {
     }
 
     // Fallback: single-phase
-    return this.singlePhase(input, totalNm, distanceNm, waypoints, steps, debug, now);
+    return this.singlePhase(
+      input,
+      totalNm,
+      distanceNm,
+      waypoints,
+      steps,
+      debug,
+      now,
+    );
   }
 
   private async tryThreePhase(
@@ -478,9 +483,7 @@ export class CalculateService {
     // Cruise phase
     const cruiseDist = totalNm - climbDist - descentDist;
     const cruiseTimeMin =
-      profile.cruise_tas > 0
-        ? (cruiseDist / profile.cruise_tas) * 60
-        : 0;
+      profile.cruise_tas > 0 ? (cruiseDist / profile.cruise_tas) * 60 : 0;
     const cruiseFuel = profile.cruise_fuel_burn
       ? profile.cruise_fuel_burn * (cruiseTimeMin / 60)
       : 0;
@@ -611,9 +614,7 @@ export class CalculateService {
     return debug ? { ...result, steps } : result;
   }
 
-  private async getAirportElevation(
-    identifier?: string,
-  ): Promise<number> {
+  private async getAirportElevation(identifier?: string): Promise<number> {
     if (!identifier) return 0;
     const airport = await this.airportRepo.findOne({
       where: [

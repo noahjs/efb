@@ -39,6 +39,7 @@ import { Endorsement } from './logbook/entities/endorsement.entity';
 import { FaaRegistryAircraft } from './registry/entities/faa-registry-aircraft.entity';
 import { RegistryModule } from './registry/registry.module';
 import { FilingModule } from './filing/filing.module';
+import { HealthModule } from './health/health.module';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -87,6 +88,7 @@ import { dbConfig } from './db.config';
     LogbookModule,
     RegistryModule,
     FilingModule,
+    HealthModule,
   ],
 })
 export class AppModule {}

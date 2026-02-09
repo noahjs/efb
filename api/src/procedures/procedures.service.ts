@@ -187,18 +187,19 @@ export class ProceduresService {
         'pdftoppm',
         [
           '-png',
-          '-r', '200', // 200 DPI
-          '-f', '1', // first page
-          '-l', '1', // last page (same = single page)
+          '-r',
+          '200', // 200 DPI
+          '-f',
+          '1', // first page
+          '-l',
+          '1', // last page (same = single page)
           '-singlefile',
           pdfPath,
           outputPrefix,
         ],
         (error) => {
           if (error) {
-            reject(
-              new Error(`pdftoppm failed: ${error.message}`),
-            );
+            reject(new Error(`pdftoppm failed: ${error.message}`));
           } else {
             resolve();
           }
