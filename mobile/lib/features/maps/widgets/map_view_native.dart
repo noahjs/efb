@@ -20,6 +20,9 @@ class PlatformMapView extends StatefulWidget {
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
   final Map<String, dynamic>? tfrGeoJson;
+  final Map<String, dynamic>? advisoryGeoJson;
+  final Map<String, dynamic>? pirepGeoJson;
+  final Map<String, dynamic>? metarOverlayGeoJson;
 
   const PlatformMapView({
     super.key,
@@ -36,6 +39,9 @@ class PlatformMapView extends StatefulWidget {
     this.airwayGeoJson,
     this.artccGeoJson,
     this.tfrGeoJson,
+    this.advisoryGeoJson,
+    this.pirepGeoJson,
+    this.metarOverlayGeoJson,
   });
 
   @override
@@ -48,6 +54,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   bool _routeSourceReady = false;
   bool _aeroSourceReady = false;
   bool _tfrSourceReady = false;
+  bool _advisorySourceReady = false;
+  bool _pirepSourceReady = false;
+  bool _metarOverlaySourceReady = false;
 
   static const _vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
 
@@ -94,6 +103,15 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
     if (oldWidget.tfrGeoJson != widget.tfrGeoJson) {
       _updateTfrSource();
+    }
+    if (oldWidget.advisoryGeoJson != widget.advisoryGeoJson) {
+      _updateAdvisorySource();
+    }
+    if (oldWidget.pirepGeoJson != widget.pirepGeoJson) {
+      _updatePirepSource();
+    }
+    if (oldWidget.metarOverlayGeoJson != widget.metarOverlayGeoJson) {
+      _updateMetarOverlaySource();
     }
   }
 
@@ -290,6 +308,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       'artcc-lines': 'artcc',
       'airway-lines': 'airway',
       'tfr-fill': 'tfr',
+      'advisory-fill': 'advisory',
     };
 
     final allFeatures = <Map<String, dynamic>>[];
@@ -328,6 +347,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await _addVfrTiles(_mapboxMap!);
     await _addAeronauticalLayers(_mapboxMap!);
     await _addTfrLayers(_mapboxMap!);
+    await _addAdvisoryLayers(_mapboxMap!);
+    await _addPirepLayers(_mapboxMap!);
+    await _addMetarOverlayLayers(_mapboxMap!);
     await _addAirportLayers(_mapboxMap!);
     await _addRouteLayer(_mapboxMap!);
     await _applyFlightCategoryMode(widget.showFlightCategory);
@@ -336,6 +358,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     _updateRouteSource();
     _updateAeronauticalSources();
     _updateTfrSource();
+    _updateAdvisorySource();
+    _updatePirepSource();
+    _updateMetarOverlaySource();
     // Re-apply any custom overlays (e.g. approach plates)
     widget.controller?.onStyleReloaded?.call();
     // Fire initial bounds
@@ -694,6 +719,188 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           .setStyleSourceProperty('tfrs', 'data', tfrData);
     } catch (e) {
       debugPrint('Failed to update TFR source: $e');
+    }
+  }
+
+  /// Creates advisory (AIR/SIGMET/CWA) GeoJSON source and layers.
+  Future<void> _addAdvisoryLayers(MapboxMap map) async {
+    const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
+
+    try {
+      await map.style
+          .addSource(GeoJsonSource(id: 'advisories', data: emptyGeoJson));
+
+      // Filled polygons
+      await map.style.addLayer(FillLayer(
+        id: 'advisory-fill',
+        sourceId: 'advisories',
+        fillColor: const Color(0xFFB0B4BC).toARGB32(),
+        fillOpacity: 0.15,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+      ));
+      await map.style.setStyleLayerProperty(
+        'advisory-fill',
+        'fill-color',
+        ['get', 'color'],
+      );
+
+      // Polygon outlines
+      await map.style.addLayer(LineLayer(
+        id: 'advisory-outline',
+        sourceId: 'advisories',
+        lineColor: const Color(0xFFB0B4BC).toARGB32(),
+        lineWidth: 2.0,
+        filter: ['==', ['geometry-type'], 'Polygon'],
+      ));
+      await map.style.setStyleLayerProperty(
+        'advisory-outline',
+        'line-color',
+        ['get', 'color'],
+      );
+
+      // LineString features (FZLVL contours) — dashed
+      await map.style.addLayer(LineLayer(
+        id: 'advisory-line',
+        sourceId: 'advisories',
+        lineColor: const Color(0xFFB0B4BC).toARGB32(),
+        lineWidth: 2.0,
+        lineDasharray: [5.0, 3.0],
+        filter: ['==', ['geometry-type'], 'LineString'],
+      ));
+      await map.style.setStyleLayerProperty(
+        'advisory-line',
+        'line-color',
+        ['get', 'color'],
+      );
+
+      _advisorySourceReady = true;
+    } catch (e) {
+      debugPrint('Failed to add advisory layers: $e');
+    }
+  }
+
+  Future<void> _updateAdvisorySource() async {
+    if (!_advisorySourceReady || _mapboxMap == null) return;
+
+    try {
+      final data = widget.advisoryGeoJson != null
+          ? jsonEncode(widget.advisoryGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('advisories', 'data', data);
+    } catch (e) {
+      debugPrint('Failed to update advisory source: $e');
+    }
+  }
+
+  /// Creates PIREP GeoJSON source and layers.
+  Future<void> _addPirepLayers(MapboxMap map) async {
+    const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
+
+    try {
+      await map.style
+          .addSource(GeoJsonSource(id: 'pireps', data: emptyGeoJson));
+
+      // Circle layer for all PIREPs
+      await map.style.addLayer(CircleLayer(
+        id: 'pirep-dots',
+        sourceId: 'pireps',
+        circleRadius: 6.0,
+        circleColor: const Color(0xFFB0B4BC).toARGB32(),
+        circleStrokeWidth: 1.5,
+        circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+      ));
+      // Data-driven color from feature property
+      await map.style.setStyleLayerProperty(
+        'pirep-dots',
+        'circle-color',
+        ['get', 'color'],
+      );
+
+      // Urgent PIREPs get a red outer ring
+      await map.style.addLayer(CircleLayer(
+        id: 'pirep-urgent-ring',
+        sourceId: 'pireps',
+        circleRadius: 10.0,
+        circleColor: const Color(0x00000000).toARGB32(),
+        circleStrokeWidth: 2.0,
+        circleStrokeColor: const Color(0xFFFF5252).toARGB32(),
+        filter: ['==', ['get', 'isUrgent'], true],
+      ));
+
+      _pirepSourceReady = true;
+    } catch (e) {
+      debugPrint('Failed to add PIREP layers: $e');
+    }
+  }
+
+  Future<void> _updatePirepSource() async {
+    if (!_pirepSourceReady || _mapboxMap == null) return;
+
+    try {
+      final data = widget.pirepGeoJson != null
+          ? jsonEncode(widget.pirepGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('pireps', 'data', data);
+    } catch (e) {
+      debugPrint('Failed to update PIREP source: $e');
+    }
+  }
+
+  /// Creates METAR-derived overlay GeoJSON source and circle layers.
+  Future<void> _addMetarOverlayLayers(MapboxMap map) async {
+    const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
+
+    try {
+      await map.style
+          .addSource(GeoJsonSource(id: 'metar-overlay', data: emptyGeoJson));
+
+      await map.style.addLayer(CircleLayer(
+        id: 'metar-overlay-dots',
+        sourceId: 'metar-overlay',
+        circleRadius: 7.0,
+        circleColor: const Color(0xFF888888).toARGB32(),
+        circleStrokeWidth: 1.5,
+        circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+      ));
+      // Data-driven color from feature property
+      await map.style.setStyleLayerProperty(
+        'metar-overlay-dots',
+        'circle-color',
+        ['get', 'color'],
+      );
+
+      // Label showing the value
+      await map.style.addLayer(SymbolLayer(
+        id: 'metar-overlay-labels',
+        sourceId: 'metar-overlay',
+        textField: '{label}',
+        textSize: 10.0,
+        textColor: Colors.white.toARGB32(),
+        textHaloColor: Colors.black.toARGB32(),
+        textHaloWidth: 1.0,
+        textOffset: [0.0, -1.5],
+        textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      ));
+
+      _metarOverlaySourceReady = true;
+    } catch (e) {
+      debugPrint('Failed to add METAR overlay layers: $e');
+    }
+  }
+
+  Future<void> _updateMetarOverlaySource() async {
+    if (!_metarOverlaySourceReady || _mapboxMap == null) return;
+
+    try {
+      final data = widget.metarOverlayGeoJson != null
+          ? jsonEncode(widget.metarOverlayGeoJson)
+          : '{"type":"FeatureCollection","features":[]}';
+      await _mapboxMap!.style
+          .setStyleSourceProperty('metar-overlay', 'data', data);
+    } catch (e) {
+      debugPrint('Failed to update METAR overlay source: $e');
     }
   }
 

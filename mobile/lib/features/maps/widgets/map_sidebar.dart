@@ -75,14 +75,6 @@ class _MapSidebarState extends State<MapSidebar> {
           ),
           const SizedBox(height: 12),
 
-          // Distance measurement
-          _SidebarButton(
-            icon: Icons.straighten,
-            size: 18,
-            onTap: () {},
-          ),
-          const SizedBox(height: 12),
-
           // Zoom controls
           _SidebarButton(
             icon: Icons.add,

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/logbook_entry.dart';
+import '../models/currency_item.dart';
 import 'api_client.dart';
 
 /// Provider for the logbook entries list, parameterized by search query
@@ -32,6 +33,14 @@ final logbookExperienceReportProvider =
     FutureProvider.family<Map<String, dynamic>, String>((ref, period) async {
   final api = ref.watch(apiClientProvider);
   return api.getLogbookExperienceReport(period: period);
+});
+
+/// Provider for logbook currency status
+final logbookCurrencyProvider =
+    FutureProvider<List<CurrencyItem>>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  final items = await api.getLogbookCurrency();
+  return items.map((json) => CurrencyItem.fromJson(json)).toList();
 });
 
 /// Service class for logbook mutations

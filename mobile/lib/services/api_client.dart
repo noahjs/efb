@@ -769,6 +769,73 @@ class ApiClient {
     await _dio.delete('/endorsements/$id');
   }
 
+  // --- Certificates ---
+
+  Future<Map<String, dynamic>> getCertificates({
+    String? query,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await _dio.get('/certificates', queryParameters: {
+      if (query != null && query.isNotEmpty) 'q': query,
+      'limit': limit,
+      'offset': offset,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getCertificate(int id) async {
+    final response = await _dio.get('/certificates/$id');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createCertificate(
+      Map<String, dynamic> data) async {
+    final response = await _dio.post('/certificates', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateCertificate(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.put('/certificates/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteCertificate(int id) async {
+    await _dio.delete('/certificates/$id');
+  }
+
+  // --- Currency ---
+
+  Future<List<dynamic>> getLogbookCurrency() async {
+    final response = await _dio.get('/logbook/currency');
+    return response.data;
+  }
+
+  // --- Import ---
+
+  Future<Map<String, dynamic>> importLogbook({
+    required Uint8List fileBytes,
+    required String fileName,
+    required String source,
+    bool preview = true,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(fileBytes, filename: fileName),
+      'source': source,
+      'preview': preview.toString(),
+    });
+    final response = await _dio.post(
+      '/logbook/import',
+      data: formData,
+      options: Options(
+        receiveTimeout: const Duration(seconds: 60),
+        sendTimeout: const Duration(seconds: 60),
+      ),
+    );
+    return response.data;
+  }
+
   // --- Registry ---
 
   Future<Map<String, dynamic>?> lookupRegistry(String nNumber) async {

@@ -146,6 +146,20 @@ describe('FilingService', () => {
       expect(check?.passed).toBe(false);
     });
 
+    it('should fail when aircraft_identifier is too long', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        aircraft_identifier: 'N1234567890',
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const check = result.checks.find(
+        (c) => c.field === 'aircraft_identifier',
+      );
+      expect(check?.passed).toBe(false);
+    });
+
     it('should fail when pilot_name is missing', async () => {
       (mockUsersService.getDemoUser as jest.Mock).mockResolvedValue({
         ...mockUser,
@@ -155,6 +169,18 @@ describe('FilingService', () => {
       const result = await service.validateForFiling(1);
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'pilot_name');
+      expect(check?.passed).toBe(false);
+    });
+
+    it('should fail when phone_number is missing', async () => {
+      (mockUsersService.getDemoUser as jest.Mock).mockResolvedValue({
+        ...mockUser,
+        phone_number: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const check = result.checks.find((c) => c.field === 'phone_number');
       expect(check?.passed).toBe(false);
     });
 
@@ -183,6 +209,156 @@ describe('FilingService', () => {
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'ete_minutes');
       expect(check?.passed).toBe(false);
+    });
+
+    it('should fail when departure is missing', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        departure_identifier: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const check = result.checks.find(
+        (c) => c.field === 'departure_identifier',
+      );
+      expect(check?.passed).toBe(false);
+    });
+
+    it('should fail when destination is missing', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        destination_identifier: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const check = result.checks.find(
+        (c) => c.field === 'destination_identifier',
+      );
+      expect(check?.passed).toBe(false);
+    });
+
+    it('should fail when cruise_altitude is missing', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        cruise_altitude: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+    });
+
+    it('should fail when true_airspeed is missing', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        true_airspeed: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+    });
+
+    it('should fail when ETD is missing', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        etd: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+    });
+
+    it('should fail when people_count is 0', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        people_count: 0,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+    });
+
+    it('should treat route as error for IFR but warning for VFR', async () => {
+      // IFR missing route = error
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        route_string: null,
+        flight_rules: 'IFR',
+      });
+
+      let result = await service.validateForFiling(1);
+      let routeCheck = result.checks.find((c) => c.field === 'route_string');
+      expect(routeCheck?.severity).toBe('error');
+      expect(result.ready).toBe(false);
+
+      // VFR missing route = warning
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        route_string: null,
+        flight_rules: 'VFR',
+      });
+
+      result = await service.validateForFiling(1);
+      routeCheck = result.checks.find((c) => c.field === 'route_string');
+      expect(routeCheck?.severity).toBe('warning');
+      expect(result.ready).toBe(true);
+    });
+
+    it('should fail when aircraft has no ICAO type code', async () => {
+      (mockAircraftService.findOne as jest.Mock).mockResolvedValue({
+        ...mockAircraft,
+        icao_type_code: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const check = result.checks.find((c) => c.field === 'icao_type_code');
+      expect(check?.passed).toBe(false);
+    });
+
+    it('should fail when aircraft has no equipment codes', async () => {
+      (mockAircraftService.findOne as jest.Mock).mockResolvedValue({
+        ...mockAircraft,
+        equipment: { equipment_codes: null },
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const check = result.checks.find((c) => c.field === 'equipment_codes');
+      expect(check?.passed).toBe(false);
+    });
+
+    it('should handle aircraft_id being null gracefully', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        aircraft_id: null,
+      });
+
+      const result = await service.validateForFiling(1);
+      expect(result.ready).toBe(false);
+      const icaoCheck = result.checks.find(
+        (c) => c.field === 'icao_type_code',
+      );
+      expect(icaoCheck?.passed).toBe(false);
+    });
+
+    it('should include value fields in check results', async () => {
+      const result = await service.validateForFiling(1);
+      const depCheck = result.checks.find(
+        (c) => c.field === 'departure_identifier',
+      );
+      expect(depCheck?.value).toBe('APA');
+
+      const altCheck = result.checks.find(
+        (c) => c.field === 'cruise_altitude',
+      );
+      expect(altCheck?.value).toBe('10000 ft');
+
+      const tasCheck = result.checks.find(
+        (c) => c.field === 'true_airspeed',
+      );
+      expect(tasCheck?.value).toBe('120 kt');
     });
   });
 
@@ -260,6 +436,106 @@ describe('FilingService', () => {
       expect(plan.personsOnBoard).toBe(2);
       expect(plan.aircraftColor).toBe('White/Blue');
     });
+
+    it('should map VFR flight_rules to V', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        flight_rules: 'VFR',
+      } as any);
+      expect(plan.flightRules).toBe('V');
+    });
+
+    it('should use ZZZZ for unknown aircraft type when no aircraft found', async () => {
+      (mockAircraftService.findOne as jest.Mock).mockRejectedValue(
+        new Error('Not found'),
+      );
+
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        aircraft_id: null,
+      } as any);
+      expect(plan.aircraftType).toBe('ZZZZ');
+    });
+
+    it('should use DCT when route_string is empty', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        route_string: null,
+      } as any);
+      expect(plan.route).toBe('DCT');
+    });
+
+    it('should not include alternate when not set', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        alternate_identifier: null,
+      } as any);
+      expect(plan.alternateIcao).toBeUndefined();
+    });
+
+    it('should compute endurance from fuel data', async () => {
+      const plan = await service.buildIcaoFlightPlan(mockFlight as any);
+      // 48 gal / 8.5 GPH ≈ 5.647 hours → 5h 39m → 0539
+      expect(plan.endurance).toBe('0539');
+    });
+
+    it('should fall back to ETE + 1hr when no fuel data', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        fuel_burn_rate: null,
+        start_fuel_gallons: null,
+        ete_minutes: 90,
+      } as any);
+      // 1.5h + 1h = 2.5h → 0230
+      expect(plan.endurance).toBe('0230');
+    });
+
+    it('should truncate aircraft identifier to 7 chars', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        aircraft_identifier: 'N1234567890',
+      } as any);
+      expect(plan.aircraftId).toBe('N123456');
+    });
+
+    it('should prepend K for unknown US airports', async () => {
+      (mockAirportsService.findById as jest.Mock).mockResolvedValue(null);
+
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        departure_identifier: 'XYZ',
+      } as any);
+      expect(plan.departureIcao).toBe('KXYZ');
+    });
+
+    it('should format departure time from ETD', async () => {
+      const plan = await service.buildIcaoFlightPlan(mockFlight as any);
+      expect(plan.departureTime).toBe('1400');
+    });
+
+    it('should return 0000 for invalid ETD', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        etd: '',
+      } as any);
+      expect(plan.departureTime).toBe('0000');
+    });
+
+    it('should include remarks when present', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        remarks: '/v/ VFR ON TOP',
+      } as any);
+      expect(plan.otherInfo).toBe('/v/ VFR ON TOP');
+    });
+
+    it('should default personsOnBoard to 1 when people_count is 0', async () => {
+      const plan = await service.buildIcaoFlightPlan({
+        ...mockFlight,
+        people_count: 0,
+      } as any);
+      expect(plan.personsOnBoard).toBe(1);
+    });
   });
 
   // --- State Machine ---
@@ -289,6 +565,95 @@ describe('FilingService', () => {
 
       await expect(service.fileFlight(1)).rejects.toThrow('Cannot file');
     });
+
+    it('should reject filing if status is accepted', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'accepted',
+      });
+
+      await expect(service.fileFlight(1)).rejects.toThrow('Cannot file');
+    });
+
+    it('should reject filing if status is closed', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'closed',
+      });
+
+      await expect(service.fileFlight(1)).rejects.toThrow('Cannot file');
+    });
+
+    it('should reject filing when validation fails', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        departure_identifier: null,
+      });
+
+      await expect(service.fileFlight(1)).rejects.toThrow(
+        'Flight plan is not ready',
+      );
+    });
+
+    it('should return failure when Leidos API fails', async () => {
+      mockLeidosClient.fileFlightPlan.mockResolvedValue({
+        success: false,
+        flightIdentifier: '',
+        versionStamp: '',
+        errors: ['Server unavailable'],
+      });
+
+      const result = await service.fileFlight(1);
+
+      expect(result.success).toBe(false);
+      expect(result.filingStatus).toBe('not_filed');
+      expect(result.errors).toContain('Server unavailable');
+      // Should NOT update flight record on failure
+      expect(mockFlightsService.update).not.toHaveBeenCalled();
+    });
+
+    it('should store filing_format as icao', async () => {
+      await service.fileFlight(1);
+
+      expect(mockFlightsService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          filing_format: 'icao',
+        }),
+      );
+    });
+
+    it('should store filed_at timestamp', async () => {
+      const result = await service.fileFlight(1);
+
+      expect(result.filedAt).toBeDefined();
+      expect(mockFlightsService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          filed_at: expect.any(String),
+        }),
+      );
+    });
+
+    it('should pass correct payload to Leidos', async () => {
+      await service.fileFlight(1);
+
+      expect(mockLeidosClient.fileFlightPlan).toHaveBeenCalledWith({
+        webUserName: 'jdoe',
+        flightPlan: expect.objectContaining({
+          aircraftIdentifier: 'N12345',
+          aircraftType: 'C172',
+          departurePoint: 'KAPA',
+          destinationPoint: 'KDEN',
+          flightType: 'IFR',
+          cruiseSpeed: 'N0120',
+          cruiseAltitude: 'A100',
+          route: 'APA V389 DEN',
+          personsOnBoard: 2,
+          pilotName: 'John Doe',
+        }),
+      });
+    });
   });
 
   describe('amendFlight', () => {
@@ -307,8 +672,88 @@ describe('FilingService', () => {
       expect(mockLeidosClient.amendFlightPlan).toHaveBeenCalledTimes(1);
     });
 
+    it('should amend an accepted flight', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'accepted',
+        filing_reference: 'FP1001',
+        filing_version_stamp: 'v123',
+      });
+
+      const result = await service.amendFlight(1);
+      expect(result.success).toBe(true);
+    });
+
     it('should reject amend if not filed', async () => {
       await expect(service.amendFlight(1)).rejects.toThrow('Cannot amend');
+    });
+
+    it('should reject amend if no filing reference', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: null,
+      });
+
+      await expect(service.amendFlight(1)).rejects.toThrow(
+        'No filing reference',
+      );
+    });
+
+    it('should pass version stamp to Leidos for amend', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+        filing_version_stamp: 'v123',
+      });
+
+      await service.amendFlight(1);
+
+      expect(mockLeidosClient.amendFlightPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flightIdentifier: 'FP1001',
+          versionStamp: 'v123',
+        }),
+      );
+    });
+
+    it('should update version stamp after successful amend', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+        filing_version_stamp: 'v123',
+      });
+
+      await service.amendFlight(1);
+
+      expect(mockFlightsService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          filing_version_stamp: 'v124',
+        }),
+      );
+    });
+
+    it('should return failure when Leidos amend fails', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+        filing_version_stamp: 'v123',
+      });
+
+      mockLeidosClient.amendFlightPlan.mockResolvedValue({
+        success: false,
+        errors: ['Version conflict'],
+      });
+
+      const result = await service.amendFlight(1);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Amendment failed');
+      expect(mockFlightsService.update).not.toHaveBeenCalled();
     });
   });
 
@@ -327,8 +772,71 @@ describe('FilingService', () => {
       expect(mockLeidosClient.cancelFlightPlan).toHaveBeenCalledTimes(1);
     });
 
+    it('should cancel an accepted flight', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'accepted',
+        filing_reference: 'FP1001',
+      });
+
+      const result = await service.cancelFiling(1);
+      expect(result.success).toBe(true);
+      expect(result.filingStatus).toBe('not_filed');
+    });
+
     it('should reject cancel if not filed', async () => {
       await expect(service.cancelFiling(1)).rejects.toThrow('Cannot cancel');
+    });
+
+    it('should reject cancel if no filing reference', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: null,
+      });
+
+      await expect(service.cancelFiling(1)).rejects.toThrow(
+        'No filing reference',
+      );
+    });
+
+    it('should clear filing fields on successful cancel', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+      });
+
+      await service.cancelFiling(1);
+
+      expect(mockFlightsService.update).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          filing_status: 'not_filed',
+          filing_reference: null,
+          filing_version_stamp: null,
+          filed_at: null,
+        }),
+      );
+    });
+
+    it('should return failure when Leidos cancel fails', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+      });
+
+      mockLeidosClient.cancelFlightPlan.mockResolvedValue({
+        success: false,
+        errors: ['Flight not found in system'],
+      });
+
+      const result = await service.cancelFiling(1);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Cancellation failed');
+      expect(mockFlightsService.update).not.toHaveBeenCalled();
     });
   });
 
@@ -347,8 +855,122 @@ describe('FilingService', () => {
       expect(mockLeidosClient.closeFlightPlan).toHaveBeenCalledTimes(1);
     });
 
+    it('should close an accepted flight', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'accepted',
+        filing_reference: 'FP1001',
+      });
+
+      const result = await service.closeFiling(1);
+      expect(result.success).toBe(true);
+      expect(result.filingStatus).toBe('closed');
+    });
+
     it('should reject close if not filed', async () => {
       await expect(service.closeFiling(1)).rejects.toThrow('Cannot close');
+    });
+
+    it('should reject close if no filing reference', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: null,
+      });
+
+      await expect(service.closeFiling(1)).rejects.toThrow(
+        'No filing reference',
+      );
+    });
+
+    it('should return failure when Leidos close fails', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+      });
+
+      mockLeidosClient.closeFlightPlan.mockResolvedValue({
+        success: false,
+        errors: ['Already closed'],
+      });
+
+      const result = await service.closeFiling(1);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toBe('Close failed');
+      expect(mockFlightsService.update).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- getFilingStatus ---
+
+  describe('getFilingStatus', () => {
+    it('should return status for filed flight', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+      });
+
+      const result = await service.getFilingStatus(1);
+
+      expect(result.success).toBe(true);
+      expect(result.filingReference).toBe('FP1001');
+      expect(mockLeidosClient.getFlightPlanStatus).toHaveBeenCalledWith(
+        'jdoe',
+        'FP1001',
+      );
+    });
+
+    it('should return status without Leidos call for unfiled flight', async () => {
+      const result = await service.getFilingStatus(1);
+
+      expect(result.success).toBe(true);
+      expect(result.filingStatus).toBe('not_filed');
+      expect(result.message).toContain('not been filed');
+      expect(mockLeidosClient.getFlightPlanStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- Full lifecycle ---
+
+  describe('filing lifecycle', () => {
+    it('should support file → amend → cancel flow', async () => {
+      // File
+      const fileResult = await service.fileFlight(1);
+      expect(fileResult.success).toBe(true);
+
+      // Amend
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+        filing_version_stamp: 'v123',
+      });
+      const amendResult = await service.amendFlight(1);
+      expect(amendResult.success).toBe(true);
+
+      // Cancel
+      const cancelResult = await service.cancelFiling(1);
+      expect(cancelResult.success).toBe(true);
+      expect(cancelResult.filingStatus).toBe('not_filed');
+    });
+
+    it('should support file → close flow', async () => {
+      // File
+      const fileResult = await service.fileFlight(1);
+      expect(fileResult.success).toBe(true);
+
+      // Close
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: 'FP1001',
+      });
+      const closeResult = await service.closeFiling(1);
+      expect(closeResult.success).toBe(true);
+      expect(closeResult.filingStatus).toBe('closed');
     });
   });
 });

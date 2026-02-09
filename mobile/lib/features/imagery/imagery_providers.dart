@@ -209,3 +209,10 @@ final tfrsProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final api = ref.watch(apiClientProvider);
   return api.getTfrs();
 });
+
+/// Fetches PIREP GeoJSON for the given bounding box string.
+final mapPirepsProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, bbox) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getPireps(bbox: bbox);
+});

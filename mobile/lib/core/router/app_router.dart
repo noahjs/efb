@@ -30,8 +30,11 @@ import '../../features/imagery/widgets/winds_aloft_viewer.dart';
 import '../../features/logbook/logbook_screen.dart';
 import '../../features/logbook/logbook_entry_screen.dart';
 import '../../features/logbook/logbook_experience_report_screen.dart';
-import '../../features/logbook/endorsements_screen.dart';
 import '../../features/logbook/endorsement_detail_screen.dart';
+import '../../features/logbook/certificate_detail_screen.dart';
+import '../../features/logbook/credentials_screen.dart';
+import '../../features/logbook/currency_screen.dart';
+import '../../features/logbook/import_screen.dart';
 import '../../features/more/more_screen.dart';
 import '../../features/more/pilot_profile_screen.dart';
 import '../widgets/app_shell.dart';
@@ -313,6 +316,16 @@ final appRouter = GoRouter(
                   const LogbookExperienceReportScreen(),
             ),
             GoRoute(
+              path: 'currency',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const CurrencyScreen(),
+            ),
+            GoRoute(
+              path: 'import',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const ImportScreen(),
+            ),
+            GoRoute(
               path: 'new',
               parentNavigatorKey: _rootNavigatorKey,
               builder: (context, state) =>
@@ -329,10 +342,14 @@ final appRouter = GoRouter(
           ],
         ),
         GoRoute(
-          path: '/endorsements',
+          path: '/credentials',
           pageBuilder: (context, state) => const NoTransitionPage(
-            child: EndorsementsScreen(),
+            child: CredentialsScreen(),
           ),
+        ),
+        GoRoute(
+          path: '/endorsements',
+          redirect: (context, state) => '/credentials',
           routes: [
             GoRoute(
               path: 'new',
@@ -346,6 +363,26 @@ final appRouter = GoRouter(
               builder: (context, state) {
                 final id = int.parse(state.pathParameters['id']!);
                 return EndorsementDetailScreen(endorsementId: id);
+              },
+            ),
+          ],
+        ),
+        GoRoute(
+          path: '/certificates',
+          redirect: (context, state) => '/credentials',
+          routes: [
+            GoRoute(
+              path: 'new',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) =>
+                  const CertificateDetailScreen(certificateId: null),
+            ),
+            GoRoute(
+              path: ':id',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final id = int.parse(state.pathParameters['id']!);
+                return CertificateDetailScreen(certificateId: id);
               },
             ),
           ],

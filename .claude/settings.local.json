@@ -41,7 +41,10 @@
       "Bash(npm run build:*)",
       "Bash(npm test:*)",
       "Bash(ls:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(flutter test:*)",
+      "Bash(npm ls:*)",
+      "Bash(flutter pub get:*)"
     ]
   }
 }

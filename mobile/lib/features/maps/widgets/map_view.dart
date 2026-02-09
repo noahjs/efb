@@ -55,6 +55,15 @@ class EfbMapView extends StatelessWidget {
   /// TFR GeoJSON FeatureCollection overlay.
   final Map<String, dynamic>? tfrGeoJson;
 
+  /// Advisory (AIR/SIGMET/CWA) GeoJSON FeatureCollection overlay.
+  final Map<String, dynamic>? advisoryGeoJson;
+
+  /// PIREP GeoJSON FeatureCollection overlay.
+  final Map<String, dynamic>? pirepGeoJson;
+
+  /// METAR-derived overlay GeoJSON (surface wind, temperature, visibility, ceiling).
+  final Map<String, dynamic>? metarOverlayGeoJson;
+
   const EfbMapView({
     super.key,
     required this.baseLayer,
@@ -70,6 +79,9 @@ class EfbMapView extends StatelessWidget {
     this.airwayGeoJson,
     this.artccGeoJson,
     this.tfrGeoJson,
+    this.advisoryGeoJson,
+    this.pirepGeoJson,
+    this.metarOverlayGeoJson,
   });
 
   @override
@@ -88,6 +100,9 @@ class EfbMapView extends StatelessWidget {
       airwayGeoJson: airwayGeoJson,
       artccGeoJson: artccGeoJson,
       tfrGeoJson: tfrGeoJson,
+      advisoryGeoJson: advisoryGeoJson,
+      pirepGeoJson: pirepGeoJson,
+      metarOverlayGeoJson: metarOverlayGeoJson,
     );
   }
 }

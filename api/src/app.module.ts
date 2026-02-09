@@ -36,6 +36,7 @@ import { ImageryModule } from './imagery/imagery.module';
 import { LogbookModule } from './logbook/logbook.module';
 import { LogbookEntry } from './logbook/entities/logbook-entry.entity';
 import { Endorsement } from './logbook/entities/endorsement.entity';
+import { Certificate } from './logbook/entities/certificate.entity';
 import { FaaRegistryAircraft } from './registry/entities/faa-registry-aircraft.entity';
 import { RegistryModule } from './registry/registry.module';
 import { FilingModule } from './filing/filing.module';
@@ -69,6 +70,7 @@ import { dbConfig } from './db.config';
         ArtccBoundary,
         LogbookEntry,
         Endorsement,
+        Certificate,
         FaaRegistryAircraft,
       ],
     }),

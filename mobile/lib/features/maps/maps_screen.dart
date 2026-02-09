@@ -15,7 +15,6 @@ import 'widgets/map_toolbar.dart';
 import 'widgets/map_sidebar.dart';
 import 'widgets/map_bottom_bar.dart';
 import 'widgets/layer_picker.dart';
-import 'widgets/map_settings_panel.dart';
 import 'widgets/aeronautical_settings_panel.dart';
 import 'widgets/map_view.dart';
 import 'widgets/airport_bottom_sheet.dart';
@@ -34,7 +33,6 @@ class MapsScreen extends ConsumerStatefulWidget {
 
 class _MapsScreenState extends ConsumerState<MapsScreen> {
   bool _showLayerPicker = false;
-  bool _showSettings = false;
   bool _showFlightPlan = false;
   String _selectedBaseLayer = 'satellite';
   Set<String> _activeOverlays = {'flight_category'};
@@ -201,17 +199,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     setState(() {
       _showLayerPicker = !_showLayerPicker;
       if (_showLayerPicker) {
-        _showSettings = false;
-        _showFlightPlan = false;
-      }
-    });
-  }
-
-  void _toggleSettings() {
-    setState(() {
-      _showSettings = !_showSettings;
-      if (_showSettings) {
-        _showLayerPicker = false;
         _showFlightPlan = false;
       }
     });
@@ -222,7 +209,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       _showFlightPlan = !_showFlightPlan;
       if (_showFlightPlan) {
         _showLayerPicker = false;
-        _showSettings = false;
       }
     });
   }
@@ -632,22 +618,29 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   @override
   Widget build(BuildContext context) {
     final toolbarBottom = MediaQuery.of(context).padding.top + 90;
-    final showOverlay = _showLayerPicker || _showSettings || _showAeroSettings || _showFlightPlan;
+    final showOverlay = _showLayerPicker || _showAeroSettings || _showFlightPlan;
     final showFlightCategory = _activeOverlays.contains('flight_category');
 
-    // Always fetch airports for current map bounds
-    final airportsAsync = _currentBounds != null
-        ? ref.watch(mapAirportsProvider(_currentBounds!))
-        : null;
-    var airports = airportsAsync?.value
-            ?.cast<Map<String, dynamic>>()
-            .toList() ??
-        [];
+    // Fetch airports when aeronautical overlay is active and airports are enabled
+    final showAeronautical = _activeOverlays.contains('aeronautical');
+    var airports = <Map<String, dynamic>>[];
+    if (showAeronautical && _aero.showAirports && _currentBounds != null) {
+      final airportsAsync = ref.watch(mapAirportsProvider(_currentBounds!));
+      airports = airportsAsync.value
+              ?.cast<Map<String, dynamic>>()
+              .toList() ??
+          [];
 
-    // Filter to fixed-wing airports only when enabled
-    if (_aero.airportsOnly) {
-      airports =
-          airports.where((a) => a['facility_type'] == 'A').toList();
+      // Granular airport filtering by facility type and use
+      airports = airports.where((a) {
+        final type = a['facility_type'] ?? '';
+        final use = a['facility_use'] ?? '';
+        if (type == 'H' && !_aero.showHeliports) return false;
+        if (type == 'S' && !_aero.showSeaplaneBases) return false;
+        if (['G', 'U', 'B'].contains(type) && !_aero.showOtherFields) return false;
+        if (use == 'PR' && !_aero.showPrivateAirports) return false;
+        return true;
+      }).toList();
     }
 
     // When flight category overlay is active, fetch METARs and merge
@@ -677,7 +670,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     }
 
     // When aeronautical overlay is active, fetch airspace/airway/ARTCC data
-    final showAeronautical = _activeOverlays.contains('aeronautical');
     Map<String, dynamic>? airspaceGeoJson;
     Map<String, dynamic>? airwayGeoJson;
     Map<String, dynamic>? artccGeoJson;
@@ -728,6 +720,58 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       tfrGeoJson = ref.watch(tfrsProvider).value;
     }
 
+    // When AIR/SIGMET overlay is active, fetch advisory GeoJSON
+    final showAirSigmet = _activeOverlays.contains('air_sigmet');
+    Map<String, dynamic>? advisoryGeoJson;
+    if (showAirSigmet) {
+      // Fetch all three advisory types and merge into one FeatureCollection
+      final gairmets = ref.watch(advisoriesProvider(
+          const AdvisoryParams(type: 'gairmets'))).value;
+      final sigmets = ref.watch(advisoriesProvider(
+          const AdvisoryParams(type: 'sigmets'))).value;
+      final cwas = ref.watch(advisoriesProvider(
+          const AdvisoryParams(type: 'cwas'))).value;
+
+      final allFeatures = <dynamic>[
+        ...?_extractFeatures(gairmets),
+        ...?_extractFeatures(sigmets),
+        ...?_extractFeatures(cwas),
+      ];
+      if (allFeatures.isNotEmpty) {
+        advisoryGeoJson = _enrichAdvisoryGeoJson({
+          'type': 'FeatureCollection',
+          'features': allFeatures,
+        });
+      }
+    }
+
+    // When PIREPs overlay is active, fetch PIREP GeoJSON
+    final showPireps = _activeOverlays.contains('pireps');
+    Map<String, dynamic>? pirepGeoJson;
+    if (showPireps && _currentBounds != null) {
+      final bbox = '${_currentBounds!.minLng},${_currentBounds!.minLat},'
+          '${_currentBounds!.maxLng},${_currentBounds!.maxLat}';
+      final pirepsData = ref.watch(mapPirepsProvider(bbox)).value;
+      if (pirepsData != null) {
+        pirepGeoJson = _enrichPirepGeoJson(pirepsData);
+      }
+    }
+
+    // METAR-derived overlays (surface wind, temperature, visibility, ceiling)
+    final metarOverlayTypes = {'surface_wind', 'temperature', 'visibility', 'ceiling'};
+    final activeMetarOverlay = _activeOverlays.intersection(metarOverlayTypes);
+    Map<String, dynamic>? metarOverlayGeoJson;
+    if (activeMetarOverlay.isNotEmpty && _currentBounds != null) {
+      final metarsAsync = ref.watch(mapMetarsProvider(_currentBounds!));
+      final metars = metarsAsync.value;
+      if (metars != null) {
+        metarOverlayGeoJson = _buildMetarOverlayGeoJson(
+          metars,
+          activeMetarOverlay.first,
+        );
+      }
+    }
+
     // Build route line coordinates from active flight's routeString
     // Uses the waypoint resolver which handles airports, navaids, and fixes
     final activeFlight = ref.watch(activeFlightProvider);
@@ -773,6 +817,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               airwayGeoJson: airwayGeoJson,
               artccGeoJson: artccGeoJson,
               tfrGeoJson: tfrGeoJson,
+              advisoryGeoJson: advisoryGeoJson,
+              pirepGeoJson: pirepGeoJson,
+              metarOverlayGeoJson: metarOverlayGeoJson,
             ),
           ),
 
@@ -824,29 +871,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               ),
             ),
 
-          // Settings panel overlay
-          if (_showSettings)
-            Positioned(
-              top: toolbarBottom,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: PointerInterceptor(
-                child: GestureDetector(
-                  onTap: _toggleSettings,
-                  child: Container(
-                    color: Colors.black38,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: MapSettingsPanel(
-                        onClose: _toggleSettings,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
           // Top toolbar (always on top of overlays)
           Positioned(
             top: 0,
@@ -857,7 +881,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               children: [
                 MapToolbar(
                   onLayersTap: _toggleLayerPicker,
-                  onSettingsTap: _toggleSettings,
                   onFplTap: _toggleFlightPlan,
                   isFplOpen: _showFlightPlan,
                   searchController: _searchController,
@@ -911,6 +934,154 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         ],
       ),
     );
+  }
+
+  List<dynamic>? _extractFeatures(Map<String, dynamic>? geojson) {
+    if (geojson == null) return null;
+    return geojson['features'] as List<dynamic>?;
+  }
+
+  Map<String, dynamic> _enrichAdvisoryGeoJson(Map<String, dynamic> original) {
+    final features = (original['features'] as List<dynamic>?) ?? [];
+    final enrichedFeatures = features.map((f) {
+      final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
+      final props =
+          Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
+      if (props['color'] == null || props['color'] == '') {
+        final hazard = (props['hazard'] as String? ?? '').toUpperCase();
+        props['color'] = _advisoryColorHex(hazard);
+      }
+      feature['properties'] = props;
+      return feature;
+    }).toList();
+    return {'type': 'FeatureCollection', 'features': enrichedFeatures};
+  }
+
+  String _advisoryColorHex(String hazard) {
+    switch (hazard) {
+      case 'IFR': return '#1E90FF';
+      case 'MTN_OBSC': case 'MT_OBSC': return '#8D6E63';
+      case 'TURB': case 'TURB-HI': case 'TURB-LO': return '#FFC107';
+      case 'ICE': return '#00BCD4';
+      case 'FZLVL': case 'M_FZLVL': return '#00BCD4';
+      case 'LLWS': return '#FF5252';
+      case 'SFC_WND': return '#FF9800';
+      case 'CONV': return '#FF5252';
+      default: return '#B0B4BC';
+    }
+  }
+
+  Map<String, dynamic> _enrichPirepGeoJson(Map<String, dynamic> original) {
+    final features = (original['features'] as List<dynamic>?) ?? [];
+    final enrichedFeatures = features.map((f) {
+      final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
+      final props =
+          Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
+      final tbInt = (props['tbInt1'] as String? ?? '').toUpperCase();
+      final icgInt = (props['icgInt1'] as String? ?? '').toUpperCase();
+      final airepType = props['airepType'] as String? ?? '';
+      props['color'] = _pirepColorHex(tbInt, icgInt);
+      props['isUrgent'] = airepType == 'URGENT PIREP';
+      feature['properties'] = props;
+      return feature;
+    }).toList();
+    return {'type': 'FeatureCollection', 'features': enrichedFeatures};
+  }
+
+  String _pirepColorHex(String tbInt, String icgInt) {
+    final primary = tbInt.isNotEmpty ? tbInt : icgInt;
+    if (['LGT', 'LIGHT', 'LGT-MOD'].contains(primary)) return '#29B6F6';
+    if (['MOD', 'MODERATE', 'MOD-SEV'].contains(primary)) return '#FFC107';
+    if (['SEV', 'SEVERE', 'SEV-EXTM', 'EXTM', 'EXTREME'].contains(primary)) {
+      return '#FF5252';
+    }
+    if (['NEG', 'SMTH', 'SMOOTH', 'NONE', 'TRACE'].contains(primary)) {
+      return '#4CAF50';
+    }
+    return '#B0B4BC';
+  }
+
+  Map<String, dynamic> _buildMetarOverlayGeoJson(
+    List<dynamic> metars,
+    String overlayType,
+  ) {
+    final features = <Map<String, dynamic>>[];
+    for (final m in metars) {
+      if (m is! Map) continue;
+      final lat = m['lat'] as num?;
+      final lng = m['lon'] as num?;
+      if (lat == null || lng == null) continue;
+
+      String? color;
+      String? label;
+
+      switch (overlayType) {
+        case 'surface_wind':
+          final wspd = m['wspd'] as num?;
+          if (wspd == null) continue;
+          label = '${wspd.toInt()}';
+          if (wspd <= 5) { color = '#4CAF50'; }
+          else if (wspd <= 15) { color = '#FFC107'; }
+          else if (wspd <= 25) { color = '#FF9800'; }
+          else { color = '#FF5252'; }
+          break;
+        case 'temperature':
+          final temp = m['temp'] as num?;
+          if (temp == null) continue;
+          label = '${temp.toInt()}°';
+          if (temp <= 0) { color = '#2196F3'; }
+          else if (temp <= 10) { color = '#29B6F6'; }
+          else if (temp <= 20) { color = '#4CAF50'; }
+          else if (temp <= 30) { color = '#FFC107'; }
+          else { color = '#FF5252'; }
+          break;
+        case 'visibility':
+          final visib = m['visib'] as num?;
+          if (visib == null) continue;
+          label = visib >= 10 ? '10+' : visib.toStringAsFixed(visib < 3 ? 1 : 0);
+          if (visib < 1) { color = '#E040FB'; }
+          else if (visib < 3) { color = '#FF5252'; }
+          else if (visib < 5) { color = '#FFC107'; }
+          else { color = '#4CAF50'; }
+          break;
+        case 'ceiling':
+          final clouds = m['clouds'] as List<dynamic>?;
+          if (clouds == null || clouds.isEmpty) continue;
+          int? cig;
+          for (final c in clouds) {
+            if (c is Map) {
+              final cover = (c['cover'] as String? ?? '').toUpperCase();
+              if (cover == 'BKN' || cover == 'OVC') {
+                final base = c['base'] as num?;
+                if (base != null && (cig == null || base.toInt() < cig)) {
+                  cig = base.toInt();
+                }
+              }
+            }
+          }
+          if (cig == null) continue;
+          label = '$cig';
+          if (cig < 500) { color = '#E040FB'; }
+          else if (cig < 1000) { color = '#FF5252'; }
+          else if (cig < 3000) { color = '#FFC107'; }
+          else { color = '#4CAF50'; }
+          break;
+      }
+
+      if (color == null) continue;
+      features.add({
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [lng, lat],
+        },
+        'properties': {
+          'color': color,
+          'label': label ?? '',
+        },
+      });
+    }
+    return {'type': 'FeatureCollection', 'features': features};
   }
 }
 

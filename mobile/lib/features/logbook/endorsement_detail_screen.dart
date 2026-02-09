@@ -41,7 +41,7 @@ class _EndorsementDetailScreenState
 
   void _goBackToList() {
     ref.invalidate(endorsementsListProvider(''));
-    context.go('/endorsements');
+    context.go('/credentials');
   }
 
   Future<void> _saveField(Endorsement updated) async {

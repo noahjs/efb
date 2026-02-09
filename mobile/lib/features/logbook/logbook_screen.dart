@@ -27,14 +27,39 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart),
+            icon: const Icon(Icons.timer_outlined),
             color: AppColors.accent,
-            onPressed: () => context.go('/logbook/experience'),
+            tooltip: 'Currency',
+            onPressed: () => context.go('/logbook/currency'),
           ),
           IconButton(
-            icon: const Icon(Icons.verified),
+            icon: const Icon(Icons.card_membership),
             color: AppColors.accent,
-            onPressed: () => context.go('/endorsements'),
+            tooltip: 'Certificates & Endorsements',
+            onPressed: () => context.go('/credentials'),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: AppColors.accent),
+            onSelected: (value) {
+              switch (value) {
+                case 'experience':
+                  context.go('/logbook/experience');
+                  break;
+                case 'import':
+                  context.go('/logbook/import');
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'experience',
+                child: Text('Experience Report'),
+              ),
+              const PopupMenuItem(
+                value: 'import',
+                child: Text('Import Logbook'),
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.add),

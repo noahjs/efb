@@ -7,252 +7,102 @@ import '../../../core/theme/app_theme.dart';
 /// All aeronautical settings state, persisted in MapsScreen across
 /// panel open/close cycles.
 class AeroSettings {
-  // Map display
-  final bool placeLabels;
-
   // Airport
-  final bool airportsOnly;
+  final bool showAirports;
   final bool showHeliports;
   final bool showPrivateAirports;
   final bool showSeaplaneBases;
   final bool showOtherFields;
 
   // Airspace — controlled
-  final bool autoHighlight;
-  final bool activationByNotam;
   final bool showAirspaces;
-  final bool showTrsa;
   final bool showClassE;
-  final bool showModeC;
-
-  // Airspace — special use
-  final bool showSua;
-  final bool showProhibitedRestricted;
-  final bool showMoaAlertTraining;
-  final bool showCautionDangerWarning;
-  final bool showTraTsa;
-  final bool showParachuteAreas;
-  final bool showAdiz;
-  final bool showSuaOther;
-  final bool worldwideAltitudes;
 
   // Airways
   final bool showAirways;
   final bool showLowAirways;
   final bool showHighAirways;
-  final bool showHelicopterAirways;
-
-  // Waypoints
-  final bool showWaypoints;
-  final bool showFixesRnav;
-  final bool showVfrWaypoints;
-  final bool showVfrHelicopterWaypoints;
 
   // ATC boundaries
   final bool showAtcBoundaries;
   final bool showArtcc;
-  final bool showAtcSectors;
-
-  // Other
-  final bool showOrganizedTracks;
-  final bool showGridMora;
 
   const AeroSettings({
-    this.placeLabels = true,
-    this.airportsOnly = true,
+    this.showAirports = true,
     this.showHeliports = true,
     this.showPrivateAirports = true,
     this.showSeaplaneBases = false,
     this.showOtherFields = true,
-    this.autoHighlight = false,
-    this.activationByNotam = true,
     this.showAirspaces = true,
-    this.showTrsa = true,
     this.showClassE = false,
-    this.showModeC = true,
-    this.showSua = true,
-    this.showProhibitedRestricted = true,
-    this.showMoaAlertTraining = true,
-    this.showCautionDangerWarning = true,
-    this.showTraTsa = true,
-    this.showParachuteAreas = true,
-    this.showAdiz = true,
-    this.showSuaOther = true,
-    this.worldwideAltitudes = true,
     this.showAirways = false,
     this.showLowAirways = true,
     this.showHighAirways = true,
-    this.showHelicopterAirways = false,
-    this.showWaypoints = true,
-    this.showFixesRnav = true,
-    this.showVfrWaypoints = true,
-    this.showVfrHelicopterWaypoints = true,
     this.showAtcBoundaries = true,
     this.showArtcc = true,
-    this.showAtcSectors = false,
-    this.showOrganizedTracks = false,
-    this.showGridMora = false,
   });
 
   AeroSettings copyWith({
-    bool? placeLabels,
-    bool? airportsOnly,
+    bool? showAirports,
     bool? showHeliports,
     bool? showPrivateAirports,
     bool? showSeaplaneBases,
     bool? showOtherFields,
-    bool? autoHighlight,
-    bool? activationByNotam,
     bool? showAirspaces,
-    bool? showTrsa,
     bool? showClassE,
-    bool? showModeC,
-    bool? showSua,
-    bool? showProhibitedRestricted,
-    bool? showMoaAlertTraining,
-    bool? showCautionDangerWarning,
-    bool? showTraTsa,
-    bool? showParachuteAreas,
-    bool? showAdiz,
-    bool? showSuaOther,
-    bool? worldwideAltitudes,
     bool? showAirways,
     bool? showLowAirways,
     bool? showHighAirways,
-    bool? showHelicopterAirways,
-    bool? showWaypoints,
-    bool? showFixesRnav,
-    bool? showVfrWaypoints,
-    bool? showVfrHelicopterWaypoints,
     bool? showAtcBoundaries,
     bool? showArtcc,
-    bool? showAtcSectors,
-    bool? showOrganizedTracks,
-    bool? showGridMora,
   }) {
     return AeroSettings(
-      placeLabels: placeLabels ?? this.placeLabels,
-      airportsOnly: airportsOnly ?? this.airportsOnly,
+      showAirports: showAirports ?? this.showAirports,
       showHeliports: showHeliports ?? this.showHeliports,
       showPrivateAirports: showPrivateAirports ?? this.showPrivateAirports,
       showSeaplaneBases: showSeaplaneBases ?? this.showSeaplaneBases,
       showOtherFields: showOtherFields ?? this.showOtherFields,
-      autoHighlight: autoHighlight ?? this.autoHighlight,
-      activationByNotam: activationByNotam ?? this.activationByNotam,
       showAirspaces: showAirspaces ?? this.showAirspaces,
-      showTrsa: showTrsa ?? this.showTrsa,
       showClassE: showClassE ?? this.showClassE,
-      showModeC: showModeC ?? this.showModeC,
-      showSua: showSua ?? this.showSua,
-      showProhibitedRestricted:
-          showProhibitedRestricted ?? this.showProhibitedRestricted,
-      showMoaAlertTraining:
-          showMoaAlertTraining ?? this.showMoaAlertTraining,
-      showCautionDangerWarning:
-          showCautionDangerWarning ?? this.showCautionDangerWarning,
-      showTraTsa: showTraTsa ?? this.showTraTsa,
-      showParachuteAreas: showParachuteAreas ?? this.showParachuteAreas,
-      showAdiz: showAdiz ?? this.showAdiz,
-      showSuaOther: showSuaOther ?? this.showSuaOther,
-      worldwideAltitudes: worldwideAltitudes ?? this.worldwideAltitudes,
       showAirways: showAirways ?? this.showAirways,
       showLowAirways: showLowAirways ?? this.showLowAirways,
       showHighAirways: showHighAirways ?? this.showHighAirways,
-      showHelicopterAirways:
-          showHelicopterAirways ?? this.showHelicopterAirways,
-      showWaypoints: showWaypoints ?? this.showWaypoints,
-      showFixesRnav: showFixesRnav ?? this.showFixesRnav,
-      showVfrWaypoints: showVfrWaypoints ?? this.showVfrWaypoints,
-      showVfrHelicopterWaypoints:
-          showVfrHelicopterWaypoints ?? this.showVfrHelicopterWaypoints,
       showAtcBoundaries: showAtcBoundaries ?? this.showAtcBoundaries,
       showArtcc: showArtcc ?? this.showArtcc,
-      showAtcSectors: showAtcSectors ?? this.showAtcSectors,
-      showOrganizedTracks: showOrganizedTracks ?? this.showOrganizedTracks,
-      showGridMora: showGridMora ?? this.showGridMora,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'placeLabels': placeLabels,
-        'airportsOnly': airportsOnly,
+        'showAirports': showAirports,
         'showHeliports': showHeliports,
         'showPrivateAirports': showPrivateAirports,
         'showSeaplaneBases': showSeaplaneBases,
         'showOtherFields': showOtherFields,
-        'autoHighlight': autoHighlight,
-        'activationByNotam': activationByNotam,
         'showAirspaces': showAirspaces,
-        'showTrsa': showTrsa,
         'showClassE': showClassE,
-        'showModeC': showModeC,
-        'showSua': showSua,
-        'showProhibitedRestricted': showProhibitedRestricted,
-        'showMoaAlertTraining': showMoaAlertTraining,
-        'showCautionDangerWarning': showCautionDangerWarning,
-        'showTraTsa': showTraTsa,
-        'showParachuteAreas': showParachuteAreas,
-        'showAdiz': showAdiz,
-        'showSuaOther': showSuaOther,
-        'worldwideAltitudes': worldwideAltitudes,
         'showAirways': showAirways,
         'showLowAirways': showLowAirways,
         'showHighAirways': showHighAirways,
-        'showHelicopterAirways': showHelicopterAirways,
-        'showWaypoints': showWaypoints,
-        'showFixesRnav': showFixesRnav,
-        'showVfrWaypoints': showVfrWaypoints,
-        'showVfrHelicopterWaypoints': showVfrHelicopterWaypoints,
         'showAtcBoundaries': showAtcBoundaries,
         'showArtcc': showArtcc,
-        'showAtcSectors': showAtcSectors,
-        'showOrganizedTracks': showOrganizedTracks,
-        'showGridMora': showGridMora,
       };
 
   static AeroSettings fromJson(Map<String, dynamic> j) {
     bool b(String key, bool fallback) => (j[key] as bool?) ?? fallback;
     const d = AeroSettings();
     return AeroSettings(
-      placeLabels: b('placeLabels', d.placeLabels),
-      airportsOnly: b('airportsOnly', d.airportsOnly),
+      showAirports: b('showAirports', d.showAirports),
       showHeliports: b('showHeliports', d.showHeliports),
       showPrivateAirports: b('showPrivateAirports', d.showPrivateAirports),
       showSeaplaneBases: b('showSeaplaneBases', d.showSeaplaneBases),
       showOtherFields: b('showOtherFields', d.showOtherFields),
-      autoHighlight: b('autoHighlight', d.autoHighlight),
-      activationByNotam: b('activationByNotam', d.activationByNotam),
       showAirspaces: b('showAirspaces', d.showAirspaces),
-      showTrsa: b('showTrsa', d.showTrsa),
       showClassE: b('showClassE', d.showClassE),
-      showModeC: b('showModeC', d.showModeC),
-      showSua: b('showSua', d.showSua),
-      showProhibitedRestricted:
-          b('showProhibitedRestricted', d.showProhibitedRestricted),
-      showMoaAlertTraining:
-          b('showMoaAlertTraining', d.showMoaAlertTraining),
-      showCautionDangerWarning:
-          b('showCautionDangerWarning', d.showCautionDangerWarning),
-      showTraTsa: b('showTraTsa', d.showTraTsa),
-      showParachuteAreas: b('showParachuteAreas', d.showParachuteAreas),
-      showAdiz: b('showAdiz', d.showAdiz),
-      showSuaOther: b('showSuaOther', d.showSuaOther),
-      worldwideAltitudes: b('worldwideAltitudes', d.worldwideAltitudes),
       showAirways: b('showAirways', d.showAirways),
       showLowAirways: b('showLowAirways', d.showLowAirways),
       showHighAirways: b('showHighAirways', d.showHighAirways),
-      showHelicopterAirways:
-          b('showHelicopterAirways', d.showHelicopterAirways),
-      showWaypoints: b('showWaypoints', d.showWaypoints),
-      showFixesRnav: b('showFixesRnav', d.showFixesRnav),
-      showVfrWaypoints: b('showVfrWaypoints', d.showVfrWaypoints),
-      showVfrHelicopterWaypoints:
-          b('showVfrHelicopterWaypoints', d.showVfrHelicopterWaypoints),
       showAtcBoundaries: b('showAtcBoundaries', d.showAtcBoundaries),
       showArtcc: b('showArtcc', d.showArtcc),
-      showAtcSectors: b('showAtcSectors', d.showAtcSectors),
-      showOrganizedTracks: b('showOrganizedTracks', d.showOrganizedTracks),
-      showGridMora: b('showGridMora', d.showGridMora),
     );
   }
 
@@ -320,93 +170,52 @@ class AeronauticalSettingsPanel extends StatelessWidget {
               child: ListView(
                 padding: EdgeInsets.zero,
                 children: [
-                  // ── MAP DISPLAY SETTINGS ──
-                  const _SectionHeader('MAP DISPLAY SETTINGS'),
-                  const _NavRow(label: 'Map Theme', value: 'Dark'),
-                  const _Divider(),
-                  const _NavRow(label: 'Terrain', value: 'Colored'),
-                  const _Divider(),
-                  const _NavRow(label: 'Cultural Elements', value: 'All'),
-                  const _Divider(),
-                  _ToggleRow(
-                    label: 'Place Labels',
-                    value: s.placeLabels,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(placeLabels: v)),
-                  ),
-                  const _SectionDivider(),
-
-                  // ── Info text ──
-                  const _InfoText(
-                    'Map display settings above apply across all aeronautical modes. '
-                    'The VFR settings below apply only to the VFR mode.',
-                  ),
-
-                  // ── VFR Settings header ──
-                  const _ModeHeader('VFR Settings'),
-
                   // ── AIRPORT SETTINGS ──
                   const _SectionHeader('AIRPORT SETTINGS'),
                   _ToggleRow(
-                    label: 'Heliports',
-                    value: s.showHeliports,
+                    label: 'Airports',
+                    value: s.showAirports,
                     onChanged: (v) =>
-                        _set((s) => s.copyWith(showHeliports: v)),
+                        _set((s) => s.copyWith(showAirports: v)),
                   ),
-                  const _Divider(),
-                  _ToggleRow(
-                    label: 'Private Airports',
-                    value: s.showPrivateAirports,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(showPrivateAirports: v)),
-                  ),
-                  const _Divider(),
-                  _ToggleRow(
-                    label: 'Seaplane Bases',
-                    value: s.showSeaplaneBases,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(showSeaplaneBases: v)),
-                  ),
-                  const _Divider(),
-                  _ToggleRow(
-                    label: 'Other Fields',
-                    value: s.showOtherFields,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(showOtherFields: v)),
-                  ),
-                  const _Divider(),
-                  const _NavRow(label: 'Min. Rwy Length', value: 'None'),
-                  const _InfoText(
-                    'Minimum runway length is based on the total length of the runway. '
-                    'Review runway details for displaced threshold & other information.',
-                  ),
+                  if (s.showAirports) ...[
+                    const _Divider(),
+                    _ToggleRow(
+                      label: 'Heliports',
+                      value: s.showHeliports,
+                      onChanged: (v) =>
+                          _set((s) => s.copyWith(showHeliports: v)),
+                      indent: true,
+                    ),
+                    const _Divider(),
+                    _ToggleRow(
+                      label: 'Private Airports',
+                      value: s.showPrivateAirports,
+                      onChanged: (v) =>
+                          _set((s) => s.copyWith(showPrivateAirports: v)),
+                      indent: true,
+                    ),
+                    const _Divider(),
+                    _ToggleRow(
+                      label: 'Seaplane Bases',
+                      value: s.showSeaplaneBases,
+                      onChanged: (v) =>
+                          _set((s) => s.copyWith(showSeaplaneBases: v)),
+                      indent: true,
+                    ),
+                    const _Divider(),
+                    _ToggleRow(
+                      label: 'Other Fields',
+                      value: s.showOtherFields,
+                      onChanged: (v) =>
+                          _set((s) => s.copyWith(showOtherFields: v)),
+                      indent: true,
+                    ),
+                  ],
                   const _SectionDivider(),
 
                   // ── AIRSPACE SETTINGS ──
                   const _SectionHeader('AIRSPACE SETTINGS'),
-                  _ToggleRow(
-                    label: 'Auto Highlight',
-                    value: s.autoHighlight,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(autoHighlight: v)),
-                  ),
-                  const _Divider(),
-                  const _NavRow(
-                      label: 'Hide Airspace Above (FT)', value: 'Show All'),
-                  const _Divider(),
-                  _ToggleRow(
-                    label: 'Activation by NOTAM',
-                    value: s.activationByNotam,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(activationByNotam: v)),
-                  ),
-                  const _InfoText(
-                    'Disabling Activation by NOTAM will hide airspaces that are only '
-                    'activated by NOTAM.',
-                  ),
-                  const _Divider(),
-
-                  // Controlled Airspace (master)
                   _ToggleRow(
                     label: 'Controlled Airspace',
                     value: s.showAirspaces,
@@ -416,104 +225,13 @@ class AeronauticalSettingsPanel extends StatelessWidget {
                   if (s.showAirspaces) ...[
                     const _Divider(),
                     _ToggleRow(
-                      label: 'TRSA',
-                      value: s.showTrsa,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showTrsa: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
                       label: 'Class E',
                       value: s.showClassE,
                       onChanged: (v) =>
                           _set((s) => s.copyWith(showClassE: v)),
                       indent: true,
                     ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Mode C',
-                      value: s.showModeC,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showModeC: v)),
-                      indent: true,
-                    ),
                   ],
-                  const _SectionDivider(),
-
-                  // Special Use Airspace (master)
-                  _ToggleRow(
-                    label: 'Special Use Airspace',
-                    value: s.showSua,
-                    onChanged: (v) => _set((s) => s.copyWith(showSua: v)),
-                  ),
-                  if (s.showSua) ...[
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Prohibited & Restricted',
-                      value: s.showProhibitedRestricted,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showProhibitedRestricted: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'MOA, Alert, & Training',
-                      value: s.showMoaAlertTraining,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showMoaAlertTraining: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Caution, Danger, & Warning',
-                      value: s.showCautionDangerWarning,
-                      onChanged: (v) => _set(
-                          (s) => s.copyWith(showCautionDangerWarning: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'TRA & TSA',
-                      value: s.showTraTsa,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showTraTsa: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Parachute Areas (USA)',
-                      value: s.showParachuteAreas,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showParachuteAreas: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'ADIZ',
-                      value: s.showAdiz,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showAdiz: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Other',
-                      value: s.showSuaOther,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showSuaOther: v)),
-                      indent: true,
-                    ),
-                  ],
-                  const _SectionDivider(),
-
-                  // Worldwide Altitudes
-                  _ToggleRow(
-                    label: 'Worldwide Altitudes',
-                    value: s.worldwideAltitudes,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(worldwideAltitudes: v)),
-                  ),
                   const _SectionDivider(),
 
                   // ── AIRWAY SETTINGS ──
@@ -541,50 +259,6 @@ class AeronauticalSettingsPanel extends StatelessWidget {
                           _set((s) => s.copyWith(showHighAirways: v)),
                       indent: true,
                     ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Helicopter',
-                      value: s.showHelicopterAirways,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showHelicopterAirways: v)),
-                      indent: true,
-                    ),
-                  ],
-                  const _SectionDivider(),
-
-                  // ── WAYPOINT SETTINGS ──
-                  const _SectionHeader('WAYPOINT SETTINGS'),
-                  _ToggleRow(
-                    label: 'Waypoints',
-                    value: s.showWaypoints,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(showWaypoints: v)),
-                  ),
-                  if (s.showWaypoints) ...[
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'Fixes & RNAV',
-                      value: s.showFixesRnav,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showFixesRnav: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'VFR Waypoints',
-                      value: s.showVfrWaypoints,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showVfrWaypoints: v)),
-                      indent: true,
-                    ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'VFR Helicopter Waypoints',
-                      value: s.showVfrHelicopterWaypoints,
-                      onChanged: (v) => _set(
-                          (s) => s.copyWith(showVfrHelicopterWaypoints: v)),
-                      indent: true,
-                    ),
                   ],
                   const _SectionDivider(),
 
@@ -594,7 +268,6 @@ class AeronauticalSettingsPanel extends StatelessWidget {
                     label: 'ATC Boundaries',
                     value: s.showAtcBoundaries,
                     onChanged: (v) {
-                      // When master is toggled, also sync ARTCC
                       if (v) {
                         _set((s) => s.copyWith(
                             showAtcBoundaries: true, showArtcc: true));
@@ -613,35 +286,7 @@ class AeronauticalSettingsPanel extends StatelessWidget {
                           _set((s) => s.copyWith(showArtcc: v)),
                       indent: true,
                     ),
-                    const _Divider(),
-                    _ToggleRow(
-                      label: 'ATC Sectors',
-                      value: s.showAtcSectors,
-                      onChanged: (v) =>
-                          _set((s) => s.copyWith(showAtcSectors: v)),
-                      indent: true,
-                    ),
                   ],
-                  const _SectionDivider(),
-
-                  // ── ORGANIZED TRACKS SETTINGS ──
-                  const _SectionHeader('ORGANIZED TRACKS SETTINGS'),
-                  _ToggleRow(
-                    label: 'Show Organized Tracks',
-                    value: s.showOrganizedTracks,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(showOrganizedTracks: v)),
-                  ),
-                  const _SectionDivider(),
-
-                  // ── GRID MORA/LSALT SETTINGS ──
-                  const _SectionHeader('GRID MORA/LSALT SETTINGS'),
-                  _ToggleRow(
-                    label: 'Grid MORA/LSALT (ft)',
-                    value: s.showGridMora,
-                    onChanged: (v) =>
-                        _set((s) => s.copyWith(showGridMora: v)),
-                  ),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -727,28 +372,6 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _ModeHeader extends StatelessWidget {
-  final String label;
-  const _ModeHeader(this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.accent.withValues(alpha: 0.85),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-    );
-  }
-}
-
 class _ToggleRow extends StatelessWidget {
   final String label;
   final bool value;
@@ -794,74 +417,6 @@ class _ToggleRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _NavRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _NavRow({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.accent,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.textMuted,
-                size: 20,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoText extends StatelessWidget {
-  final String text;
-  const _InfoText(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: AppColors.textMuted.withValues(alpha: 0.7),
-          fontStyle: FontStyle.italic,
-        ),
-        textAlign: TextAlign.center,
       ),
     );
   }

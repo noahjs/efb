@@ -3,7 +3,6 @@ import '../../../core/theme/app_theme.dart';
 
 class MapToolbar extends StatelessWidget {
   final VoidCallback onLayersTap;
-  final VoidCallback onSettingsTap;
   final VoidCallback? onFplTap;
   final bool isFplOpen;
   final TextEditingController? searchController;
@@ -16,7 +15,6 @@ class MapToolbar extends StatelessWidget {
   const MapToolbar({
     super.key,
     required this.onLayersTap,
-    required this.onSettingsTap,
     this.onFplTap,
     this.isFplOpen = false,
     this.searchController,
@@ -66,32 +64,7 @@ class MapToolbar extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 4),
-                _ToolbarButton(
-                  icon: Icons.settings,
-                  onTap: onSettingsTap,
-                  badgeColor: AppColors.error,
-                ),
-                const SizedBox(width: 4),
-                _ToolbarButton(
-                  icon: Icons.bar_chart,
-                  onTap: () {},
-                ),
                 const Spacer(),
-                _ToolbarButton(
-                  icon: Icons.public,
-                  onTap: () {},
-                ),
-                const SizedBox(width: 4),
-                _ToolbarButton(
-                  icon: Icons.star_border,
-                  onTap: () {},
-                ),
-                const SizedBox(width: 4),
-                _ToolbarButton(
-                  icon: Icons.my_location,
-                  onTap: () {},
-                ),
               ],
             ),
           ),
@@ -155,43 +128,24 @@ class MapToolbar extends StatelessWidget {
 class _ToolbarButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  final Color? badgeColor;
 
   const _ToolbarButton({
     required this.icon,
     required this.onTap,
-    this.badgeColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Icon(icon, color: AppColors.textPrimary, size: 22),
-            ),
-          ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Icon(icon, color: AppColors.textPrimary, size: 22),
         ),
-        if (badgeColor != null)
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: badgeColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }
