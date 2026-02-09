@@ -82,6 +82,58 @@ export class ImageryController {
     res.send(buffer);
   }
 
+  @Get('winds/:level')
+  async getWindsAloftChart(
+    @Param('level') level: string,
+    @Query('area') area: string,
+    @Query('forecastHour') forecastHour: string,
+    @Res() res: Response,
+  ) {
+    const effectiveArea = area || 'a';
+    const hour = parseInt(forecastHour, 10) || 6;
+    const buffer = await this.imageryService.getWindsAloftChart(
+      level,
+      effectiveArea,
+      hour,
+    );
+
+    if (!buffer) {
+      res.status(404).json({ error: 'Winds aloft chart not found' });
+      return;
+    }
+
+    res.set({
+      'Content-Type': 'image/gif',
+      'Cache-Control': 'public, max-age=3600',
+    });
+    res.send(buffer);
+  }
+
+  @Get('convective/:day')
+  async getConvectiveOutlook(
+    @Param('day') day: string,
+    @Query('type') type: string,
+    @Res() res: Response,
+  ) {
+    const dayNum = parseInt(day, 10) || 1;
+    const effectiveType = type || 'cat';
+    const buffer = await this.imageryService.getConvectiveOutlook(
+      dayNum,
+      effectiveType,
+    );
+
+    if (!buffer) {
+      res.status(404).json({ error: 'Convective outlook not found' });
+      return;
+    }
+
+    res.set({
+      'Content-Type': 'image/gif',
+      'Cache-Control': 'public, max-age=1800',
+    });
+    res.send(buffer);
+  }
+
   @Get('tfrs')
   async getTfrs() {
     return this.imageryService.getTfrs();

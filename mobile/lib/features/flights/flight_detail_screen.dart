@@ -15,8 +15,6 @@ import 'widgets/flight_route_section.dart';
 import 'widgets/flight_payload_section.dart';
 import 'widgets/flight_fuel_section.dart';
 import 'widgets/flight_weights_section.dart';
-import 'widgets/flight_services_section.dart';
-import 'widgets/flight_log_section.dart';
 import 'widgets/flight_actions_section.dart';
 import 'widgets/flight_filing_bar.dart';
 
@@ -210,11 +208,14 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                   flight: _flight,
                   onChanged: _saveField,
                 ),
-                const FlightWeightsSection(),
-                const FlightServicesSection(),
-                FlightLogSection(
+                FlightWeightsSection(
                   flight: _flight,
-                  onChanged: _saveField,
+                  aircraft: _flight.aircraftId != null
+                      ? ref
+                          .watch(aircraftDetailProvider(_flight.aircraftId!))
+                          .whenData((a) => a)
+                          .value
+                      : null,
                 ),
                 FlightActionsSection(
                   isNewFlight: _isNew,

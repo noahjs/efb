@@ -110,6 +110,15 @@ export class AircraftController {
     return this.aircraftService.setDefaultProfile(id, pid);
   }
 
+  @Post(':id/profiles/:pid/apply-template')
+  applyTemplate(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('pid', ParseIntPipe) pid: number,
+    @Body() body: { type: string },
+  ) {
+    return this.aircraftService.applyTemplate(id, pid, body.type);
+  }
+
   // --- Fuel Tanks ---
 
   @Get(':id/fuel-tanks')

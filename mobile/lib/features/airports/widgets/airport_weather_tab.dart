@@ -22,7 +22,7 @@ class AirportWeatherTab extends StatelessWidget {
               tabs: [
                 Tab(text: 'METAR'),
                 Tab(text: 'TAF'),
-                Tab(text: 'MOS'),
+                Tab(text: 'Ai-Fcst'),
                 Tab(text: 'Daily'),
                 Tab(text: 'Winds'),
               ],
@@ -37,7 +37,7 @@ class AirportWeatherTab extends StatelessWidget {
               children: [
                 _MetarView(airportId: airportId),
                 _TafView(airportId: airportId),
-                _PlaceholderView(label: 'MOS data coming soon'),
+                _PlaceholderView(label: 'Ai-Fcst data coming soon'),
                 _DailyForecastView(airportId: airportId),
                 _WindsAloftView(airportId: airportId),
               ],

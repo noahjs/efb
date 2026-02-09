@@ -70,6 +70,22 @@ export class CreateAircraftDto {
   glide_ratio?: number;
 
   @IsOptional()
+  @IsNumber()
+  empty_weight?: number;
+
+  @IsOptional()
+  @IsNumber()
+  max_takeoff_weight?: number;
+
+  @IsOptional()
+  @IsNumber()
+  max_landing_weight?: number;
+
+  @IsOptional()
+  @IsNumber()
+  fuel_weight_per_gallon?: number;
+
+  @IsOptional()
   @IsBoolean()
   is_default?: boolean;
 }

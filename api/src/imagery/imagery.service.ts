@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 export class ImageryService {
   private readonly logger = new Logger(ImageryService.name);
   private readonly AWC_BASE = 'https://aviationweather.gov';
+  private readonly SPC_BASE = 'https://www.spc.noaa.gov';
   private readonly TFR_BASE = 'https://tfr.faa.gov';
 
   // Simple in-memory cache: key -> { data, expiresAt }
@@ -13,6 +14,7 @@ export class ImageryService {
   private readonly GFA_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
   private readonly ADVISORY_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
   private readonly TFR_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+  private readonly WINDS_CACHE_TTL_MS = 60 * 60 * 1000; // 60 minutes
 
   constructor(private readonly http: HttpService) {}
 
@@ -219,6 +221,28 @@ export class ImageryService {
           ],
         },
         {
+          id: 'winds',
+          title: 'WINDS ALOFT',
+          products: [
+            {
+              id: 'winds-aloft',
+              name: 'Winds & Temperatures Aloft',
+              type: 'winds',
+            },
+          ],
+        },
+        {
+          id: 'convective',
+          title: 'CONVECTIVE OUTLOOKS',
+          products: [
+            {
+              id: 'convective-outlook',
+              name: 'Convective Outlook',
+              type: 'convective',
+            },
+          ],
+        },
+        {
           id: 'tfrs',
           title: 'TFRs',
           products: [
@@ -332,6 +356,76 @@ export class ImageryService {
     } catch (error) {
       this.logger.error(
         `Failed to fetch icing chart: ${param}/${level}/F${paddedHour}`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  async getWindsAloftChart(
+    level: string,
+    area: string,
+    forecastHour: number,
+  ): Promise<Buffer | null> {
+    const paddedHour = String(forecastHour).padStart(2, '0');
+    const cacheKey = `winds:${level}:${area}:${paddedHour}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    const url = `${this.AWC_BASE}/data/products/fax/F${paddedHour}_wind_${level}_${area}.gif`;
+
+    try {
+      const { data } = await firstValueFrom(
+        this.http.get(url, {
+          responseType: 'arraybuffer',
+        }),
+      );
+
+      const buffer = Buffer.from(data);
+      this.setCache(cacheKey, buffer, this.WINDS_CACHE_TTL_MS);
+      return buffer;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch winds aloft chart: ${level}/${area}/F${paddedHour}`,
+        error,
+      );
+      return null;
+    }
+  }
+
+  async getConvectiveOutlook(
+    day: number,
+    type: string,
+  ): Promise<Buffer | null> {
+    const cacheKey = `convective:${day}:${type}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    let filename: string;
+    if (type === 'cat') {
+      filename = `day${day}otlk.gif`;
+    } else {
+      // Probability products (torn, hail, wind) — use latest issuance
+      // Day 1 uses 1200 issuance, Day 2 uses 0600
+      const issuance = day === 1 ? '1200' : '0600';
+      filename = `day${day}probotlk_${issuance}_${type}.gif`;
+    }
+
+    const url = `${this.SPC_BASE}/products/outlook/${filename}`;
+
+    try {
+      const { data } = await firstValueFrom(
+        this.http.get(url, {
+          responseType: 'arraybuffer',
+        }),
+      );
+
+      const buffer = Buffer.from(data);
+      this.setCache(cacheKey, buffer, this.GFA_CACHE_TTL_MS);
+      return buffer;
+    } catch (error) {
+      this.logger.error(
+        `Failed to fetch convective outlook: day${day}/${type}`,
         error,
       );
       return null;

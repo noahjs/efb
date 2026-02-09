@@ -7,21 +7,12 @@ import '../../../core/theme/app_theme.dart';
 import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
 
 class PlatformRouteMapView extends StatefulWidget {
-  final String depId;
-  final double depLat;
-  final double depLng;
-  final String destId;
-  final double destLat;
-  final double destLng;
+  /// List of route points, each with: identifier, latitude, longitude, isEndpoint.
+  final List<Map<String, dynamic>> routePoints;
 
   const PlatformRouteMapView({
     super.key,
-    required this.depId,
-    required this.depLat,
-    required this.depLng,
-    required this.destId,
-    required this.destLat,
-    required this.destLng,
+    required this.routePoints,
   });
 
   @override
@@ -57,15 +48,16 @@ class _PlatformRouteMapViewState extends State<PlatformRouteMapView> {
   }
 
   Future<void> _addRouteAndMarkers(MapboxMap map) async {
-    final depLng = widget.depLng;
-    final depLat = widget.depLat;
-    final destLng = widget.destLng;
-    final destLat = widget.destLat;
+    final points = widget.routePoints;
+    if (points.length < 2) return;
 
-    // Route line
+    // Build the route line coordinates from all points
+    final coords = points
+        .map((p) => '[${p['longitude']},${p['latitude']}]')
+        .join(',');
+
     final lineGeoJson =
-        '{"type":"Feature","geometry":{"type":"LineString","coordinates":'
-        '[[$depLng,$depLat],[$destLng,$destLat]]}}';
+        '{"type":"Feature","geometry":{"type":"LineString","coordinates":[$coords]}}';
 
     try {
       await map.style.addSource(
@@ -82,74 +74,126 @@ class _PlatformRouteMapViewState extends State<PlatformRouteMapView> {
       debugPrint('FlightRouteMap: Failed to add route line: $e');
     }
 
-    // Airport markers
-    final features = [
-      (widget.depId, depLng, depLat),
-      (widget.destId, destLng, destLat),
-    ]
-        .map((a) =>
-            '{"type":"Feature","geometry":{"type":"Point","coordinates":'
-            '[${a.$2},${a.$3}]},"properties":{"id":"${a.$1}"}}')
-        .join(',');
+    // Airport/waypoint markers
+    final endpointFeatures = <String>[];
+    final waypointFeatures = <String>[];
 
-    final markersGeoJson =
-        '{"type":"FeatureCollection","features":[$features]}';
+    for (final p in points) {
+      final id = p['identifier'] as String;
+      final lng = p['longitude'] as double;
+      final lat = p['latitude'] as double;
+      final isEndpoint = p['isEndpoint'] as bool;
 
-    try {
-      await map.style.addSource(
-        GeoJsonSource(id: 'route-airports-source', data: markersGeoJson),
-      );
+      final feature =
+          '{"type":"Feature","geometry":{"type":"Point","coordinates":[$lng,$lat]},"properties":{"id":"$id"}}';
 
-      await map.style.addLayer(CircleLayer(
-        id: 'route-airports-circles',
-        sourceId: 'route-airports-source',
-        circleRadius: 5.0,
-        circleColor: Colors.white.toARGB32(),
-        circleStrokeWidth: 1.5,
-        circleStrokeColor: AppColors.routeMagenta.toARGB32(),
-      ));
+      if (isEndpoint) {
+        endpointFeatures.add(feature);
+      } else {
+        waypointFeatures.add(feature);
+      }
+    }
 
-      await map.style.addLayer(SymbolLayer(
-        id: 'route-airports-labels',
-        sourceId: 'route-airports-source',
-        textField: '{id}',
-        textSize: 11.0,
-        textColor: Colors.white.toARGB32(),
-        textHaloColor: Colors.black.toARGB32(),
-        textHaloWidth: 1.5,
-        textOffset: [0.0, -1.5],
-        textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
-      ));
-    } catch (e) {
-      debugPrint('FlightRouteMap: Failed to add airport markers: $e');
+    // Endpoint markers (departure/destination) — larger
+    if (endpointFeatures.isNotEmpty) {
+      try {
+        await map.style.addSource(
+          GeoJsonSource(
+            id: 'route-endpoints-source',
+            data:
+                '{"type":"FeatureCollection","features":[${endpointFeatures.join(',')}]}',
+          ),
+        );
+
+        await map.style.addLayer(CircleLayer(
+          id: 'route-endpoints-circles',
+          sourceId: 'route-endpoints-source',
+          circleRadius: 5.0,
+          circleColor: Colors.white.toARGB32(),
+          circleStrokeWidth: 1.5,
+          circleStrokeColor: AppColors.routeMagenta.toARGB32(),
+        ));
+
+        await map.style.addLayer(SymbolLayer(
+          id: 'route-endpoints-labels',
+          sourceId: 'route-endpoints-source',
+          textField: '{id}',
+          textSize: 11.0,
+          textColor: Colors.white.toARGB32(),
+          textHaloColor: Colors.black.toARGB32(),
+          textHaloWidth: 1.5,
+          textOffset: [0.0, -1.5],
+          textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+        ));
+      } catch (e) {
+        debugPrint('FlightRouteMap: Failed to add endpoint markers: $e');
+      }
+    }
+
+    // Intermediate waypoint markers — smaller
+    if (waypointFeatures.isNotEmpty) {
+      try {
+        await map.style.addSource(
+          GeoJsonSource(
+            id: 'route-waypoints-source',
+            data:
+                '{"type":"FeatureCollection","features":[${waypointFeatures.join(',')}]}',
+          ),
+        );
+
+        await map.style.addLayer(CircleLayer(
+          id: 'route-waypoints-circles',
+          sourceId: 'route-waypoints-source',
+          circleRadius: 3.0,
+          circleColor: Colors.white.toARGB32(),
+          circleStrokeWidth: 1.0,
+          circleStrokeColor: AppColors.routeMagenta.toARGB32(),
+        ));
+
+        await map.style.addLayer(SymbolLayer(
+          id: 'route-waypoints-labels',
+          sourceId: 'route-waypoints-source',
+          textField: '{id}',
+          textSize: 9.0,
+          textColor: Colors.white.toARGB32(),
+          textHaloColor: Colors.black.toARGB32(),
+          textHaloWidth: 1.0,
+          textOffset: [0.0, -1.3],
+          textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+        ));
+      } catch (e) {
+        debugPrint('FlightRouteMap: Failed to add waypoint markers: $e');
+      }
     }
   }
 
   Future<void> _fitCamera(MapboxMap map) async {
+    final points = widget.routePoints;
+    if (points.isEmpty) return;
+
+    double minLng = double.infinity, maxLng = -double.infinity;
+    double minLat = double.infinity, maxLat = -double.infinity;
+
+    for (final p in points) {
+      final lng = p['longitude'] as double;
+      final lat = p['latitude'] as double;
+      minLng = min(minLng, lng);
+      maxLng = max(maxLng, lng);
+      minLat = min(minLat, lat);
+      maxLat = max(maxLat, lat);
+    }
+
     try {
       final bounds = CoordinateBounds(
-        southwest: Point(
-          coordinates: Position(
-            min(widget.depLng, widget.destLng),
-            min(widget.depLat, widget.destLat),
-          ),
-        ),
-        northeast: Point(
-          coordinates: Position(
-            max(widget.depLng, widget.destLng),
-            max(widget.depLat, widget.destLat),
-          ),
-        ),
+        southwest: Point(coordinates: Position(minLng, minLat)),
+        northeast: Point(coordinates: Position(maxLng, maxLat)),
         infiniteBounds: false,
       );
 
       final camera = await map.cameraForCoordinateBounds(
         bounds,
         MbxEdgeInsets(top: 24, left: 24, bottom: 24, right: 24),
-        null, // bearing
-        null, // pitch
-        null, // maxZoom
-        null, // offset
+        null, null, null, null,
       );
 
       await map.setCamera(camera);
@@ -160,8 +204,20 @@ class _PlatformRouteMapViewState extends State<PlatformRouteMapView> {
 
   @override
   Widget build(BuildContext context) {
-    final centerLat = (widget.depLat + widget.destLat) / 2;
-    final centerLng = (widget.depLng + widget.destLng) / 2;
+    final points = widget.routePoints;
+    if (points.isEmpty) return const SizedBox.shrink();
+
+    // Center on midpoint of all route points
+    double sumLat = 0, sumLng = 0;
+    for (final p in points) {
+      sumLat += p['latitude'] as double;
+      sumLng += p['longitude'] as double;
+    }
+    final centerLat = sumLat / points.length;
+    final centerLng = sumLng / points.length;
+
+    // Build a stable key from all identifiers
+    final keyStr = points.map((p) => p['identifier']).join('-');
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -169,7 +225,7 @@ class _PlatformRouteMapViewState extends State<PlatformRouteMapView> {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: MapWidget(
-          key: ValueKey('route-map-${widget.depId}-${widget.destId}'),
+          key: ValueKey('route-map-$keyStr'),
           styleUri: MapboxStyles.SATELLITE_STREETS,
           cameraOptions: CameraOptions(
             center: Point(coordinates: Position(centerLng, centerLat)),

@@ -6,11 +6,15 @@ import '../../../core/theme/app_theme.dart';
 class PlatformPdfScreen extends StatefulWidget {
   final String title;
   final String pdfUrl;
+  final String? airportId;
+  final String? chartCode;
 
   const PlatformPdfScreen({
     super.key,
     required this.title,
     required this.pdfUrl,
+    this.airportId,
+    this.chartCode,
   });
 
   @override

@@ -617,6 +617,7 @@ export class WeatherService {
           icaoId: n.icaoId ?? icao,
           facilityDesignator: n.facilityDesignator ?? '',
           text: n.traditionalMessageFrom4thWord ?? n.traditionalMessage ?? '',
+          fullText: n.traditionalMessage ?? '',
           effectiveStart: this.parseNotamDate(n.startDate),
           effectiveEnd: this.parseNotamDate(n.endDate),
           classification: n.featureName ?? '',

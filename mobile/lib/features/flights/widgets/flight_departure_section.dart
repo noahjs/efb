@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../models/flight.dart';
+import '../../../services/aircraft_providers.dart';
 import 'flight_section_header.dart';
 import 'flight_field_row.dart';
 import 'flight_edit_dialogs.dart';
 
-class FlightDepartureSection extends StatelessWidget {
+class FlightDepartureSection extends ConsumerWidget {
   final Flight flight;
   final ValueChanged<Flight> onChanged;
 
@@ -16,7 +20,7 @@ class FlightDepartureSection extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     String etdDisplay = 'Set ETD';
     if (flight.etd != null) {
       try {
@@ -25,6 +29,23 @@ class FlightDepartureSection extends StatelessWidget {
       } catch (_) {
         etdDisplay = flight.etd!;
       }
+    }
+
+    // Check if performance data is available for takeoff/landing buttons
+    bool hasTakeoffData = false;
+    bool hasLandingData = false;
+    if (flight.id != null && flight.aircraftId != null) {
+      final aircraftAsync =
+          ref.watch(aircraftDetailProvider(flight.aircraftId!));
+      aircraftAsync.whenData((aircraft) {
+        if (aircraft != null) {
+          final profile = aircraft.defaultProfile;
+          if (profile != null) {
+            hasTakeoffData = profile.takeoffData != null;
+            hasLandingData = profile.landingData != null;
+          }
+        }
+      });
     }
 
     return Column(
@@ -51,10 +72,13 @@ class FlightDepartureSection extends StatelessWidget {
             }
           },
         ),
-        FlightFieldRow(
+        _DepartureRow(
           label: 'Departure',
-          value: flight.departureIdentifier ?? 'Select',
-          showChevron: true,
+          airportId: flight.departureIdentifier,
+          showTakeoff: hasTakeoffData,
+          onTakeoff: flight.id != null
+              ? () => context.push('/flights/${flight.id}/takeoff')
+              : null,
           onTap: () async {
             final result = await showTextEditSheet(
               context,
@@ -68,10 +92,13 @@ class FlightDepartureSection extends StatelessWidget {
             }
           },
         ),
-        FlightFieldRow(
+        _DepartureRow(
           label: 'Destination',
-          value: flight.destinationIdentifier ?? 'Select',
-          showChevron: true,
+          airportId: flight.destinationIdentifier,
+          showLanding: hasLandingData,
+          onLanding: flight.id != null
+              ? () => context.push('/flights/${flight.id}/landing')
+              : null,
           onTap: () async {
             final result = await showTextEditSheet(
               context,
@@ -102,6 +129,101 @@ class FlightDepartureSection extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+class _DepartureRow extends StatelessWidget {
+  final String label;
+  final String? airportId;
+  final bool showTakeoff;
+  final bool showLanding;
+  final VoidCallback? onTakeoff;
+  final VoidCallback? onLanding;
+  final VoidCallback? onTap;
+
+  const _DepartureRow({
+    required this.label,
+    this.airportId,
+    this.showTakeoff = false,
+    this.showLanding = false,
+    this.onTakeoff,
+    this.onLanding,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppColors.divider, width: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (showTakeoff)
+              _ActionChip(label: 'Takeoff', onTap: onTakeoff),
+            if (showLanding)
+              _ActionChip(label: 'Landing', onTap: onLanding),
+            const Spacer(),
+            Text(
+              airportId ?? 'Select',
+              style: TextStyle(
+                fontSize: 14,
+                color:
+                    onTap != null ? AppColors.accent : AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right,
+                size: 18, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  final String label;
+  final VoidCallback? onTap;
+
+  const _ActionChip({required this.label, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.accent, width: 1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.accent,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

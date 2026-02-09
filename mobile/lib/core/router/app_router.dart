@@ -6,6 +6,9 @@ import '../../features/airports/screens/airports_screen.dart';
 import '../../features/airports/screens/airport_detail_screen.dart';
 import '../../features/flights/flights_screen.dart';
 import '../../features/flights/flight_detail_screen.dart';
+import '../../features/flights/told_screen.dart';
+import '../../features/flights/told_card_screen.dart';
+import '../../services/told_providers.dart';
 import '../../features/scratchpads/scratchpads_screen.dart';
 import '../../features/scratchpads/scratchpad_editor_screen.dart';
 import '../../features/aircraft/aircraft_screen.dart';
@@ -19,9 +22,11 @@ import '../../features/imagery/imagery_screen.dart';
 import '../../features/imagery/widgets/gfa_viewer.dart';
 import '../../features/imagery/widgets/advisory_viewer.dart';
 import '../../features/imagery/widgets/pirep_viewer.dart';
+import '../../features/imagery/widgets/convective_viewer.dart';
 import '../../features/imagery/widgets/icing_viewer.dart';
 import '../../features/imagery/widgets/prog_viewer.dart';
 import '../../features/imagery/widgets/tfr_viewer.dart';
+import '../../features/imagery/widgets/winds_aloft_viewer.dart';
 import '../../features/logbook/logbook_screen.dart';
 import '../../features/logbook/logbook_entry_screen.dart';
 import '../../features/logbook/logbook_experience_report_screen.dart';
@@ -83,6 +88,39 @@ final appRouter = GoRouter(
                 final id = int.parse(state.pathParameters['id']!);
                 return FlightDetailScreen(flightId: id);
               },
+              routes: [
+                GoRoute(
+                  path: 'takeoff',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final id = int.parse(state.pathParameters['id']!);
+                    return ToldScreen(
+                        flightId: id, mode: ToldMode.takeoff);
+                  },
+                ),
+                GoRoute(
+                  path: 'landing',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final id = int.parse(state.pathParameters['id']!);
+                    return ToldScreen(
+                        flightId: id, mode: ToldMode.landing);
+                  },
+                ),
+                GoRoute(
+                  path: 'told',
+                  parentNavigatorKey: _rootNavigatorKey,
+                  builder: (context, state) {
+                    final id = int.parse(state.pathParameters['id']!);
+                    final modeStr =
+                        state.uri.queryParameters['mode'] ?? 'takeoff';
+                    final mode = modeStr == 'landing'
+                        ? ToldMode.landing
+                        : ToldMode.takeoff;
+                    return ToldCardScreen(flightId: id, mode: mode);
+                  },
+                ),
+              ],
             ),
           ],
         ),
@@ -230,6 +268,11 @@ final appRouter = GoRouter(
               },
             ),
             GoRoute(
+              path: 'convective',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const ConvectiveViewer(),
+            ),
+            GoRoute(
               path: 'icing',
               parentNavigatorKey: _rootNavigatorKey,
               builder: (context, state) {
@@ -239,6 +282,11 @@ final appRouter = GoRouter(
                     state.uri.queryParameters['name'] ?? 'Icing';
                 return IcingViewer(icingParam: param, name: name);
               },
+            ),
+            GoRoute(
+              path: 'winds',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const WindsAloftViewer(),
             ),
             GoRoute(
               path: 'pireps',

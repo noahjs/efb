@@ -65,6 +65,7 @@ class FlightRouteSection extends StatelessWidget {
         FlightRouteMap(
           departureIdentifier: flight.departureIdentifier,
           destinationIdentifier: flight.destinationIdentifier,
+          routeString: flight.routeString,
         ),
         FlightFieldRow(
           label: 'Route',

@@ -12,6 +12,10 @@ import { UpdatePerformanceProfileDto } from './dto/update-performance-profile.dt
 import { CreateFuelTankDto } from './dto/create-fuel-tank.dto';
 import { UpdateFuelTankDto } from './dto/update-fuel-tank.dto';
 import { UpdateEquipmentDto } from './dto/update-equipment.dto';
+import {
+  TBM960_TAKEOFF_DATA,
+  TBM960_LANDING_DATA,
+} from './seed/tbm960-performance';
 
 @Injectable()
 export class AircraftService {
@@ -149,6 +153,36 @@ export class AircraftService {
     if (!profile)
       throw new NotFoundException(`Profile #${profileId} not found`);
     return profile;
+  }
+
+  async applyTemplate(
+    aircraftId: number,
+    profileId: number,
+    templateType: string,
+  ): Promise<PerformanceProfile> {
+    const profile = await this.profileRepo.findOne({
+      where: { id: profileId, aircraft_id: aircraftId },
+    });
+    if (!profile)
+      throw new NotFoundException(`Profile #${profileId} not found`);
+
+    const templates: Record<
+      string,
+      { takeoff: object; landing: object }
+    > = {
+      tbm960: {
+        takeoff: TBM960_TAKEOFF_DATA,
+        landing: TBM960_LANDING_DATA,
+      },
+    };
+
+    const tmpl = templates[templateType];
+    if (!tmpl)
+      throw new NotFoundException(`Template "${templateType}" not found`);
+
+    profile.takeoff_data = JSON.stringify(tmpl.takeoff);
+    profile.landing_data = JSON.stringify(tmpl.landing);
+    return this.profileRepo.save(profile);
   }
 
   // --- Fuel Tanks ---

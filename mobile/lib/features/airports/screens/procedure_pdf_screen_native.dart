@@ -1,30 +1,38 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/notam_matcher.dart';
+import '../../../services/airport_providers.dart';
 
-class PlatformPdfScreen extends StatefulWidget {
+class PlatformPdfScreen extends ConsumerStatefulWidget {
   final String title;
   final String pdfUrl;
+  final String? airportId;
+  final String? chartCode;
 
   const PlatformPdfScreen({
     super.key,
     required this.title,
     required this.pdfUrl,
+    this.airportId,
+    this.chartCode,
   });
 
   @override
-  State<PlatformPdfScreen> createState() => _PlatformPdfScreenState();
+  ConsumerState<PlatformPdfScreen> createState() => _PlatformPdfScreenState();
 }
 
-class _PlatformPdfScreenState extends State<PlatformPdfScreen> {
+class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
   String? _localPath;
   bool _loading = true;
   String? _error;
   int _currentPage = 0;
   int _totalPages = 0;
+  bool _bannerExpanded = false;
 
   @override
   void initState() {
@@ -62,6 +70,19 @@ class _PlatformPdfScreenState extends State<PlatformPdfScreen> {
 
   @override
   Widget build(BuildContext context) {
+    List<Map<String, dynamic>> matchedNotams = [];
+    if (widget.airportId != null && widget.chartCode != null) {
+      final notamsData = ref.watch(notamsProvider(widget.airportId!));
+      final data = notamsData.whenOrNull(data: (d) => d);
+      if (data != null && data['notams'] != null) {
+        matchedNotams = NotamProcedureMatcher.match(
+          chartName: widget.title,
+          chartCode: widget.chartCode!,
+          notams: data['notams'] as List<dynamic>,
+        );
+      }
+    }
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -86,7 +107,18 @@ class _PlatformPdfScreenState extends State<PlatformPdfScreen> {
             ),
         ],
       ),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          if (matchedNotams.isNotEmpty)
+            _NotamBanner(
+              notams: matchedNotams,
+              expanded: _bannerExpanded,
+              onToggle: () =>
+                  setState(() => _bannerExpanded = !_bannerExpanded),
+            ),
+          Expanded(child: _buildBody()),
+        ],
+      ),
     );
   }
 
@@ -162,6 +194,110 @@ class _PlatformPdfScreenState extends State<PlatformPdfScreen> {
           _error = 'PDF render error: $error';
         });
       },
+    );
+  }
+}
+
+class _NotamBanner extends StatelessWidget {
+  final List<Map<String, dynamic>> notams;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  const _NotamBanner({
+    required this.notams,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onToggle,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 200),
+        alignment: Alignment.topCenter,
+        child: Container(
+          width: double.infinity,
+          color: AppColors.error.withValues(alpha: 0.15),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 16, color: AppColors.error),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${notams.length} NOTAM${notams.length == 1 ? '' : 's'} affecting this procedure',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.error,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: AppColors.error,
+                  ),
+                ],
+              ),
+              if (expanded) ...[
+                const SizedBox(height: 8),
+                for (int i = 0; i < notams.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 6),
+                  _NotamSummary(notam: notams[i]),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotamSummary extends StatelessWidget {
+  final Map<String, dynamic> notam;
+
+  const _NotamSummary({required this.notam});
+
+  @override
+  Widget build(BuildContext context) {
+    final id = notam['id'] as String? ?? '';
+    final text = notam['text'] as String? ?? '';
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NOTAM $id',
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            text,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 11,
+              color: AppColors.textPrimary,
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

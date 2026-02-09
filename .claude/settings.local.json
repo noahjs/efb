@@ -32,7 +32,8 @@
       "WebFetch(domain:registry.faa.gov)",
       "WebFetch(domain:doc8643.com)",
       "WebFetch(domain:www.1800wxbrief.com)",
-      "WebFetch(domain:ais-faa.opendata.arcgis.com)"
+      "WebFetch(domain:ais-faa.opendata.arcgis.com)",
+      "Bash(npx jest:*)"
     ]
   }
 }

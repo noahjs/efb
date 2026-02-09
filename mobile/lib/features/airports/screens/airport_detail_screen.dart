@@ -11,6 +11,9 @@ import '../widgets/airport_weather_tab.dart';
 import '../widgets/airport_runway_tab.dart';
 import '../widgets/airport_procedure_tab.dart';
 import '../widgets/airport_notam_tab.dart';
+import '../../../services/procedure_providers.dart';
+import 'airport_3d_view_screen.dart';
+import 'procedure_pdf_screen.dart';
 
 class AirportDetailScreen extends ConsumerWidget {
   final String airportId;
@@ -99,14 +102,14 @@ class AirportDetailScreen extends ConsumerWidget {
   }
 }
 
-class _AirportHeader extends StatelessWidget {
+class _AirportHeader extends ConsumerWidget {
   final String airportId;
   final Map<String, dynamic>? airport;
 
   const _AirportHeader({required this.airportId, required this.airport});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final name = airport?['name'] ?? airportId;
     final city = airport?['city'] ?? '';
     final state = airport?['state'] ?? '';
@@ -217,9 +220,41 @@ class _AirportHeader extends StatelessWidget {
         // Quick action buttons
         Row(
           children: [
-            _QuickAction(label: '3D View', onTap: () {}),
+            _QuickAction(
+              label: '3D View',
+              onTap: () {
+                if (airport != null) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => Airport3dViewScreen(airport: airport!),
+                    ),
+                  );
+                }
+              },
+            ),
             const SizedBox(width: 8),
-            _QuickAction(label: 'Taxiways', onTap: () {}),
+            _QuickAction(
+              label: 'Taxiways',
+              onTap: () {
+                final grouped = ref.read(airportProceduresProvider(airportId)).whenOrNull(data: (d) => d);
+                final apd = grouped?['APD'];
+                if (apd != null && apd.isNotEmpty) {
+                  final diagram = apd.first;
+                  final client = ref.read(apiClientProvider);
+                  final pdfUrl = client.getProcedurePdfUrl(airportId, diagram.id);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProcedurePdfScreen(
+                        title: diagram.chartName,
+                        pdfUrl: pdfUrl,
+                        airportId: airportId,
+                        chartCode: 'APD',
+                      ),
+                    ),
+                  );
+                }
+              },
+            ),
             const SizedBox(width: 8),
             _QuickAction(label: 'FBOs', onTap: () {}),
             const SizedBox(width: 8),

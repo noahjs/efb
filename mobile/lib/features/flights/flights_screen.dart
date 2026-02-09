@@ -22,16 +22,6 @@ class _FlightsScreenState extends ConsumerState<FlightsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Center(
-            child: TextButton(
-              onPressed: () {},
-              child: const Text('Edit',
-                  style: TextStyle(color: AppColors.accent)),
-            ),
-          ),
-        ),
         title: const Text('Flights'),
         centerTitle: true,
         actions: [

@@ -53,6 +53,12 @@ export class PerformanceProfile {
   @Column({ type: 'float', nullable: true })
   descent_fuel_flow: number;
 
+  @Column({ type: 'text', nullable: true })
+  takeoff_data: string;
+
+  @Column({ type: 'text', nullable: true })
+  landing_data: string;
+
   @CreateDateColumn()
   created_at: Date;
 

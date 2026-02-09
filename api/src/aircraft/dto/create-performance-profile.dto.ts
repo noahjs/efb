@@ -39,4 +39,12 @@ export class CreatePerformanceProfileDto {
   @IsOptional()
   @IsNumber()
   descent_fuel_flow?: number;
+
+  @IsOptional()
+  @IsString()
+  takeoff_data?: string;
+
+  @IsOptional()
+  @IsString()
+  landing_data?: string;
 }

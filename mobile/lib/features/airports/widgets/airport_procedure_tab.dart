@@ -157,6 +157,8 @@ class _ProcedureRow extends ConsumerWidget {
             builder: (_) => ProcedurePdfScreen(
               title: procedure.chartName,
               pdfUrl: pdfUrl,
+              airportId: airportId,
+              chartCode: procedure.chartCode,
             ),
           ),
         );

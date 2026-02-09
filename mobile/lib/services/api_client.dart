@@ -580,6 +580,34 @@ class ApiClient {
     }
   }
 
+  Future<Uint8List?> getConvectiveOutlook(int day,
+      {String type = 'cat'}) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/convective/$day',
+        queryParameters: {'type': type},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> getWindsAloftChart(String level,
+      {String area = 'a', int forecastHour = 6}) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/winds/$level',
+        queryParameters: {'area': area, 'forecastHour': forecastHour},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Uint8List?> getIcingChart(String param,
       {String level = 'max', int forecastHour = 0}) async {
     try {

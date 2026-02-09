@@ -5,15 +5,24 @@ import 'procedure_pdf_screen_native.dart' if (dart.library.html) 'procedure_pdf_
 class ProcedurePdfScreen extends StatelessWidget {
   final String title;
   final String pdfUrl;
+  final String? airportId;
+  final String? chartCode;
 
   const ProcedurePdfScreen({
     super.key,
     required this.title,
     required this.pdfUrl,
+    this.airportId,
+    this.chartCode,
   });
 
   @override
   Widget build(BuildContext context) {
-    return platform_pdf.PlatformPdfScreen(title: title, pdfUrl: pdfUrl);
+    return platform_pdf.PlatformPdfScreen(
+      title: title,
+      pdfUrl: pdfUrl,
+      airportId: airportId,
+      chartCode: chartCode,
+    );
   }
 }

@@ -78,6 +78,70 @@ final progChartProvider =
   );
 });
 
+/// Parameters for a Convective Outlook image request.
+class ConvectiveOutlookParams {
+  final int day;
+  final String type;
+
+  const ConvectiveOutlookParams({
+    this.day = 1,
+    this.type = 'cat',
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConvectiveOutlookParams &&
+          day == other.day &&
+          type == other.type;
+
+  @override
+  int get hashCode => day.hashCode ^ type.hashCode;
+}
+
+/// Fetches a Convective Outlook image as raw bytes.
+final convectiveOutlookProvider = FutureProvider.family<Uint8List?,
+    ConvectiveOutlookParams>((ref, params) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getConvectiveOutlook(params.day, type: params.type);
+});
+
+/// Parameters for a Winds Aloft Chart image request.
+class WindsAloftChartParams {
+  final String level;
+  final String area;
+  final int forecastHour;
+
+  const WindsAloftChartParams({
+    required this.level,
+    this.area = 'a',
+    this.forecastHour = 6,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WindsAloftChartParams &&
+          level == other.level &&
+          area == other.area &&
+          forecastHour == other.forecastHour;
+
+  @override
+  int get hashCode =>
+      level.hashCode ^ area.hashCode ^ forecastHour.hashCode;
+}
+
+/// Fetches a Winds Aloft Chart image as raw bytes.
+final windsAloftChartProvider = FutureProvider.family<Uint8List?,
+    WindsAloftChartParams>((ref, params) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getWindsAloftChart(
+    params.level,
+    area: params.area,
+    forecastHour: params.forecastHour,
+  );
+});
+
 /// Parameters for an Icing Chart image request.
 class IcingChartParams {
   final String icingParam;

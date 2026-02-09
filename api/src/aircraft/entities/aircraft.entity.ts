@@ -71,6 +71,18 @@ export class Aircraft {
   @Column({ type: 'float', nullable: true })
   glide_ratio: number;
 
+  @Column({ type: 'float', nullable: true })
+  empty_weight: number;
+
+  @Column({ type: 'float', nullable: true })
+  max_takeoff_weight: number;
+
+  @Column({ type: 'float', nullable: true })
+  max_landing_weight: number;
+
+  @Column({ type: 'float', nullable: true })
+  fuel_weight_per_gallon: number;
+
   @Column({ type: 'boolean', default: false })
   is_default: boolean;
 

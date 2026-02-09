@@ -130,78 +130,199 @@ class _NotamCard extends StatelessWidget {
 
     final effectiveRange = _formatEffective(effectiveStart, effectiveEnd);
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceLight,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.divider, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (type.isNotEmpty)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _typeColor(type).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
+    return GestureDetector(
+      onTap: () => _showFullNotam(context),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceLight,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.divider, width: 0.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (type.isNotEmpty)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _typeColor(type).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      type,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _typeColor(type),
+                      ),
+                    ),
                   ),
+                if (type.isNotEmpty) const SizedBox(width: 8),
+                Expanded(
                   child: Text(
-                    type,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _typeColor(type),
+                    'NOTAM $id',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ),
-              if (type.isNotEmpty) const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'NOTAM $id',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
+                if (classification.isNotEmpty)
+                  Text(
+                    classification,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textMuted,
+                    ),
                   ),
+              ],
+            ),
+            if (effectiveRange.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                effectiveRange,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
                 ),
               ),
-              if (classification.isNotEmpty)
-                Text(
-                  classification,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textMuted,
-                  ),
-                ),
             ],
-          ),
-          if (effectiveRange.isNotEmpty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
-              effectiveRange,
+              text,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textMuted,
+                fontFamily: 'monospace',
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                height: 1.4,
               ),
             ),
           ],
-          const SizedBox(height: 8),
-          Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 13,
-              color: AppColors.textPrimary,
-              height: 1.4,
+        ),
+      ),
+    );
+  }
+
+  void _showFullNotam(BuildContext context) {
+    final id = notam['id'] as String? ?? '';
+    final type = notam['type'] as String? ?? '';
+    final fullText = notam['fullText'] as String? ?? notam['text'] as String? ?? '';
+    final classification = notam['classification'] as String? ?? '';
+    final effectiveStart = notam['effectiveStart'] as String?;
+    final effectiveEnd = notam['effectiveEnd'] as String?;
+    final effectiveRange = _formatEffective(effectiveStart, effectiveEnd);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Handle bar
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 8),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
             ),
-          ),
-        ],
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  if (type.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _typeColor(type).withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        type,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _typeColor(type),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    'NOTAM $id',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (classification.isNotEmpty)
+                    Text(
+                      classification,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (effectiveRange.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    effectiveRange,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+            const Divider(color: AppColors.divider, height: 16),
+            // Full text
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+                child: SelectableText(
+                  fullText,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

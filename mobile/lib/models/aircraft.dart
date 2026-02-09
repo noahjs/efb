@@ -1,3 +1,17 @@
+import 'dart:convert';
+
+Map<String, dynamic>? _parseJsonField(dynamic val) {
+  if (val is Map<String, dynamic>) return val;
+  if (val is String && val.isNotEmpty) {
+    try {
+      return Map<String, dynamic>.from(jsonDecode(val));
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
+
 class PerformanceProfile {
   final int? id;
   final int? aircraftId;
@@ -11,6 +25,8 @@ class PerformanceProfile {
   final double? descentRate;
   final double? descentSpeed;
   final double? descentFuelFlow;
+  final Map<String, dynamic>? takeoffData;
+  final Map<String, dynamic>? landingData;
   final String? createdAt;
   final String? updatedAt;
 
@@ -27,6 +43,8 @@ class PerformanceProfile {
     this.descentRate,
     this.descentSpeed,
     this.descentFuelFlow,
+    this.takeoffData,
+    this.landingData,
     this.createdAt,
     this.updatedAt,
   });
@@ -45,6 +63,8 @@ class PerformanceProfile {
       descentRate: (json['descent_rate'] as num?)?.toDouble(),
       descentSpeed: (json['descent_speed'] as num?)?.toDouble(),
       descentFuelFlow: (json['descent_fuel_flow'] as num?)?.toDouble(),
+      takeoffData: _parseJsonField(json['takeoff_data']),
+      landingData: _parseJsonField(json['landing_data']),
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
     );
@@ -63,6 +83,8 @@ class PerformanceProfile {
       'descent_rate': descentRate,
       'descent_speed': descentSpeed,
       'descent_fuel_flow': descentFuelFlow,
+      if (takeoffData != null) 'takeoff_data': jsonEncode(takeoffData),
+      if (landingData != null) 'landing_data': jsonEncode(landingData),
     };
   }
 
@@ -79,6 +101,8 @@ class PerformanceProfile {
     double? descentRate,
     double? descentSpeed,
     double? descentFuelFlow,
+    Map<String, dynamic>? takeoffData,
+    Map<String, dynamic>? landingData,
   }) {
     return PerformanceProfile(
       id: id ?? this.id,
@@ -93,6 +117,8 @@ class PerformanceProfile {
       descentRate: descentRate ?? this.descentRate,
       descentSpeed: descentSpeed ?? this.descentSpeed,
       descentFuelFlow: descentFuelFlow ?? this.descentFuelFlow,
+      takeoffData: takeoffData ?? this.takeoffData,
+      landingData: landingData ?? this.landingData,
     );
   }
 }
@@ -233,6 +259,10 @@ class Aircraft {
   final double? totalUsableFuel;
   final double? bestGlideSpeed;
   final double? glideRatio;
+  final double? emptyWeight;
+  final double? maxTakeoffWeight;
+  final double? maxLandingWeight;
+  final double? fuelWeightPerGallon;
   final bool isDefault;
   final String? createdAt;
   final String? updatedAt;
@@ -257,6 +287,10 @@ class Aircraft {
     this.totalUsableFuel,
     this.bestGlideSpeed,
     this.glideRatio,
+    this.emptyWeight,
+    this.maxTakeoffWeight,
+    this.maxLandingWeight,
+    this.fuelWeightPerGallon,
     this.isDefault = false,
     this.createdAt,
     this.updatedAt,
@@ -295,6 +329,11 @@ class Aircraft {
       totalUsableFuel: (json['total_usable_fuel'] as num?)?.toDouble(),
       bestGlideSpeed: (json['best_glide_speed'] as num?)?.toDouble(),
       glideRatio: (json['glide_ratio'] as num?)?.toDouble(),
+      emptyWeight: (json['empty_weight'] as num?)?.toDouble(),
+      maxTakeoffWeight: (json['max_takeoff_weight'] as num?)?.toDouble(),
+      maxLandingWeight: (json['max_landing_weight'] as num?)?.toDouble(),
+      fuelWeightPerGallon:
+          (json['fuel_weight_per_gallon'] as num?)?.toDouble(),
       isDefault: (json['is_default'] as bool?) ?? false,
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
@@ -330,6 +369,10 @@ class Aircraft {
       'total_usable_fuel': totalUsableFuel,
       'best_glide_speed': bestGlideSpeed,
       'glide_ratio': glideRatio,
+      'empty_weight': emptyWeight,
+      'max_takeoff_weight': maxTakeoffWeight,
+      'max_landing_weight': maxLandingWeight,
+      'fuel_weight_per_gallon': fuelWeightPerGallon,
       'is_default': isDefault,
     };
   }
@@ -351,6 +394,10 @@ class Aircraft {
     double? totalUsableFuel,
     double? bestGlideSpeed,
     double? glideRatio,
+    double? emptyWeight,
+    double? maxTakeoffWeight,
+    double? maxLandingWeight,
+    double? fuelWeightPerGallon,
     bool? isDefault,
     List<PerformanceProfile>? performanceProfiles,
     List<FuelTank>? fuelTanks,
@@ -373,6 +420,10 @@ class Aircraft {
       totalUsableFuel: totalUsableFuel ?? this.totalUsableFuel,
       bestGlideSpeed: bestGlideSpeed ?? this.bestGlideSpeed,
       glideRatio: glideRatio ?? this.glideRatio,
+      emptyWeight: emptyWeight ?? this.emptyWeight,
+      maxTakeoffWeight: maxTakeoffWeight ?? this.maxTakeoffWeight,
+      maxLandingWeight: maxLandingWeight ?? this.maxLandingWeight,
+      fuelWeightPerGallon: fuelWeightPerGallon ?? this.fuelWeightPerGallon,
       isDefault: isDefault ?? this.isDefault,
       performanceProfiles: performanceProfiles ?? this.performanceProfiles,
       fuelTanks: fuelTanks ?? this.fuelTanks,

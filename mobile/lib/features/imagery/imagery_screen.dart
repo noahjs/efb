@@ -136,6 +136,10 @@ class ImageryScreen extends ConsumerWidget {
         return Icons.map_outlined;
       case 'icing':
         return Icons.ac_unit;
+      case 'winds':
+        return Icons.air;
+      case 'convective':
+        return Icons.thunderstorm_outlined;
       case 'tfr':
         return Icons.warning_amber_outlined;
       default:
@@ -157,10 +161,14 @@ class ImageryScreen extends ConsumerWidget {
       final progType = params['progType'] as String? ?? 'low';
       final name = product['name'] as String? ?? 'Prog Chart';
       context.push('/imagery/prog?type=$progType&name=$name');
+    } else if (type == 'convective') {
+      context.push('/imagery/convective');
     } else if (type == 'icing' && params != null) {
       final icingParam = params['icingParam'] as String? ?? 'prob';
       final name = product['name'] as String? ?? 'Icing';
       context.push('/imagery/icing?param=$icingParam&name=$name');
+    } else if (type == 'winds') {
+      context.push('/imagery/winds');
     } else if (type == 'tfr') {
       context.push('/imagery/tfrs');
     } else if (type == 'geojson') {
