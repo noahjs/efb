@@ -162,6 +162,18 @@ Flutter app using:
 - **NWS** — Point forecasts ([api.weather.gov](https://api.weather.gov))
 - **FAA d-TPP** — Terminal procedures ([aeronav.faa.gov](https://aeronav.faa.gov))
 
+## TODO
+
+- GeoRef PDFs
+  - Not loading on map page
+  - Need to show GPS when viewing PDF plate
+- Add layers from weather to the Maps view
+- Add a button to send a Flight to the Map
+- Settings on Map page
+- Nav/waypoints on Map page
+- Turbulence in Imagery (see readme)
+- Make a list of all of our data sources and the recency for Admin page
+
 ## License
 
 UNLICENSED - Private project.
