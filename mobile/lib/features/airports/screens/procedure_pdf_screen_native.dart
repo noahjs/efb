@@ -32,7 +32,6 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
   String? _error;
   int _currentPage = 0;
   int _totalPages = 0;
-  bool _bannerExpanded = false;
 
   @override
   void initState() {
@@ -112,12 +111,133 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
           if (matchedNotams.isNotEmpty)
             _NotamBanner(
               notams: matchedNotams,
-              expanded: _bannerExpanded,
-              onToggle: () =>
-                  setState(() => _bannerExpanded = !_bannerExpanded),
+              onTap: () => _showNotamSheet(context, matchedNotams),
             ),
           Expanded(child: _buildBody()),
         ],
+      ),
+    );
+  }
+
+  void _showNotamSheet(
+      BuildContext context, List<Map<String, dynamic>> notams) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.25,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 8),
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 18, color: AppColors.error),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${notams.length} NOTAM${notams.length == 1 ? '' : 's'} affecting this procedure',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: AppColors.divider, height: 1),
+            Expanded(
+              child: ListView.separated(
+                controller: scrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: notams.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final notam = notams[index];
+                  final id = notam['id'] as String? ?? '';
+                  final type = notam['type'] as String? ?? '';
+                  final text = notam['text'] as String? ?? '';
+                  final fullText = notam['fullText'] as String? ?? text;
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceLight,
+                      borderRadius: BorderRadius.circular(8),
+                      border:
+                          Border.all(color: AppColors.divider, width: 0.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (type.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                margin: const EdgeInsets.only(right: 8),
+                                decoration: BoxDecoration(
+                                  color: AppColors.error
+                                      .withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  type,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                              ),
+                            Text(
+                              'NOTAM $id',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SelectableText(
+                          fullText,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            color: AppColors.textPrimary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -200,103 +320,39 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
 
 class _NotamBanner extends StatelessWidget {
   final List<Map<String, dynamic>> notams;
-  final bool expanded;
-  final VoidCallback onToggle;
+  final VoidCallback onTap;
 
   const _NotamBanner({
     required this.notams,
-    required this.expanded,
-    required this.onToggle,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onToggle,
-      child: AnimatedSize(
-        duration: const Duration(milliseconds: 200),
-        alignment: Alignment.topCenter,
-        child: Container(
-          width: double.infinity,
-          color: AppColors.error.withValues(alpha: 0.15),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded,
-                      size: 16, color: AppColors.error),
-                  const SizedBox(width: 6),
-                  Text(
-                    '${notams.length} NOTAM${notams.length == 1 ? '' : 's'} affecting this procedure',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.error,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: AppColors.error,
-                  ),
-                ],
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        color: AppColors.error.withValues(alpha: 0.15),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                size: 16, color: AppColors.error),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '${notams.length} NOTAM${notams.length == 1 ? '' : 's'} affecting this procedure',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.error,
+                ),
               ),
-              if (expanded) ...[
-                const SizedBox(height: 8),
-                for (int i = 0; i < notams.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 6),
-                  _NotamSummary(notam: notams[i]),
-                ],
-              ],
-            ],
-          ),
+            ),
+            const Icon(Icons.expand_more, size: 18, color: AppColors.error),
+          ],
         ),
-      ),
-    );
-  }
-}
-
-class _NotamSummary extends StatelessWidget {
-  final Map<String, dynamic> notam;
-
-  const _NotamSummary({required this.notam});
-
-  @override
-  Widget build(BuildContext context) {
-    final id = notam['id'] as String? ?? '';
-    final text = notam['text'] as String? ?? '';
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'NOTAM $id',
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 11,
-              color: AppColors.textPrimary,
-              height: 1.3,
-            ),
-          ),
-        ],
       ),
     );
   }

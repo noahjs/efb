@@ -206,6 +206,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         MapAnimationOptions(duration: 1000),
       );
     };
+
+    // Notify controller that map is ready
+    widget.controller?.onMapReady?.call(mapboxMap);
   }
 
   void _onMapIdle(MapIdleEventData data) {
@@ -333,6 +336,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     _updateRouteSource();
     _updateAeronauticalSources();
     _updateTfrSource();
+    // Re-apply any custom overlays (e.g. approach plates)
+    widget.controller?.onStyleReloaded?.call();
     // Fire initial bounds
     _fireBounds();
   }

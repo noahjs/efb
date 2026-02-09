@@ -172,6 +172,22 @@ class ApiClient {
     return '${_dio.options.baseUrl}/procedures/$airportId/pdf/$procedureId';
   }
 
+  Future<Map<String, dynamic>?> getGeoref(
+      String airportId, int procedureId) async {
+    try {
+      final response =
+          await _dio.get('/procedures/$airportId/georef/$procedureId');
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  String getProcedureImageUrl(String airportId, int procedureId) {
+    return '${_dio.options.baseUrl}/procedures/$airportId/image/$procedureId';
+  }
+
   // --- Users / Profile ---
 
   Future<Map<String, dynamic>> getProfile() async {

@@ -3,10 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Procedure } from './entities/procedure.entity';
 import { DtppCycle } from './entities/dtpp-cycle.entity';
+import { parseGeoref, GeorefData } from './georef-parser';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
 import * as http from 'http';
+import { execFile } from 'child_process';
 
 const PDF_CACHE_DIR = path.join(
   __dirname,
@@ -15,6 +17,15 @@ const PDF_CACHE_DIR = path.join(
   'data',
   'procedures',
   'pdfs',
+);
+
+const IMAGE_CACHE_DIR = path.join(
+  __dirname,
+  '..',
+  '..',
+  'data',
+  'procedures',
+  'images',
 );
 
 @Injectable()
@@ -58,21 +69,7 @@ export class ProceduresService {
     airportId: string,
     procedureId: number,
   ): Promise<{ filePath: string; fileName: string }> {
-    let id = airportId.toUpperCase();
-    let procedure = await this.procedureRepo.findOne({
-      where: { id: procedureId, airport_identifier: id },
-    });
-
-    if (!procedure && id.length === 4 && id.startsWith('K')) {
-      id = id.substring(1);
-      procedure = await this.procedureRepo.findOne({
-        where: { id: procedureId, airport_identifier: id },
-      });
-    }
-
-    if (!procedure) {
-      throw new NotFoundException('Procedure not found');
-    }
+    const procedure = await this.findProcedure(airportId, procedureId);
 
     const cycleDir = path.join(PDF_CACHE_DIR, procedure.cycle);
     const filePath = path.join(cycleDir, procedure.pdf_name);
@@ -97,6 +94,123 @@ export class ProceduresService {
       take: 1,
     });
     return cycles[0] || null;
+  }
+
+  /**
+   * Find a procedure by airport ID and procedure ID, handling ICAO→FAA fallback.
+   */
+  private async findProcedure(
+    airportId: string,
+    procedureId: number,
+  ): Promise<Procedure> {
+    let id = airportId.toUpperCase();
+    let procedure = await this.procedureRepo.findOne({
+      where: { id: procedureId, airport_identifier: id },
+    });
+
+    if (!procedure && id.length === 4 && id.startsWith('K')) {
+      id = id.substring(1);
+      procedure = await this.procedureRepo.findOne({
+        where: { id: procedureId, airport_identifier: id },
+      });
+    }
+
+    if (!procedure) {
+      throw new NotFoundException('Procedure not found');
+    }
+
+    return procedure;
+  }
+
+  /**
+   * Get georef data for an IAP procedure. Parses from the PDF on first
+   * access and caches the result in the database.
+   */
+  async getGeoref(
+    airportId: string,
+    procedureId: number,
+  ): Promise<GeorefData | null> {
+    const procedure = await this.findProcedure(airportId, procedureId);
+
+    if (procedure.chart_code !== 'IAP') {
+      return null;
+    }
+
+    // Return cached georef if available
+    if (procedure.georef_data) {
+      return procedure.georef_data as GeorefData;
+    }
+
+    // Download/locate the PDF
+    const { filePath } = await this.getPdf(airportId, procedureId);
+    const pdfBytes = fs.readFileSync(filePath);
+
+    // Parse georef from PDF
+    const georef = await parseGeoref(new Uint8Array(pdfBytes));
+
+    // Cache result (even null → store as null so we don't re-parse)
+    await this.procedureRepo.update(procedureId, {
+      georef_data: georef as object | null,
+    });
+
+    return georef;
+  }
+
+  /**
+   * Render a procedure PDF page to PNG. Caches the image on disk.
+   * Uses pdftoppm (poppler-utils) for rendering.
+   */
+  async getProcedureImage(
+    airportId: string,
+    procedureId: number,
+  ): Promise<{ filePath: string; fileName: string }> {
+    const procedure = await this.findProcedure(airportId, procedureId);
+
+    const imageDir = path.join(IMAGE_CACHE_DIR, procedure.cycle);
+    const imageName = procedure.pdf_name.replace(/\.pdf$/i, '.png');
+    const imagePath = path.join(imageDir, imageName);
+
+    // Return cached image if it exists
+    if (fs.existsSync(imagePath)) {
+      return { filePath: imagePath, fileName: imageName };
+    }
+
+    // Ensure the PDF exists
+    const { filePath: pdfPath } = await this.getPdf(airportId, procedureId);
+
+    // Render PDF page 1 to PNG using pdftoppm
+    fs.mkdirSync(imageDir, { recursive: true });
+    const outputPrefix = imagePath.replace(/\.png$/, '');
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'pdftoppm',
+        [
+          '-png',
+          '-r', '200', // 200 DPI
+          '-f', '1', // first page
+          '-l', '1', // last page (same = single page)
+          '-singlefile',
+          pdfPath,
+          outputPrefix,
+        ],
+        (error) => {
+          if (error) {
+            reject(
+              new Error(`pdftoppm failed: ${error.message}`),
+            );
+          } else {
+            resolve();
+          }
+        },
+      );
+    });
+
+    if (!fs.existsSync(imagePath)) {
+      throw new Error('Image rendering failed — output file not created');
+    }
+
+    return { filePath: imagePath, fileName: imageName };
   }
 
   private downloadFile(url: string, dest: string): Promise<void> {

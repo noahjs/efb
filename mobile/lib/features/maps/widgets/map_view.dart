@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' show MapboxMap;
 import 'map_view_native.dart' if (dart.library.html) 'map_view_web.dart'
     as platform_map;
 
@@ -19,6 +20,13 @@ class EfbMapController {
   VoidCallback? onZoomIn;
   VoidCallback? onZoomOut;
   void Function(double lat, double lng, {double? zoom})? onFlyTo;
+
+  /// Callback when the underlying MapboxMap instance is ready.
+  void Function(MapboxMap map)? onMapReady;
+
+  /// Callback when the map style finishes loading (including reloads).
+  /// Use this to re-apply custom overlays that get destroyed on style change.
+  VoidCallback? onStyleReloaded;
 
   void zoomIn() => onZoomIn?.call();
   void zoomOut() => onZoomOut?.call();

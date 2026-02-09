@@ -24,6 +24,12 @@ class AirportDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final airportAsync = ref.watch(airportDetailProvider(airportId));
 
+    // Eagerly prefetch weather & NOTAMs so data is cached before user
+    // navigates to plates or other tabs.
+    ref.watch(notamsProvider(airportId));
+    ref.watch(metarProvider(airportId));
+    ref.watch(tafProvider(airportId));
+
     return DefaultTabController(
       length: 5,
       child: Scaffold(

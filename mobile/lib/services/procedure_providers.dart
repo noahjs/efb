@@ -18,3 +18,13 @@ final airportProceduresProvider = FutureProvider.family<
 
   return grouped;
 });
+
+/// Provider for procedure georef data (for map overlay positioning)
+final procedureGeorefProvider = FutureProvider.family<GeorefData?,
+    ({String airportId, int procedureId})>((ref, params) async {
+  final client = ref.read(apiClientProvider);
+  final data =
+      await client.getGeoref(params.airportId, params.procedureId);
+  if (data == null) return null;
+  return GeorefData.fromJson(data);
+});

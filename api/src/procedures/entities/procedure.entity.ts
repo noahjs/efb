@@ -42,4 +42,7 @@ export class Procedure {
 
   @Column({ type: 'varchar', nullable: true })
   volume: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  georef_data: object | null;
 }

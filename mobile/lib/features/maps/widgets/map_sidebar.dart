@@ -5,12 +5,16 @@ class MapSidebar extends StatefulWidget {
   final VoidCallback? onZoomIn;
   final VoidCallback? onZoomOut;
   final VoidCallback? onAeroSettingsTap;
+  final VoidCallback? onApproachTap;
+  final bool isApproachActive;
 
   const MapSidebar({
     super.key,
     this.onZoomIn,
     this.onZoomOut,
     this.onAeroSettingsTap,
+    this.onApproachTap,
+    this.isApproachActive = false,
   });
 
   @override
@@ -59,6 +63,15 @@ class _MapSidebarState extends State<MapSidebar> {
               color: AppColors.primary,
               shape: BoxShape.circle,
             ),
+          ),
+          const SizedBox(height: 12),
+
+          // Approach plate overlay
+          _SidebarButton(
+            icon: Icons.flight_land,
+            size: 18,
+            active: widget.isApproachActive,
+            onTap: () => widget.onApproachTap?.call(),
           ),
           const SizedBox(height: 12),
 

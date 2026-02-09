@@ -23,6 +23,7 @@ import 'widgets/navaid_bottom_sheet.dart';
 import 'widgets/fix_bottom_sheet.dart';
 import 'widgets/map_long_press_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
+import 'widgets/approach_overlay.dart';
 
 class MapsScreen extends ConsumerStatefulWidget {
   const MapsScreen({super.key});
@@ -40,6 +41,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   AeroSettings _aero = const AeroSettings();
   bool _showAeroSettings = false;
   final _mapController = EfbMapController();
+  final _approachController = ApproachOverlayController();
 
   MapBounds? _currentBounds;
   Timer? _boundsDebounce;
@@ -58,6 +60,12 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   void initState() {
     super.initState();
     _loadSettings();
+    _mapController.onMapReady = (map) {
+      _approachController.attach(map);
+    };
+    _mapController.onStyleReloaded = () {
+      _approachController.reapply();
+    };
   }
 
   @override
@@ -289,6 +297,86 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     ).whenComplete(() {
       if (mounted) setState(() => _showAeroSettings = false);
     });
+  }
+
+  void _onApproachTapped() {
+    // If overlay is active, remove it
+    if (_approachController.isActive) {
+      _approachController.hide();
+      setState(() {});
+      return;
+    }
+
+    // Show a dialog to enter airport identifier
+    final textController = TextEditingController();
+
+    // Pre-fill from active flight if available
+    final flight = ref.read(activeFlightProvider);
+    if (flight?.destinationIdentifier != null &&
+        flight!.destinationIdentifier!.isNotEmpty) {
+      textController.text = flight.destinationIdentifier!;
+    } else if (flight?.departureIdentifier != null &&
+        flight!.departureIdentifier!.isNotEmpty) {
+      textController.text = flight.departureIdentifier!;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: const Text('Approach Plates',
+            style: TextStyle(color: AppColors.textPrimary, fontSize: 16)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          textCapitalization: TextCapitalization.characters,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: const InputDecoration(
+            hintText: 'Airport ID (e.g. KAPA)',
+            hintStyle: TextStyle(color: AppColors.textMuted),
+          ),
+          onSubmitted: (val) {
+            Navigator.of(ctx).pop();
+            if (val.trim().isNotEmpty) {
+              _showApproachPicker(val.trim().toUpperCase());
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              final val = textController.text.trim().toUpperCase();
+              if (val.isNotEmpty) {
+                _showApproachPicker(val);
+              }
+            },
+            child: const Text('Show Plates'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showApproachPicker(String airportId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => PointerInterceptor(
+        child: ApproachPlatePicker(
+          airportId: airportId,
+          overlayController: _approachController,
+          onOverlayChanged: () {
+            if (mounted) setState(() {});
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildSearchResults() {
@@ -696,6 +784,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               onZoomIn: _mapController.zoomIn,
               onZoomOut: _mapController.zoomOut,
               onAeroSettingsTap: _showAeroSettingsPanel,
+              onApproachTap: _onApproachTapped,
+              isApproachActive: _approachController.isActive,
             ),
           ),
 
