@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import 'sheet_actions.dart' as actions;
 
-class FixBottomSheet extends StatelessWidget {
+class FixBottomSheet extends ConsumerWidget {
   final String fixId;
   final Map<String, dynamic>? fixData;
 
@@ -13,7 +15,7 @@ class FixBottomSheet extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return DraggableScrollableSheet(
       initialChildSize: 0.38,
       minChildSize: 0.15,
@@ -27,6 +29,7 @@ class FixBottomSheet extends StatelessWidget {
             fixId: fixId,
             fixData: fixData,
             scrollController: scrollController,
+            ref: ref,
           ),
         );
       },
@@ -38,11 +41,13 @@ class _FixSheetContent extends StatelessWidget {
   final String fixId;
   final Map<String, dynamic>? fixData;
   final ScrollController scrollController;
+  final WidgetRef ref;
 
   const _FixSheetContent({
     required this.fixId,
     this.fixData,
     required this.scrollController,
+    required this.ref,
   });
 
   @override
@@ -98,10 +103,22 @@ class _FixSheetContent extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              _ActionButton(label: 'Direct To', onTap: () {}),
-              _ActionButton(label: 'Add to Route', onTap: () {}),
-              _ActionButton(label: 'Hold...', onTap: () {}),
-              _ActionButton(label: 'Wx Forecast', onTap: () {}),
+              _ActionButton(
+                label: 'Direct To',
+                onTap: () => actions.directTo(context, ref, identifier),
+              ),
+              _ActionButton(
+                label: 'Add to Route',
+                onTap: () => actions.addToRoute(context, ref, identifier),
+              ),
+              _ActionButton(
+                label: 'Hold...',
+                onTap: () => actions.showComingSoon(context, 'Hold patterns'),
+              ),
+              _ActionButton(
+                label: 'Wx Forecast',
+                onTap: () => actions.showComingSoon(context, 'Wx Forecast'),
+              ),
             ],
           ),
         ),

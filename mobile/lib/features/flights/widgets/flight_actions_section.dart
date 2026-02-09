@@ -7,6 +7,7 @@ class FlightActionsSection extends StatelessWidget {
   final VoidCallback onCopy;
   final VoidCallback onDelete;
   final VoidCallback onAddNext;
+  final VoidCallback? onLogToLogbook;
 
   const FlightActionsSection({
     super.key,
@@ -14,6 +15,7 @@ class FlightActionsSection extends StatelessWidget {
     required this.onCopy,
     required this.onDelete,
     required this.onAddNext,
+    this.onLogToLogbook,
   });
 
   @override
@@ -39,6 +41,12 @@ class FlightActionsSection extends StatelessWidget {
           icon: Icons.add_circle_outline,
           onTap: onAddNext,
         ),
+        if (!isNewFlight && onLogToLogbook != null)
+          _ActionTile(
+            label: 'Log to Logbook',
+            icon: Icons.book_outlined,
+            onTap: onLogToLogbook!,
+          ),
         if (!isNewFlight) ...[
           _ActionTile(
             label: 'Copy Flight',

@@ -15,6 +15,13 @@ import '../../features/aircraft/screens/performance_profiles_screen.dart';
 import '../../features/aircraft/screens/performance_profile_edit_screen.dart';
 import '../../features/aircraft/screens/fuel_tanks_screen.dart';
 import '../../features/aircraft/screens/equipment_screen.dart';
+import '../../features/imagery/imagery_screen.dart';
+import '../../features/imagery/widgets/gfa_viewer.dart';
+import '../../features/imagery/widgets/advisory_viewer.dart';
+import '../../features/imagery/widgets/pirep_viewer.dart';
+import '../../features/logbook/logbook_screen.dart';
+import '../../features/logbook/logbook_entry_screen.dart';
+import '../../features/logbook/logbook_experience_report_screen.dart';
 import '../../features/more/more_screen.dart';
 import '../widgets/app_shell.dart';
 
@@ -170,21 +177,75 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/imagery',
-          pageBuilder: (context, state) => NoTransitionPage(
-            child: Scaffold(
-              appBar: AppBar(title: const Text('Imagery')),
-              body: const Center(child: Text('Coming Soon')),
-            ),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: ImageryScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'gfa',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final type =
+                    state.uri.queryParameters['type'] ?? 'clouds';
+                final region =
+                    state.uri.queryParameters['region'] ?? 'us';
+                final name =
+                    state.uri.queryParameters['name'] ?? 'GFA';
+                return GfaViewer(
+                  gfaType: type,
+                  region: region,
+                  name: name,
+                );
+              },
+            ),
+            GoRoute(
+              path: 'advisory',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final type =
+                    state.uri.queryParameters['type'] ?? 'gairmets';
+                final name =
+                    state.uri.queryParameters['name'] ?? 'Advisories';
+                return AdvisoryViewer(
+                  advisoryType: type,
+                  name: name,
+                );
+              },
+            ),
+            GoRoute(
+              path: 'pireps',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) => const PirepViewer(),
+            ),
+          ],
         ),
         GoRoute(
           path: '/logbook',
-          pageBuilder: (context, state) => NoTransitionPage(
-            child: Scaffold(
-              appBar: AppBar(title: const Text('Logbook')),
-              body: const Center(child: Text('Coming Soon')),
-            ),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: LogbookScreen(),
           ),
+          routes: [
+            GoRoute(
+              path: 'experience',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) =>
+                  const LogbookExperienceReportScreen(),
+            ),
+            GoRoute(
+              path: 'new',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) =>
+                  const LogbookEntryScreen(entryId: null),
+            ),
+            GoRoute(
+              path: ':id',
+              parentNavigatorKey: _rootNavigatorKey,
+              builder: (context, state) {
+                final id = int.parse(state.pathParameters['id']!);
+                return LogbookEntryScreen(entryId: id);
+              },
+            ),
+          ],
         ),
         GoRoute(
           path: '/weight-balance',

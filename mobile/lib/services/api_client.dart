@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -527,6 +529,133 @@ class ApiClient {
       if (type != null) 'type': type,
     });
     return response.data;
+  }
+
+  // --- Aircraft Equipment ---
+
+  // --- Imagery ---
+
+  Future<Map<String, dynamic>> getImageryCatalog() async {
+    final response = await _dio.get('/imagery/catalog');
+    return response.data;
+  }
+
+  Future<Uint8List?> getGfaImage(String type, String region,
+      {int forecastHour = 3}) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/gfa/$type/$region',
+        queryParameters: {'forecastHour': forecastHour},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Uint8List?> getProgChart(String type, {int forecastHour = 6}) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/prog/$type',
+        queryParameters: {'forecastHour': forecastHour},
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getAdvisories(String type) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/advisories/$type',
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getPireps({String? bbox, int? age}) async {
+    try {
+      final response = await _dio.get(
+        '/imagery/pireps',
+        queryParameters: {
+          if (bbox != null) 'bbox': bbox,
+          if (age != null) 'age': age,
+        },
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // --- Logbook ---
+
+  Future<Map<String, dynamic>> getLogbookEntries({
+    String? query,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await _dio.get('/logbook', queryParameters: {
+      if (query != null && query.isNotEmpty) 'q': query,
+      'limit': limit,
+      'offset': offset,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getLogbookSummary() async {
+    final response = await _dio.get('/logbook/summary');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getLogbookEntry(int id) async {
+    final response = await _dio.get('/logbook/$id');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createLogbookEntry(
+      Map<String, dynamic> data) async {
+    final response = await _dio.post('/logbook', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateLogbookEntry(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.put('/logbook/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteLogbookEntry(int id) async {
+    await _dio.delete('/logbook/$id');
+  }
+
+  Future<Map<String, dynamic>> getLogbookExperienceReport({
+    String? period,
+  }) async {
+    final response = await _dio.get('/logbook/experience-report',
+        queryParameters: {
+          if (period != null) 'period': period,
+        });
+    return response.data;
+  }
+
+  // --- Registry ---
+
+  Future<Map<String, dynamic>?> lookupRegistry(String nNumber) async {
+    try {
+      final response = await _dio.get('/registry/lookup/$nNumber');
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   // --- Aircraft Equipment ---

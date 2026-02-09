@@ -21,3 +21,28 @@ The Airport Details module provides a comprehensive directory of US airports acc
 | FBO Information | FBO name, services, fuel types/prices, fees, hours, phone, and amenities. | Medium |
 | Taxi Diagrams | Airport taxi/ground movement charts with NOTAM-affected areas highlighted. | High |
 | Nearby Airports | List of airports within configurable radius, sorted by distance, with basic info for diversion planning. | Low |
+
+---
+
+## Implementation Status
+
+### Built
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Airport Search | **Done** | Search by identifier, name, city. Supports partial matching. Backend: `AirportsService` with full-text search. |
+| General Info | **Done** | Name, identifier, ICAO, city/state, elevation, magnetic variation, ownership, status. Sourced from FAA NASR 28-day seed. |
+| Runways | **Done** | Full runway data: identifiers, dimensions, surface, lighting, slope, displaced thresholds. Backend entity: `Runway` → `RunwayEnd`. |
+| Frequencies | **Done** | All frequency types (ATIS, Ground, Tower, Approach, CTAF, UNICOM, etc.). Backend entity: `Frequency`. |
+| Weather (METAR/TAF) | **Done** | Live METAR (decoded + raw) and TAF from AWC API. Color-coded flight category. 5-minute backend cache. |
+| NOTAMs | **Done** | Active NOTAMs from FAA NOTAM Search API. Cached 30min. Uses FAA 3-letter identifier. |
+| Procedures | **Done** | SIDs, STARs, approaches from FAA CIFP (ARINC 424) data. Seeded from NASR subscription. |
+| Nearby Airports | **Done** | Nearby airports by distance with basic info. Backend spatial query. |
+
+### Not Started
+
+| Feature | Notes |
+|---------|-------|
+| FBO Information | No data source integrated (AirNav or FBO partnerships needed) |
+| Taxi Diagrams | FAA airport diagrams available via d-TPP but not yet integrated |
+| Fuel Prices | No data source integrated |

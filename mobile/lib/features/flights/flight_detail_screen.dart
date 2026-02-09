@@ -6,6 +6,7 @@ import '../../models/flight.dart';
 import '../../services/api_client.dart';
 import '../../services/flight_providers.dart';
 import '../../services/aircraft_providers.dart';
+import '../../services/logbook_providers.dart';
 import 'widgets/flight_stats_bar.dart';
 import 'widgets/flight_quick_actions.dart';
 import 'widgets/flight_departure_section.dart';
@@ -209,6 +210,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                   onCopy: _handleCopy,
                   onDelete: _handleDelete,
                   onAddNext: () => context.go('/flights/new'),
+                  onLogToLogbook: _handleLogToLogbook,
                 ),
                 if (_flight.id != null)
                   Padding(
@@ -265,6 +267,69 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to copy: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleLogToLogbook() async {
+    try {
+      // Extract date from ETD (ISO string → YYYY-MM-DD)
+      String? date;
+      DateTime? depTime;
+      if (_flight.etd != null) {
+        try {
+          depTime = DateTime.parse(_flight.etd!);
+          date =
+              '${depTime.year}-${depTime.month.toString().padLeft(2, '0')}-${depTime.day.toString().padLeft(2, '0')}';
+        } catch (_) {}
+      }
+
+      // Estimate total time: ETE + 0.2 hours for taxi/runup
+      double? totalTime;
+      if (_flight.eteMinutes != null) {
+        totalTime = (_flight.eteMinutes! / 60.0) + 0.2;
+        totalTime = (totalTime * 10).round() / 10;
+      }
+
+      // Estimate day/night (6:00–19:00 local = day)
+      bool isDayDeparture = true;
+      bool isDayArrival = true;
+      if (depTime != null) {
+        isDayDeparture = depTime.hour >= 6 && depTime.hour < 19;
+        if (_flight.eteMinutes != null) {
+          final arrTime =
+              depTime.add(Duration(minutes: _flight.eteMinutes!));
+          isDayArrival = arrTime.hour >= 6 && arrTime.hour < 19;
+        }
+      }
+
+      final data = <String, dynamic>{
+        'date': date,
+        'aircraft_id': _flight.aircraftId,
+        'aircraft_identifier': _flight.aircraftIdentifier,
+        'aircraft_type': _flight.aircraftType,
+        'from_airport': _flight.departureIdentifier,
+        'to_airport': _flight.destinationIdentifier,
+        'route': _flight.routeString,
+        'distance': _flight.distanceNm,
+        'total_time': totalTime ?? 0,
+        'day_takeoffs': isDayDeparture ? 1 : 0,
+        'night_takeoffs': isDayDeparture ? 0 : 1,
+        'day_landings_full_stop': isDayArrival ? 1 : 0,
+        'night_landings_full_stop': isDayArrival ? 0 : 1,
+        'all_landings': 1,
+      };
+
+      final service = ref.read(logbookServiceProvider);
+      final entry = await service.createEntry(data);
+      if (mounted && entry.id != null) {
+        context.go('/logbook/${entry.id}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create logbook entry: $e')),
         );
       }
     }

@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/solar.dart';
 import '../../../services/api_client.dart';
 import '../../../services/airport_providers.dart';
+import 'sheet_actions.dart' as actions;
 import '../../airports/widgets/airport_info_tab.dart';
 import '../../airports/widgets/airport_weather_tab.dart';
 import '../../airports/widgets/airport_runway_tab.dart';
@@ -59,17 +60,11 @@ class _AirportSheetContent extends ConsumerStatefulWidget {
 class _AirportSheetContentState extends ConsumerState<_AirportSheetContent>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  int _selectedTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() => _selectedTabIndex = _tabController.index);
-      }
-    });
   }
 
   @override
@@ -81,8 +76,6 @@ class _AirportSheetContentState extends ConsumerState<_AirportSheetContent>
   @override
   Widget build(BuildContext context) {
     final airportAsync = ref.watch(airportDetailProvider(widget.airportId));
-    final frequenciesAsync =
-        ref.watch(airportFrequenciesProvider(widget.airportId));
 
     return airportAsync.when(
       loading: () => const SizedBox(
@@ -206,8 +199,16 @@ class _AirportSheetContentState extends ConsumerState<_AirportSheetContent>
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 child: Row(
                   children: [
-                    _ActionButton(label: 'Direct To', onTap: () {}),
-                    _ActionButton(label: 'Add to Route', onTap: () {}),
+                    _ActionButton(
+                      label: 'Direct To',
+                      onTap: () => actions.directTo(
+                          context, ref, widget.airportId),
+                    ),
+                    _ActionButton(
+                      label: 'Add to Route',
+                      onTap: () => actions.addToRoute(
+                          context, ref, widget.airportId),
+                    ),
                     _ActionButton(
                       label: 'Fullscreen',
                       onTap: () {
@@ -215,7 +216,11 @@ class _AirportSheetContentState extends ConsumerState<_AirportSheetContent>
                         context.push('/airports/${widget.airportId}');
                       },
                     ),
-                    _ActionButton(label: 'Hold...', onTap: () {}),
+                    _ActionButton(
+                      label: 'Hold...',
+                      onTap: () =>
+                          actions.showComingSoon(context, 'Hold patterns'),
+                    ),
                   ],
                 ),
               ),

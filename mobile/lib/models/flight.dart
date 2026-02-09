@@ -102,6 +102,7 @@ class Flight {
     );
   }
 
+  /// Serializes editable fields for API requests.
   Map<String, dynamic> toJson() {
     return {
       if (id != null) 'id': id,
@@ -127,6 +128,21 @@ class Flight {
       'fuel_burn_rate': fuelBurnRate,
       'fuel_at_shutdown_gallons': fuelAtShutdownGallons,
       'filing_status': filingStatus,
+    };
+  }
+
+  /// Serializes all fields including computed values, for local persistence.
+  Map<String, dynamic> toFullJson() {
+    return {
+      ...toJson(),
+      'distance_nm': distanceNm,
+      'ete_minutes': eteMinutes,
+      'flight_fuel_gallons': flightFuelGallons,
+      'wind_component': windComponent,
+      'eta': eta,
+      'calculated_at': calculatedAt,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
     };
   }
 

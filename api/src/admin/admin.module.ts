@@ -9,6 +9,7 @@ import { Navaid } from '../navaids/entities/navaid.entity';
 import { Fix } from '../navaids/entities/fix.entity';
 import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
+import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
       Fix,
       Procedure,
       DtppCycle,
+      FaaRegistryAircraft,
     ]),
   ],
   controllers: [AdminController],

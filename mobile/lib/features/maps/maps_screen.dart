@@ -306,10 +306,12 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
 
     final airports = _searchResults;
     final navaids = _navaidResults;
+    final fixes = _fixResults;
     final hasAirports = airports != null && airports.isNotEmpty;
     final hasNavaids = navaids != null && navaids.isNotEmpty;
+    final hasFixes = fixes != null && fixes.isNotEmpty;
 
-    if (!hasAirports && !hasNavaids) {
+    if (!hasAirports && !hasNavaids && !hasFixes) {
       return const Padding(
         padding: EdgeInsets.all(16),
         child: Text(
@@ -341,6 +343,16 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               if (i > 0)
                 const Divider(height: 0.5, color: AppColors.divider),
               _buildNavaidRow(navaids[i] as Map<String, dynamic>),
+            ],
+          ],
+          if (hasFixes) ...[
+            if (hasAirports || hasNavaids)
+              const Divider(height: 0.5, color: AppColors.divider),
+            _buildSectionHeader('Fixes'),
+            for (int i = 0; i < fixes.length; i++) ...[
+              if (i > 0)
+                const Divider(height: 0.5, color: AppColors.divider),
+              _buildFixRow(fixes[i] as Map<String, dynamic>),
             ],
           ],
         ],
@@ -486,10 +498,52 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     );
   }
 
+  Widget _buildFixRow(Map<String, dynamic> fix) {
+    final identifier = fix['identifier'] ?? '';
+    final state = fix['state'] ?? '';
+
+    return InkWell(
+      onTap: () => _onFixResultTapped(fix),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 52,
+              child: Text(
+                identifier,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.accent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                state.isNotEmpty ? 'Intersection \u2022 $state' : 'Intersection',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ),
+            const Icon(
+              Icons.change_history_outlined,
+              size: 16,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final toolbarBottom = MediaQuery.of(context).padding.top + 90;
-    final showOverlay = _showLayerPicker || _showSettings || _showAeroSettings;
+    final showOverlay = _showLayerPicker || _showSettings || _showAeroSettings || _showFlightPlan;
     final showFlightCategory = _activeOverlays.contains('flight_category');
 
     // Always fetch airports for current map bounds

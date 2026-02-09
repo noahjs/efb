@@ -22,6 +22,8 @@ class FlightPlanPanel extends ConsumerStatefulWidget {
 
 class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
   bool _saving = false;
+  int? _dragFromIndex;
+  int? _dragTargetSlot;
 
   Flight? get _flight => ref.read(activeFlightProvider);
 
@@ -145,6 +147,155 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     }
   }
 
+  /// Builds the list of widgets for the Wrap: pills with arrows normally,
+  /// pills with drop-zone gaps when a drag is active.
+  List<Widget> _buildDraggableWaypoints(
+      List<String> waypoints, Flight? flight) {
+    final isDragging = _dragFromIndex != null;
+    final widgets = <Widget>[];
+
+    for (int i = 0; i <= waypoints.length; i++) {
+      // Drop zone at slot i (only while dragging)
+      if (isDragging) {
+        final from = _dragFromIndex!;
+        // Skip no-op slots (same position or position+1 means no move)
+        if (i != from && i != from + 1) {
+          widgets.add(_buildDropSlot(i, waypoints, flight));
+        }
+      }
+
+      if (i < waypoints.length) {
+        final wp = waypoints[i];
+        // The pill itself
+        if (isDragging && i == _dragFromIndex) {
+          // Ghost of the dragged pill
+          widgets.add(Opacity(
+            opacity: 0.3,
+            child: _buildWaypointPill(wp, i, waypoints.length),
+          ));
+        } else {
+          widgets.add(
+            LongPressDraggable<int>(
+              data: i,
+              delay: const Duration(milliseconds: 150),
+              onDragStarted: () =>
+                  setState(() => _dragFromIndex = i),
+              onDragEnd: (_) => setState(() {
+                _dragFromIndex = null;
+                _dragTargetSlot = null;
+              }),
+              onDraggableCanceled: (velocity, offset) => setState(() {
+                _dragFromIndex = null;
+                _dragTargetSlot = null;
+              }),
+              feedback: Material(
+                color: Colors.transparent,
+                elevation: 6,
+                shadowColor: Colors.black54,
+                borderRadius: BorderRadius.circular(8),
+                child: _buildWaypointPill(wp, i, waypoints.length),
+              ),
+              child: GestureDetector(
+                onTap: flight != null
+                    ? () => _editWaypoint(flight, i)
+                    : null,
+                child: _buildWaypointPill(wp, i, waypoints.length),
+              ),
+            ),
+          );
+        }
+
+        // Arrow separator (only when not dragging)
+        if (!isDragging && i < waypoints.length - 1) {
+          widgets.add(const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2),
+            child: Icon(Icons.arrow_forward_ios,
+                size: 10, color: AppColors.textMuted),
+          ));
+        }
+      }
+    }
+
+    return widgets;
+  }
+
+  /// A drop-zone slot that appears between pills during drag.
+  Widget _buildDropSlot(
+      int slot, List<String> waypoints, Flight? flight) {
+    final isHovered = _dragTargetSlot == slot;
+    return DragTarget<int>(
+      onWillAcceptWithDetails: (details) {
+        setState(() => _dragTargetSlot = slot);
+        return true;
+      },
+      onLeave: (_) {
+        if (_dragTargetSlot == slot) {
+          setState(() => _dragTargetSlot = null);
+        }
+      },
+      onAcceptWithDetails: (details) {
+        final from = details.data;
+        setState(() {
+          _dragFromIndex = null;
+          _dragTargetSlot = null;
+        });
+        final wps = List<String>.from(waypoints);
+        final moved = wps.removeAt(from);
+        // After removing, indices shift down if from < slot
+        final to = from < slot ? slot - 1 : slot;
+        wps.insert(to, moved);
+        _saveField(_buildRouteUpdate(flight ?? const Flight(), wps));
+      },
+      builder: (context, candidates, rejected) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: isHovered ? 36 : 18,
+          height: 30,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          decoration: BoxDecoration(
+            color: isHovered
+                ? AppColors.accent.withValues(alpha: 0.3)
+                : AppColors.textMuted.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: isHovered
+                  ? AppColors.accent
+                  : AppColors.textMuted.withValues(alpha: 0.3),
+              width: isHovered ? 2 : 1,
+            ),
+          ),
+          child: isHovered
+              ? const Icon(Icons.arrow_downward,
+                  size: 14, color: AppColors.accent)
+              : null,
+        );
+      },
+    );
+  }
+
+  /// Builds a single waypoint pill chip.
+  Widget _buildWaypointPill(String label, int index, int total) {
+    final isFirst = index == 0;
+    final isLast = index == total - 1;
+    final isEndpoint = isFirst || isLast;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isEndpoint ? AppColors.primary : AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isEndpoint ? Colors.white : AppColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
   Future<void> _editWaypoint(Flight flight, int index) async {
     final wps = _parseWaypoints(flight);
     if (index >= wps.length) return;
@@ -227,135 +378,6 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
     if (result != null && flight != null) {
       _saveField(flight.copyWith(routeString: result.routeString));
     }
-  }
-
-  /// Estimate the pixel width of a waypoint chip + arrow.
-  static double _chipWidth(String label) {
-    // ~8.5px per character at fontSize 14 w700, plus 24px horizontal padding, plus 6px gap
-    return label.length * 8.5 + 24 + 6;
-  }
-
-  static const _arrowWidth = 22.0; // " → " text width + spacing
-
-  /// Build a collapsed list of waypoint chips that fits within [maxWidth].
-  /// Always shows first and last. Fills intermediate from the start, then
-  /// collapses remaining into a "..." chip.
-  List<Widget> _buildCollapsedWaypoints(
-      List<String> waypoints, double maxWidth, Flight? flight) {
-    if (waypoints.isEmpty) return [];
-    if (waypoints.length == 1) {
-      return [_waypointChip(waypoints[0], 0, flight)];
-    }
-
-    final firstW = _chipWidth(waypoints.first);
-    final lastW = _chipWidth(waypoints.last);
-    const ellipsisW = 40.0; // "..." chip width
-    // Reserve space for first, last, and arrows between them
-    final reserved = firstW + _arrowWidth + lastW;
-
-    if (waypoints.length == 2 || reserved > maxWidth) {
-      // Only room for first → last
-      return [
-        _waypointChip(waypoints.first, 0, flight),
-        _arrowSeparator(),
-        _waypointChip(waypoints.last, waypoints.length - 1, flight),
-      ];
-    }
-
-    // Try to fit intermediate waypoints from the start
-    var used = reserved;
-    var fitCount = 0;
-    for (var i = 1; i < waypoints.length - 1; i++) {
-      final w = _arrowWidth + _chipWidth(waypoints[i]);
-      // If not all intermediates fit, we need room for the ellipsis chip too
-      final needEllipsis = i + 1 < waypoints.length - 1;
-      final extra = needEllipsis ? _arrowWidth + ellipsisW : 0;
-      if (used + w + extra > maxWidth) break;
-      used += w;
-      fitCount++;
-    }
-
-    final intermediateCount = waypoints.length - 2;
-    if (fitCount >= intermediateCount) {
-      // All fit — show everything
-      final chips = <Widget>[_waypointChip(waypoints.first, 0, flight)];
-      for (var i = 1; i < waypoints.length - 1; i++) {
-        chips.add(_arrowSeparator());
-        chips.add(_waypointChip(waypoints[i], i, flight));
-      }
-      chips.add(_arrowSeparator());
-      chips.add(_waypointChip(waypoints.last, waypoints.length - 1, flight));
-      return chips;
-    }
-
-    // Show first, fitCount intermediates, ellipsis, last
-    final chips = <Widget>[_waypointChip(waypoints.first, 0, flight)];
-    for (var i = 1; i <= fitCount; i++) {
-      chips.add(_arrowSeparator());
-      chips.add(_waypointChip(waypoints[i], i, flight));
-    }
-    chips.add(_arrowSeparator());
-    chips.add(_ellipsisChip(waypoints, flight));
-    chips.add(_arrowSeparator());
-    chips.add(_waypointChip(waypoints.last, waypoints.length - 1, flight));
-    return chips;
-  }
-
-  Widget _waypointChip(String label, int index, Flight? flight) {
-    return GestureDetector(
-      onTap: flight != null ? () => _editWaypoint(flight, index) : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.primary,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _ellipsisChip(List<String> waypoints, Flight? flight) {
-    final hidden = waypoints.length - 2;
-    return GestureDetector(
-      onTap: () {
-        // Show full route editor
-        if (flight?.id != null) {
-          context.push('/flights/${flight!.id}');
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceLight,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          '+$hidden',
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _arrowSeparator() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 2),
-      child: Icon(Icons.arrow_forward, size: 14, color: AppColors.textMuted),
-    );
   }
 
   String _formatEte(int? minutes) {
@@ -685,42 +707,46 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
 
           const Divider(height: 1, color: AppColors.divider),
 
-          // Route waypoint chips (collapsed when too many)
+          // Route waypoints — horizontal draggable pills
+          if (waypoints.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+              child: Wrap(
+                spacing: 0,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: _buildDraggableWaypoints(waypoints, flight),
+              ),
+            ),
+
+          // Add waypoint button
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-            child: SizedBox(
-              height: 34,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: waypoints.isEmpty
-                        ? const SizedBox.shrink()
-                        : LayoutBuilder(
-                            builder: (context, constraints) {
-                              final chips = _buildCollapsedWaypoints(
-                                waypoints,
-                                constraints.maxWidth,
-                                flight,
-                              );
-                              return Row(children: chips);
-                            },
-                          ),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => _addWaypoint(flight),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceLight,
-                        borderRadius: BorderRadius.circular(8),
+            padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+            child: GestureDetector(
+              onTap: () => _addWaypoint(flight),
+              child: Container(
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppColors.divider, width: 0.5),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add, size: 16, color: AppColors.textMuted),
+                    SizedBox(width: 4),
+                    Text(
+                      'Add Waypoint',
+                      style: TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: const Icon(Icons.add,
-                          size: 16, color: AppColors.textMuted),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

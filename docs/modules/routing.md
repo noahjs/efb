@@ -87,3 +87,26 @@ Integrate FlightAware AeroAPI (or ADS-B Exchange as a free alternative) to fetch
 
 **Phase 4 — Community Routes & Unified Ranking**
 Add opt-in community route sharing. Build the unified ranking engine that merges all sources. Add weather-aware filtering.
+
+---
+
+## Implementation Status
+
+### Built (Phase 1 — Partial)
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| IFR Preferred Routes | **Done** | FAA Preferred IFR Routes seeded from NASR PFR dataset into `preferred_routes` table. Searchable by origin/destination airport pair. Backend: `PreferredRoutesModule` with search endpoint. |
+| Route Import | **Done** | Preferred routes can be imported into a flight plan from the route advisor. |
+
+### Not Started
+
+| Feature | Notes |
+|---------|-------|
+| TEC Routes | NASR TEC dataset available but not yet parsed/seeded |
+| Coded Departure Routes (CDRs) | FAA RMT data source identified but not integrated |
+| Preferred Route Map Overlay | Visualize route on map |
+| Personal Route History | Record routes from completed flights |
+| Community Cleared Routes | Opt-in sharing infrastructure |
+| Real-World Flight Tracking | FlightAware/ADS-B Exchange integration |
+| Unified Route Ranking | Multi-source ranking engine |

@@ -24,3 +24,30 @@ The Flight Planning module handles route creation, optimization, filing, and bri
 | Flight Stats Bar | Real-time display of DIST, ETE, ETA (with timezone), FUEL required, and WIND for the planned route. | Medium |
 | ETD Selection | Set estimated time of departure for accurate ETA and wind calculations. | Low |
 | Profile View | Vertical cross-section of route showing terrain, airspace, and planned altitude. | High |
+
+---
+
+## Implementation Status
+
+### Built
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Route Editor | **Done** | Text-based route entry with airport/navaid/fix identifiers. Flight entity with origin, destination, route waypoints. |
+| Aircraft Selection | **Done** | Select aircraft by tail number for flight. Links to aircraft profile for performance data. |
+| Route Advisor (partial) | **Partial** | FAA Preferred IFR Routes seeded from NASR PFR dataset. Searchable by airport pair. See [routing.md](./routing.md). TEC routes and CDRs not yet integrated. |
+| Flight Stats Bar (partial) | **Partial** | Distance, ETE, fuel calculations computed from route + aircraft profile. Displayed in flight detail screen, not yet as persistent bar on map. |
+| ETD Selection | **Done** | Departure time selection on flight detail screen. |
+
+### Not Started
+
+| Feature | Notes |
+|---------|-------|
+| Graphical Touch Planning | Rubber-band route editing on map |
+| Procedure Advisor | SID/STAR/approach suggestions for route endpoints |
+| Altitude Advisor | Wind-optimized altitude selection |
+| Alternate Advisor | Weather-based alternate suggestions |
+| Flight Plan Filing | FAA IFR/VFR filing integration |
+| Graphical Briefing | Visual preflight briefing along route |
+| NavLog | Printable navigation log with per-leg data |
+| Profile View | Vertical cross-section with terrain and airspace |

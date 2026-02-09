@@ -232,6 +232,10 @@
       <div class="value green" id="statProcedures">--</div>
     </div>
     <div class="stat-card">
+      <div class="label">Registry Aircraft</div>
+      <div class="value green" id="statRegistry">--</div>
+    </div>
+    <div class="stat-card">
       <div class="label">Charts Installed</div>
       <div class="value amber" id="statCharts">--</div>
     </div>
@@ -286,6 +290,23 @@
       <p style="font-size: 13px; color: #8b949e;" id="dtppInfo">
         Downloads the FAA d-TPP metafile XML and imports ~17,000 terminal procedure records
         (approach plates, SIDs, STARs, airport diagrams). PDFs are cached on-demand when viewed.
+      </p>
+    </div>
+  </div>
+
+  <!-- Aircraft Registry -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Aircraft Registry</h2>
+      <button class="btn btn-primary" onclick="seedRegistry()">
+        Seed Registry (FAA)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Downloads the FAA Releasable Aircraft database and imports ~300K+ aircraft registrations
+        with manufacturer, model, and engine data. Used for N-number lookup and auto-fill
+        when creating aircraft.
       </p>
     </div>
   </div>
@@ -359,6 +380,7 @@ async function refreshData() {
     document.getElementById('statNavaids').textContent = data.database.navaids.toLocaleString();
     document.getElementById('statFixes').textContent = data.database.fixes.toLocaleString();
     document.getElementById('statProcedures').textContent = data.database.procedures.toLocaleString();
+    document.getElementById('statRegistry').textContent = (data.database.registryAircraft || 0).toLocaleString();
     document.getElementById('statCharts').textContent =
       `${data.charts.installedCount} / ${data.charts.totalAvailable}`;
 
@@ -535,6 +557,13 @@ async function seedNavaids() {
 async function seedProcedures() {
   toast('Starting d-TPP procedure seed job...');
   await fetchJSON(`${API}/seed/procedures`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedRegistry() {
+  toast('Starting aircraft registry seed job...');
+  await fetchJSON(`${API}/seed/registry`, { method: 'POST' });
   setTimeout(refreshData, 500);
   if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
 }

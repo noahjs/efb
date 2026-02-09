@@ -28,7 +28,10 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.spc.noaa.gov)",
       "WebFetch(domain:cloudfront.foreflight.com)",
-      "WebFetch(domain:www.swpc.noaa.gov)"
+      "WebFetch(domain:www.swpc.noaa.gov)",
+      "WebFetch(domain:registry.faa.gov)",
+      "WebFetch(domain:doc8643.com)",
+      "WebFetch(domain:www.1800wxbrief.com)"
     ]
   }
 }

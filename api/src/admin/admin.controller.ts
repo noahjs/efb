@@ -78,6 +78,15 @@ export class AdminController {
   }
 
   /**
+   * Trigger aircraft registry seed (FAA)
+   */
+  @Post('seed/registry')
+  @HttpCode(200)
+  async seedRegistry() {
+    return this.adminService.runSeedRegistry();
+  }
+
+  /**
    * Clear cached procedure PDFs
    */
   @Delete('procedures/pdf-cache')

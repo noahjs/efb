@@ -32,3 +32,25 @@ While not called out as a primary module, the application must support digital c
 ## 7. Additional Menu Items
 
 Based on the ForeFlight "More" menu, the following secondary features are required: Downloads manager, Settings, Plates viewer, Documents catalog, Imagery browser, ScratchPads (freeform notes), Custom Content, Track Logs viewer, Devices (ADS-B receiver management), Discover (community/content), Passenger app connectivity, Account management, and Support.
+
+---
+
+## Implementation Status
+
+| Concern | Status | Notes |
+|---------|--------|-------|
+| Offline Capability | **Not Started** | No download manager or offline data storage. All data fetched live from backend. |
+| Data Currency | **Partial** | 28-day NASR seed pipeline exists (airports, navaids, fixes, procedures, preferred routes). Manual admin trigger via dashboard. No automatic update checks or expiration alerts. |
+| GPS & Connectivity | **Not Started** | No GPS integration, no ADS-B receiver support. |
+| Performance | **Good** | Map rendering is smooth (Mapbox GL). Tile loading from backend is fast. Weather proxy caching in place. |
+| Sync & Cloud | **Not Started** | No user accounts, no cross-device sync. All data is per-device (SQLite backend). |
+| Checklists & Documents | **Not Started** | No checklist or document management features. |
+| Additional Menu Items | **Partial** | "More" tab exists with navigation to Aircraft and Logbook. Admin dashboard built for seed management. Missing: Downloads, Settings, Plates, Documents, ScratchPads, Track Logs, Devices. |
+
+### Admin Dashboard (Built)
+
+The admin dashboard (`/api/admin`) provides seed management and monitoring:
+- Database stats: airports, runways, frequencies, navaids, fixes, preferred routes, procedures, registry aircraft
+- Seed triggers: Airports (FAA NASR), Navaids, Fixes, Procedures, Preferred Routes, Registry (FAA)
+- Job status with polling
+- Chart tile management (process VFR sectionals)

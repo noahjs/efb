@@ -32,6 +32,11 @@ import { Airspace } from './airspaces/entities/airspace.entity';
 import { AirwaySegment } from './airspaces/entities/airway-segment.entity';
 import { ArtccBoundary } from './airspaces/entities/artcc-boundary.entity';
 import { CalculateModule } from './calculate/calculate.module';
+import { ImageryModule } from './imagery/imagery.module';
+import { LogbookModule } from './logbook/logbook.module';
+import { LogbookEntry } from './logbook/entities/logbook-entry.entity';
+import { FaaRegistryAircraft } from './registry/entities/faa-registry-aircraft.entity';
+import { RegistryModule } from './registry/registry.module';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -59,6 +64,8 @@ import { dbConfig } from './db.config';
         Airspace,
         AirwaySegment,
         ArtccBoundary,
+        LogbookEntry,
+        FaaRegistryAircraft,
       ],
     }),
     AirportsModule,
@@ -73,6 +80,9 @@ import { dbConfig } from './db.config';
     AircraftModule,
     AirspacesModule,
     CalculateModule,
+    ImageryModule,
+    LogbookModule,
+    RegistryModule,
   ],
 })
 export class AppModule {}

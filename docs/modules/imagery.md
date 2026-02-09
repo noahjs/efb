@@ -759,3 +759,46 @@ final routeSoundingsProvider = FutureProvider<List<SoundingData>>((ref) async { 
 - Download individual weather products for offline preflight briefing
 - Synthetic approach plate overlay with ownship position in real-time
 - Space weather status indicator (SWPC D-RAP for HF comm disruption awareness)
+
+---
+
+## Implementation Status
+
+### Built
+
+**Backend (ImageryModule):**
+- `GET /api/imagery/gfa/:type/:region` — Proxies GFA static PNGs from AWC with caching
+- `GET /api/imagery/advisories` — Proxies G-AIRMET, SIGMET, CWA GeoJSON from AWC
+- `GET /api/imagery/pireps` — Proxies PIREP GeoJSON from AWC (requires bbox)
+- In-memory caching per product type (GFA 30min, advisories 10min, PIREPs 10min)
+
+**Mobile (Imagery tab — 4th bottom nav tab):**
+- `imagery_screen.dart` — Main screen with product catalog
+- `gfa_viewer.dart` — GFA cloud/surface viewer with region picker and forecast hour selector (3–18 HR)
+- `advisory_viewer.dart` — Interactive map viewer for G-AIRMETs, SIGMETs, CWAs with colored polygons by hazard type, tap-for-detail, filter bar
+- `pirep_viewer.dart` — PIREP list/map viewer
+
+**Routing:** `/imagery`, `/imagery/gfa`, `/imagery/advisories`, `/imagery/pireps`
+
+### Not Started
+
+**Weather Imagery Products:**
+- Prog Charts (thumbnail grid viewer)
+- Convective Outlooks / SPC Mesoscale Discussions
+- Convective Forecasts (TCF)
+- Winds Aloft graphics
+- Icing products (CIP/FIP) — must use Decision Support Graphics, legacy URLs blocked
+- Turbulence products (GTG) — must use Decision Support Graphics
+- Radar animation (MRMS / RainViewer) — data sources verified
+- Satellite (nowCOAST WMS) — data sources verified
+- Skew-T / Soundings (Open-Meteo API verified)
+- Route weather cross-section
+- Favorites / Recents system
+- Full product catalog with all sections
+
+**Plates:**
+- Airport plates search
+- Plates list per airport
+- PDF plate viewer
+- d-TPP download and catalog parsing
+- Geo-referenced plate overlay on map

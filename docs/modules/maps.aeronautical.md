@@ -329,3 +329,36 @@ Opened from the gear icon in the aero sidebar. Slides down like existing setting
 - **shapefile** (npm) — Parse ESRI shapefiles in Node.js (for seed script)
 - **xml2js** or **fast-xml-parser** (npm) — Parse AIXM XML for SUA data
 - No new Flutter dependencies needed (Mapbox SDK already supports GeoJSON layers)
+
+---
+
+## Implementation Status
+
+### Built
+
+**Backend:**
+- `AirspacesModule` — `airspaces` table with PostGIS geometry. Seeded from FAA NASR shapefiles (Class B/C/D/E) and AIXM XML (MOA, Restricted, Prohibited). `GET /api/airspaces/bounds` endpoint with spatial queries.
+- `AirwaysModule` — `airway_segments` table seeded from NASR CSV (AWY_BASE + AWY_SEG_ALT). Victor and Jet routes. `GET /api/airways/bounds` endpoint.
+- `NavaidsModule` — `navaids` table seeded from NASR. `GET /api/navaids/bounds` endpoint. VOR, VORTAC, NDB, DME types.
+- `FixesModule` — `fixes` table seeded from NASR. `GET /api/navaids/fixes/bounds` endpoint.
+
+**Mobile:**
+- Aeronautical toggle in layer picker (above base layers, with divider)
+- Airspace polygons rendered as Mapbox fill+line layers, color-coded by class
+- Airways rendered as Mapbox line layers
+- Navaids rendered as Mapbox symbol layers with type icons
+- Fixes rendered as Mapbox symbol layers with identifier labels
+- Data fetched on map bounds change (debounced)
+- Tap-to-inspect: bottom sheets for navaids and fixes with details and actions (Direct To, Add to Route)
+
+### Not Started
+
+| Feature | Notes |
+|---------|-------|
+| ARTCC/FIR Boundaries | NASR ARB data available, `artcc_boundaries` table not created |
+| Aeronautical sidebar icon column | Full sidebar with sub-category toggles |
+| Aeronautical Settings panel | Full scrollable settings sheet |
+| High IFR / Low IFR / VFR mode switching | Mode-based data emphasis |
+| Zoom-dependent decluttering | Progressive detail by zoom level |
+| Altitude filtering | Hide airspace above/below relevant altitude |
+| Airspace labels and altitude annotations | Display altitude ranges on airspace polygons |

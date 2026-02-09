@@ -17,14 +17,15 @@ Version 1.0 — February 2026
 
 ### Module Specifications
 
-- [Maps Module](./modules/maps.md)
+- [Maps Module](./modules/maps.md) | [Aeronautical Layer](./modules/maps.aeronautical.md)
 - [Airport Details Module](./modules/airport-details.md)
-- [Flight Planning Module](./modules/flight-planning.md)
-- [Logbook Module](./modules/logbook.md)
-- [Aircraft Profiles Module](./modules/aircraft-profiles.md)
+- [Flight Planning Module](./modules/flight-planning.md) | [Routing](./modules/routing.md)
+- [Logbook Module](./modules/logbook.md) | [Logbook Import & Migration](./modules/logbook-import.md)
+- [Aircraft Profiles Module](./modules/aircraft-profiles.md) | [Registry Data Sources](./modules/registry-data-sources.md)
 - [Weight & Balance Module](./modules/weight-and-balance.md)
 - [Weather Imagery Module](./modules/weather-imagery.md) (overview)
 - [Imagery Module](./modules/imagery.md) (detailed spec — weather imagery + plates)
+- [ScratchPads Module](./modules/scratchpads.md)
 - [US Data Sources](./modules/us-data-sources.md)
 - [Cross-Cutting Concerns](./modules/cross-cutting-concerns.md)
 
@@ -85,15 +86,16 @@ This specification covers seven core modules: Maps, Airport Details, Flight Plan
 
 The application is organized into seven core modules. Each module will have a dedicated detailed specification. The table below summarizes scope and build priority.
 
-| Module | Description | Priority |
-|--------|-------------|----------|
-| **[Maps](./modules/maps.md)** | Moving map with aeronautical charts, weather overlays, ownship position, glide range, and flight plan route display | **P0 — Core** |
-| **[Airport Details](./modules/airport-details.md)** | Comprehensive airport directory with frequencies, runways, weather, procedures, NOTAMs, and FBO information | **P0 — Core** |
-| **[Flight Planning](./modules/flight-planning.md)** | Route creation, editing, filing (IFR/VFR), briefing, navlog generation, and route optimization | **P0 — Core** |
-| **[Logbook](./modules/logbook.md)** | Digital flight logging, currency tracking, endorsements, certificates, and experience reports | **P1 — Important** |
-| **[Aircraft Profiles](./modules/aircraft-profiles.md)** | Aircraft configuration, performance profiles, tail number management, and type certificate data | **P1 — Important** |
-| **[Weight & Balance](./modules/weight-and-balance.md)** | Pre-loaded aircraft W&B envelopes, fuel planning, passenger/cargo loading, and limit checks | **P1 — Important** |
-| **[Weather Imagery](./modules/weather-imagery.md)** | Forecast products, radar animation, satellite, winds aloft, icing/turbulence, PIREPs, and graphical briefing | **P0 — Core** |
+| Module | Description | Priority | Status |
+|--------|-------------|----------|--------|
+| **[Maps](./modules/maps.md)** | Moving map with aeronautical charts, weather overlays, ownship position, glide range, and flight plan route display | **P0 — Core** | **Partial** — VFR sectional tiles, Mapbox base maps, airport dots, aeronautical layer (airspaces, airways, navaids, fixes), flight plan route display, bottom sheets for map features. Missing: weather overlays, ownship, glide ring, track recording, approach plate overlay. |
+| **[Airport Details](./modules/airport-details.md)** | Comprehensive airport directory with frequencies, runways, weather, procedures, NOTAMs, and FBO information | **P0 — Core** | **Mostly Built** — Search, general info, runways, frequencies, weather (METAR/TAF), NOTAMs, procedures (SIDs/STARs/approaches via CIFP), nearby airports. Missing: FBO info, fuel prices, taxi diagrams. |
+| **[Flight Planning](./modules/flight-planning.md)** | Route creation, editing, filing (IFR/VFR), briefing, navlog generation, and route optimization | **P0 — Core** | **Partial** — Flights CRUD, route editor, aircraft selection, distance/time/fuel calculations, preferred routes (FAA NASR). Missing: graphical touch planning, procedure/altitude/alternate advisors, flight filing, briefing, navlog PDF, profile view. |
+| **[Logbook](./modules/logbook.md)** | Digital flight logging, currency tracking, endorsements, certificates, and experience reports | **P1 — Important** | **Partial** — Entry CRUD (all time fields, landings, approaches, holds, remarks), experience reports. Missing: currency tracking, endorsements, certificates, import/export, cloud sync. |
+| **[Aircraft Profiles](./modules/aircraft-profiles.md)** | Aircraft configuration, performance profiles, tail number management, and type certificate data | **P1 — Important** | **Mostly Built** — Full CRUD, fuel config, glide performance, equipment, FAA registry N-number auto-fill. Missing: pre-loaded aircraft type database, performance profiles by altitude/power setting. |
+| **[Weight & Balance](./modules/weight-and-balance.md)** | Pre-loaded aircraft W&B envelopes, fuel planning, passenger/cargo loading, and limit checks | **P1 — Important** | **Not Started** |
+| **[Weather Imagery](./modules/weather-imagery.md)** | Forecast products, radar animation, satellite, winds aloft, icing/turbulence, PIREPs, and graphical briefing | **P0 — Core** | **Partial** — GFA viewer (cloud/surface, all regions, time steps), advisory map (G-AIRMETs, SIGMETs, CWAs with interactive map), PIREP viewer, backend imagery module with proxy/caching. Missing: radar animation, satellite, prog charts, icing/turbulence products, Skew-T, plates. |
+| **[ScratchPads](./modules/scratchpads.md)** | Digital notepad for clearances, ATIS, briefing templates with drawing/typing support | **P1 — Important** | **Not Started** |
 
 ---
 
@@ -103,11 +105,12 @@ This high-level specification establishes the scope and module boundaries for th
 
 | Specification | Scope | Status |
 |---------------|-------|--------|
-| Maps Detailed Spec | Map engine selection, tile architecture, rendering pipeline, layer compositing, and interaction model. | Pending |
-| Airport Details Spec | Data schema, FAA NASR parsing, search indexing, and UI wireframes. | Pending |
-| Flight Planning Spec | Route computation engine, FAA filing integration, briefing generation, and navlog format. | Pending |
-| Logbook Spec | Data model, currency calculation rules, endorsement workflow, and import/export formats. | Pending |
-| Aircraft Spec | Performance model schema, type certificate database, and profile management. | Pending |
-| Weight & Balance Spec | Envelope computation, station configuration, and limit checking algorithms. | Pending |
-| Weather Imagery Spec | Data pipeline architecture, rendering approach for each product, and caching strategy. | Pending |
+| Maps Detailed Spec | Map engine selection, tile architecture, rendering pipeline, layer compositing, and interaction model. | **Written** — [maps.md](./modules/maps.md), [maps.aeronautical.md](./modules/maps.aeronautical.md) |
+| Airport Details Spec | Data schema, FAA NASR parsing, search indexing, and UI wireframes. | **Written** — [airport-details.md](./modules/airport-details.md) |
+| Flight Planning Spec | Route computation engine, FAA filing integration, briefing generation, and navlog format. | **Written** — [flight-planning.md](./modules/flight-planning.md), [routing.md](./modules/routing.md) |
+| Logbook Spec | Data model, currency calculation rules, endorsement workflow, and import/export formats. | **Written** — [logbook.md](./modules/logbook.md), [logbook-import.md](./modules/logbook-import.md) |
+| Aircraft Spec | Performance model schema, type certificate database, and profile management. | **Written** — [aircraft-profiles.md](./modules/aircraft-profiles.md), [registry-data-sources.md](./modules/registry-data-sources.md) |
+| Weight & Balance Spec | Envelope computation, station configuration, and limit checking algorithms. | **Written** — [weight-and-balance.md](./modules/weight-and-balance.md) (spec only, not implemented) |
+| Weather Imagery Spec | Data pipeline architecture, rendering approach for each product, and caching strategy. | **Written** — [weather-imagery.md](./modules/weather-imagery.md), [imagery.md](./modules/imagery.md) (detailed) |
+| ScratchPads Spec | Drawing engine, templates, and notepad UI for in-flight use. | **Written** — [scratchpads.md](./modules/scratchpads.md) (spec only, not implemented) |
 | Architecture Spec | Overall system architecture, API design, offline-first data layer, sync infrastructure, and platform approach (native vs cross-platform). | Pending |

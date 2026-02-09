@@ -19,3 +19,9 @@ The Weight & Balance module ensures aircraft are loaded within approved limits b
 | Fuel Planning | Calculate fuel load requirements based on flight distance, reserves, and alternate requirements. Show effect on W&B. | Medium |
 | Takeoff & Landing | Takeoff and landing performance calculations based on weight, density altitude, runway length, and wind. | Very High |
 | Scenario Comparison | Save and compare multiple loading scenarios for the same flight. | Medium |
+
+---
+
+## Implementation Status
+
+**Not Started** — This module has no implementation yet. All features remain spec-only.

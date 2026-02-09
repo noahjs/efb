@@ -8,6 +8,7 @@ import { Navaid } from '../navaids/entities/navaid.entity';
 import { Fix } from '../navaids/entities/fix.entity';
 import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
+import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -95,6 +96,8 @@ export class AdminService {
     @InjectRepository(Fix) private fixRepo: Repository<Fix>,
     @InjectRepository(Procedure) private procedureRepo: Repository<Procedure>,
     @InjectRepository(DtppCycle) private cycleRepo: Repository<DtppCycle>,
+    @InjectRepository(FaaRegistryAircraft)
+    private registryRepo: Repository<FaaRegistryAircraft>,
   ) {}
 
   // --- Data inventory ---
@@ -106,6 +109,7 @@ export class AdminService {
     const navaids = await this.navaidRepo.count();
     const fixes = await this.fixRepo.count();
     const procedures = await this.procedureRepo.count();
+    const registryAircraft = await this.registryRepo.count();
     const charts = this.getInstalledCharts();
     const diskUsage = this.getDiskUsage();
 
@@ -117,7 +121,7 @@ export class AdminService {
     const dtppCycle = cycles[0] || null;
 
     return {
-      database: { airports, runways, frequencies, navaids, fixes, procedures },
+      database: { airports, runways, frequencies, navaids, fixes, procedures, registryAircraft },
       dtppCycle,
       charts: {
         installed: charts,
@@ -255,6 +259,36 @@ export class AdminService {
       'src',
       'seed',
       'seed-procedures.ts',
+    );
+    this.runScript(
+      'npx',
+      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
+      job,
+    );
+
+    return job;
+  }
+
+  // --- Seed registry ---
+
+  async runSeedRegistry(): Promise<JobStatus> {
+    const jobId = `seed-registry-${Date.now()}`;
+    const job: JobStatus = {
+      id: jobId,
+      type: 'seed-registry',
+      label: 'Seed Aircraft Registry (FAA)',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      log: ['Starting aircraft registry seed...'],
+    };
+    this.jobs.set(jobId, job);
+
+    const seedScript = path.join(
+      this.scriptsDir,
+      '..',
+      'src',
+      'seed',
+      'seed-registry.ts',
     );
     this.runScript(
       'npx',

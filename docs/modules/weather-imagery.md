@@ -22,3 +22,30 @@ The Weather Imagery module provides standalone weather viewing beyond the map ov
 | AIRMETs/SIGMETs | Active and forecast AIRMETs and SIGMETs with geographic extent and altitude ranges. | Medium |
 | TFR Viewer | Detailed TFR information with effective times, altitudes, and geographic boundaries. | Medium |
 | Weather Profile View | Vertical cross-section of weather conditions along a planned route showing clouds, precipitation, turbulence, and icing. | Very High |
+
+---
+
+## Implementation Status
+
+### Built
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| METAR/TAF Viewer | **Done** | Decoded and raw METAR/TAF on airport detail screen. Color-coded flight categories. Backend proxies AWC API with 5-min cache. |
+| PIREPs | **Done** | PIREP viewer in Imagery tab. Backend proxies AWC PIREP GeoJSON. |
+| AIRMETs/SIGMETs | **Done** | Advisory map viewer with G-AIRMETs, SIGMETs, CWAs rendered as colored polygons on interactive map. Filter by hazard type. |
+| Forecast Products (partial) | **Partial** | GFA cloud/surface panels for CONUS and all 9 regions with time-step selector. Backend proxies AWC static PNGs. |
+
+### Not Started
+
+| Feature | Notes |
+|---------|-------|
+| Radar Animation | NEXRAD composite radar with play/pause, timeline. Data sources verified (MRMS, RainViewer). |
+| Satellite Imagery | GOES visible/IR/water vapor. Data source verified (nowCOAST WMS). |
+| Winds Aloft | Tabular and graphical winds aloft |
+| Icing Forecasts | CIP/FIP products. Must use AWC Decision Support Graphics (legacy URLs return 403/404). |
+| Turbulence Forecasts | GTG products. Must use AWC Decision Support Graphics. |
+| TFR Viewer | TFR polygons with effective times and altitudes |
+| Weather Profile View | Vertical cross-section along route |
+
+See [imagery.md](./imagery.md) for the detailed implementation spec including all verified data sources and API endpoints.

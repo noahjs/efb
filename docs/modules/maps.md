@@ -83,3 +83,43 @@ Multiple weather overlays can be toggled independently on top of the base map la
 ## 5. Bottom Information Bar
 
 A persistent or contextual information bar at the bottom of the map displays real-time flight data: Distance Next, ETE Destination, Groundspeed, GPS Altitude, and Track. When a flight plan is active, additional fields show: Distance (total), ETE, ETA (with timezone), Fuel Required, and Wind.
+
+---
+
+## Implementation Status
+
+### Built
+
+**Base Map Layers:**
+- VFR Sectional — FAA raster tiles served from backend TilesModule (TMS/XYZ conversion), pan/zoom working
+- Street Map — Mapbox streets basemap
+- Aerial/Satellite — Mapbox satellite basemap
+- Layer picker with base layer selection (left column) and overlay toggles (right column)
+
+**Aviation Data Overlay Layers:**
+- Aeronautical layer toggle — data-driven vector overlay with sub-toggles ([detailed spec](./maps.aeronautical.md))
+- Airspaces — Class B/C/D/E polygons from FAA NASR shapefiles, color-coded fill+line rendering
+- Special Use Airspace — MOA, Restricted, Prohibited areas from AIXM data
+- Airways — Victor and Jet route segments from NASR CSV data
+- Navaids — VOR, VORTAC, NDB, DME with icon symbols from NASR
+- Fixes/Waypoints — Waypoint markers with identifiers from NASR
+- Airport dots — Color-coded by type, tappable with bottom sheet detail
+
+**Map Interaction & Display:**
+- Zoom & Pan — Smooth Mapbox gesture handling
+- Route Display — Magenta course line for flight plan with waypoint labels
+- Map tap — Bottom sheets for airports, navaids, fixes with details and actions (Direct To, Add to Route)
+- Flight plan panel — Slide-up panel showing route legs, distance, bearing
+
+**Bottom Information Bar:**
+- Not yet implemented
+
+### Not Started
+
+**Base Map Layers:** Aeronautical Map (vector), VFR TAC, VFR Flyway, IFR Low Enroute, IFR High Enroute
+
+**Weather Overlay Layers:** All (Radar/NEXRAD, Satellite, Icing, Turbulence, Clouds, Surface Analysis, Winds, Lightning)
+
+**Aviation Data Overlay Layers:** Flight Category dots, METARs/TAFs on map, Surface Wind, Winds Aloft, Dewpoint Spread, Temperature, Visibility, Ceiling, Sky Coverage, PIREPs on map, AIR/SIGMET/CWA polygons on map, NOTAMs on map, TFRs on map, Obstacles, Traffic (ADS-B), Cameras, Fuel Prices, User Waypoints, Hazard Advisor
+
+**Map Interaction & Display:** Ownship Position (GPS/ADS-B), Glide Range Ring, Distance Rings, Track Recording, Auto-Center Modes (North Up/Track Up), Approach Plate Overlay, Map Annotations, Declutter Control, Map Settings (brightness/inversion/theme)

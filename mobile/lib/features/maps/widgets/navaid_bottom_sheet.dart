@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../services/airport_providers.dart';
+import 'sheet_actions.dart' as actions;
 
 class NavaidBottomSheet extends ConsumerWidget {
   final String navaidId;
@@ -127,10 +128,22 @@ class _NavaidSheetContent extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(
                 children: [
-                  _ActionButton(label: 'Direct To', onTap: () {}),
-                  _ActionButton(label: 'Add to Route', onTap: () {}),
-                  _ActionButton(label: 'Hold...', onTap: () {}),
-                  _ActionButton(label: 'Wx Forecast', onTap: () {}),
+                  _ActionButton(
+                    label: 'Direct To',
+                    onTap: () => actions.directTo(context, ref, identifier),
+                  ),
+                  _ActionButton(
+                    label: 'Add to Route',
+                    onTap: () => actions.addToRoute(context, ref, identifier),
+                  ),
+                  _ActionButton(
+                    label: 'Hold...',
+                    onTap: () => actions.showComingSoon(context, 'Hold patterns'),
+                  ),
+                  _ActionButton(
+                    label: 'Wx Forecast',
+                    onTap: () => actions.showComingSoon(context, 'Wx Forecast'),
+                  ),
                 ],
               ),
             ),

@@ -195,3 +195,9 @@ ScratchPads occupies the **4th tab** in the bottom navigation bar (between Fligh
 - Text recognition (OCR) for handwritten clearances
 - Pre-populated templates with airport-specific frequencies
 - Integration with flight plan (auto-fill departure/destination frequencies)
+
+---
+
+## Implementation Status
+
+**Complete** — Spec finalized. Implementation not yet started. Note: the bottom nav currently uses Imagery as the 4th tab; ScratchPads would need a navigation reorganization when implemented.
