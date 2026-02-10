@@ -2,7 +2,9 @@ import { Controller, Get, Param, Res, NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('tiles')
 export class TilesController {
   private readonly tilesDir = path.join(

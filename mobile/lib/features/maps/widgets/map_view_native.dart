@@ -861,13 +861,12 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupTrafficLayers(MapboxMap map, String srcId) async {
-    // Leader lines (target → heads) — dashed, drawn below dots
+    // Leader lines (target → heads) — solid, drawn below dots
     await map.style.addLayer(LineLayer(
       id: 'traffic-leader-lines',
       sourceId: srcId,
-      lineWidth: 1.5,
-      lineOpacity: 0.5,
-      lineDasharray: [4.0, 3.0],
+      lineWidth: 2.5,
+      lineOpacity: 0.9,
       lineColor: const Color(0xFFFFFFFF).toARGB32(),
       filter: ['==', ['get', 'featureType'], 'leader'],
     ));
@@ -884,11 +883,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await map.style.addLayer(CircleLayer(
       id: 'traffic-head-5min',
       sourceId: srcId,
-      circleRadius: 4.0,
+      circleRadius: 2.5,
       circleColor: const Color(0xFFFFFFFF).toARGB32(),
-      circleOpacity: 0.4,
-      circleStrokeWidth: 1.0,
-      circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+      circleOpacity: 0.85,
+      circleStrokeWidth: 0.5,
+      circleStrokeColor: Colors.white.withValues(alpha: 0.9).toARGB32(),
       filter: ['all',
         ['==', ['get', 'featureType'], 'head'],
         ['==', ['get', 'head_interval'], 300],
@@ -907,11 +906,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await map.style.addLayer(CircleLayer(
       id: 'traffic-head-2min',
       sourceId: srcId,
-      circleRadius: 5.0,
+      circleRadius: 3.0,
       circleColor: const Color(0xFFFFFFFF).toARGB32(),
-      circleOpacity: 0.6,
-      circleStrokeWidth: 1.0,
-      circleStrokeColor: Colors.white.withValues(alpha: 0.4).toARGB32(),
+      circleOpacity: 0.9,
+      circleStrokeWidth: 0.5,
+      circleStrokeColor: Colors.white.withValues(alpha: 0.9).toARGB32(),
       filter: ['all',
         ['==', ['get', 'featureType'], 'head'],
         ['==', ['get', 'head_interval'], 120],
@@ -945,7 +944,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       id: 'traffic-dots',
       sourceId: srcId,
       iconImage: 'traffic-chevron',
-      iconSize: 0.6,
+      iconSize: 0.9,
       iconRotate: 0.0,
       iconRotationAlignment: IconRotationAlignment.MAP,
       iconAllowOverlap: true,

@@ -1,6 +1,8 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { RegistryService } from './registry.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('registry')
 export class RegistryController {
   constructor(private readonly registryService: RegistryService) {}

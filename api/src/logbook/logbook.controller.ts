@@ -18,6 +18,7 @@ import { CurrencyService } from './currency.service';
 import { ImportService } from './import.service';
 import { CreateLogbookEntryDto } from './dto/create-logbook-entry.dto';
 import { UpdateLogbookEntryDto } from './dto/update-logbook-entry.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('logbook')
 export class LogbookController {
@@ -29,11 +30,13 @@ export class LogbookController {
 
   @Get()
   findAll(
+    @CurrentUser() user: { id: string },
     @Query('q') query?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.logbookService.findAll(
+      user.id,
       query,
       limit ? parseInt(limit, 10) : 50,
       offset ? parseInt(offset, 10) : 0,
@@ -41,18 +44,21 @@ export class LogbookController {
   }
 
   @Get('summary')
-  getSummary() {
-    return this.logbookService.getSummary();
+  getSummary(@CurrentUser() user: { id: string }) {
+    return this.logbookService.getSummary(user.id);
   }
 
   @Get('experience-report')
-  getExperienceReport(@Query('period') period?: string) {
-    return this.logbookService.getExperienceReport(period);
+  getExperienceReport(
+    @CurrentUser() user: { id: string },
+    @Query('period') period?: string,
+  ) {
+    return this.logbookService.getExperienceReport(user.id, period);
   }
 
   @Get('currency')
-  getCurrency() {
-    return this.currencyService.getCurrency();
+  getCurrency(@CurrentUser() user: { id: string }) {
+    return this.currencyService.getCurrency(user.id);
   }
 
   @Post('import')
@@ -60,6 +66,7 @@ export class LogbookController {
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )
   importLogbook(
+    @CurrentUser() user: { id: string },
     @UploadedFile() file: Express.Multer.File,
     @Body('source') source: string,
     @Body('preview') preview: string,
@@ -72,29 +79,44 @@ export class LogbookController {
     }
     const isPreview = preview !== 'false';
     const fileContent = file.buffer.toString('utf-8');
-    return this.importService.processImport(fileContent, source, isPreview);
+    return this.importService.processImport(
+      user.id,
+      fileContent,
+      source,
+      isPreview,
+    );
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.logbookService.findOne(id);
+  findOne(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.logbookService.findOne(user.id, id);
   }
 
   @Post()
-  create(@Body() dto: CreateLogbookEntryDto) {
-    return this.logbookService.create(dto);
+  create(
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateLogbookEntryDto,
+  ) {
+    return this.logbookService.create(user.id, dto);
   }
 
   @Put(':id')
   update(
+    @CurrentUser() user: { id: string },
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateLogbookEntryDto,
   ) {
-    return this.logbookService.update(id, dto);
+    return this.logbookService.update(user.id, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.logbookService.remove(id);
+  remove(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.logbookService.remove(user.id, id);
   }
 }

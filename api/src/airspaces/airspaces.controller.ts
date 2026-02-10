@@ -1,6 +1,8 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { AirspacesService } from './airspaces.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller()
 export class AirspacesController {
   constructor(private readonly airspacesService: AirspacesService) {}

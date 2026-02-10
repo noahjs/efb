@@ -28,7 +28,11 @@ import 'widgets/wind_altitude_slider.dart';
 import '../../services/windy_providers.dart';
 import '../adsb/providers/adsb_providers.dart';
 import '../adsb/widgets/adsb_status_bar.dart';
+import '../traffic/models/traffic_settings.dart';
 import '../traffic/providers/traffic_providers.dart';
+import '../traffic/providers/traffic_alert_provider.dart';
+import '../traffic/widgets/traffic_settings_panel.dart';
+import '../traffic/widgets/traffic_alert_banner.dart';
 
 class MapsScreen extends ConsumerStatefulWidget {
   const MapsScreen({super.key});
@@ -44,6 +48,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   Set<String> _activeOverlays = {'flight_category'};
   AeroSettings _aero = const AeroSettings();
   bool _showAeroSettings = false;
+  TrafficSettings _trafficSettings = const TrafficSettings();
+  bool _showTrafficSettings = false;
   int _windsAloftAltitude = 9000; // default winds aloft display altitude
   final _mapController = EfbMapController();
   final _approachController = ApproachOverlayController();
@@ -87,11 +93,13 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     final baseLayer = prefs.getString('map_base_layer') ?? 'satellite';
     final overlays = prefs.getStringList('map_overlays') ?? ['flight_category'];
     final aero = await AeroSettings.load();
+    final traffic = await TrafficSettings.load();
     if (mounted) {
       setState(() {
         _selectedBaseLayer = baseLayer;
         _activeOverlays = overlays.toSet();
         _aero = aero;
+        _trafficSettings = traffic;
       });
     }
   }
@@ -298,6 +306,29 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       ),
     ).whenComplete(() {
       if (mounted) setState(() => _showAeroSettings = false);
+    });
+  }
+
+  void _showTrafficSettingsPanel() {
+    setState(() => _showTrafficSettings = true);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => PointerInterceptor(
+        child: _TrafficSettingsSheet(
+          settings: _trafficSettings,
+          onChanged: (newSettings) {
+            setState(() => _trafficSettings = newSettings);
+            newSettings.save();
+            // Invalidate the provider so the traffic layer picks up changes
+            ref.invalidate(trafficSettingsProvider);
+          },
+          onClose: () => Navigator.of(context).pop(),
+        ),
+      ),
+    ).whenComplete(() {
+      if (mounted) setState(() => _showTrafficSettings = false);
     });
   }
 
@@ -634,7 +665,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   @override
   Widget build(BuildContext context) {
     final toolbarBottom = MediaQuery.of(context).padding.top + 90;
-    final showOverlay = _showLayerPicker || _showAeroSettings || _showFlightPlan;
+    final showOverlay = _showLayerPicker || _showAeroSettings || _showTrafficSettings || _showFlightPlan;
     final showFlightCategory = _activeOverlays.contains('flight_category');
 
     // Fetch airports when aeronautical overlay is active and airports are enabled
@@ -828,6 +859,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     // When traffic overlay is active, build traffic GeoJSON from unified provider
     final showTraffic = _activeOverlays.contains('traffic');
     Map<String, dynamic>? trafficGeoJson;
+    final trafficLoading = showTraffic &&
+        ref.watch(unifiedTrafficProvider).isEmpty;
     if (showTraffic) {
       trafficGeoJson = ref.watch(trafficGeoJsonProvider);
     }
@@ -920,6 +953,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               onZoomIn: _mapController.zoomIn,
               onZoomOut: _mapController.zoomOut,
               onAeroSettingsTap: _showAeroSettingsPanel,
+              onTrafficSettingsTap: _showTrafficSettingsPanel,
+              isTrafficActive: showTraffic,
+              isTrafficLoading: trafficLoading,
               onApproachTap: _onApproachTapped,
               isApproachActive: _approachController.isActive,
               onCenterOnMe: () {
@@ -943,6 +979,17 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                     _windsAloftAltitude = alt;
                   });
                 },
+              ),
+            ),
+
+          // Traffic proximity alert banner
+          if (showTraffic && ref.watch(trafficAlertProvider) != null)
+            Positioned(
+              top: toolbarBottom + 8,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: TrafficAlertBanner(alert: ref.watch(trafficAlertProvider)!),
               ),
             ),
 
@@ -1250,6 +1297,45 @@ class _AeroSettingsSheetState extends State<_AeroSettingsSheet> {
   @override
   Widget build(BuildContext context) {
     return AeronauticalSettingsPanel(
+      onClose: widget.onClose,
+      settings: _settings,
+      onChanged: (newSettings) {
+        setState(() => _settings = newSettings);
+        widget.onChanged(newSettings);
+      },
+    );
+  }
+}
+
+/// Stateful wrapper so the traffic settings bottom sheet rebuilds on toggle
+/// changes while also syncing state back to [MapsScreen].
+class _TrafficSettingsSheet extends StatefulWidget {
+  final TrafficSettings settings;
+  final ValueChanged<TrafficSettings> onChanged;
+  final VoidCallback onClose;
+
+  const _TrafficSettingsSheet({
+    required this.settings,
+    required this.onChanged,
+    required this.onClose,
+  });
+
+  @override
+  State<_TrafficSettingsSheet> createState() => _TrafficSettingsSheetState();
+}
+
+class _TrafficSettingsSheetState extends State<_TrafficSettingsSheet> {
+  late TrafficSettings _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = widget.settings;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TrafficSettingsPanel(
       onClose: widget.onClose,
       settings: _settings,
       onChanged: (newSettings) {

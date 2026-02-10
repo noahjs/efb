@@ -10,7 +10,9 @@ import {
 import type { Response } from 'express';
 import { AdminService } from './admin.service';
 import * as path from 'path';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}

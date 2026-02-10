@@ -6,8 +6,6 @@ import { StarredAirport } from './entities/starred-airport.entity';
 import { AirportsService } from '../airports/airports.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 
-const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
-
 @Injectable()
 export class UsersService {
   constructor(
@@ -18,13 +16,13 @@ export class UsersService {
     private airportsService: AirportsService,
   ) {}
 
-  async getDemoUser() {
-    return this.userRepo.findOne({ where: { id: DEMO_USER_ID } });
+  async findById(userId: string) {
+    return this.userRepo.findOne({ where: { id: userId } });
   }
 
-  async getStarredAirports() {
+  async getStarredAirports(userId: string) {
     const starred = await this.starredRepo.find({
-      where: { user_id: DEMO_USER_ID },
+      where: { user_id: userId },
       order: { created_at: 'DESC' },
     });
 
@@ -35,8 +33,7 @@ export class UsersService {
     return airports.filter((a) => a !== null);
   }
 
-  async starAirport(airportIdentifier: string) {
-    // Resolve the airport to ensure it exists and normalize the identifier
+  async starAirport(userId: string, airportIdentifier: string) {
     const airport = await this.airportsService.findById(airportIdentifier);
     if (!airport) {
       return null;
@@ -44,7 +41,7 @@ export class UsersService {
 
     const existing = await this.starredRepo.findOne({
       where: {
-        user_id: DEMO_USER_ID,
+        user_id: userId,
         airport_identifier: airport.identifier,
       },
     });
@@ -54,17 +51,17 @@ export class UsersService {
     }
 
     await this.starredRepo.save({
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       airport_identifier: airport.identifier,
     });
 
     return airport;
   }
 
-  async updateProfile(dto: UpdateUserDto) {
-    const user = await this.getDemoUser();
+  async updateProfile(userId: string, dto: UpdateUserDto) {
+    const user = await this.findById(userId);
     if (!user) {
-      throw new NotFoundException('Demo user not found. Run the seed script.');
+      throw new NotFoundException('User not found');
     }
     const filtered = Object.fromEntries(
       Object.entries(dto).filter(([, v]) => v !== undefined),
@@ -73,13 +70,12 @@ export class UsersService {
     return this.userRepo.save(user);
   }
 
-  async unstarAirport(airportIdentifier: string) {
-    // Try both the raw identifier and resolved one
+  async unstarAirport(userId: string, airportIdentifier: string) {
     const airport = await this.airportsService.findById(airportIdentifier);
     const identifier = airport?.identifier ?? airportIdentifier;
 
     await this.starredRepo.delete({
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       airport_identifier: identifier,
     });
   }

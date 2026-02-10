@@ -1,0 +1,123 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ─── */
+:root {
+  /* Primary */
+  --color-navy: #0A1628;
+  --color-teal: #00C9A7;
+  --color-teal-hover: #00B396;
+  --color-sky: #38BDF8;
+
+  /* Neutrals */
+  --color-white: #FFFFFF;
+  --color-warm-white: #F8FAFC;
+  --color-slate: #64748B;
+  --color-deep-slate: #1E293B;
+
+  /* Semantic */
+  --color-vfr: #22C55E;
+  --color-ifr: #F59E0B;
+  --color-lifr: #EF4444;
+
+  /* Typography */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+
+  /* Spacing */
+  --section-py: 72px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --section-py: 96px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --section-py: 120px;
+  }
+}
+
+/* ─── Base Styles (in @layer base so Tailwind utilities can override) ─── */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+
+  body {
+    font-family: var(--font-primary);
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--color-slate);
+    background-color: var(--color-white);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.15;
+    color: var(--color-deep-slate);
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* ─── Component Classes (in @layer components so utilities win) ─── */
+@layer components {
+  .section-padding {
+    padding: var(--section-py) 0;
+  }
+
+  .headline-hero {
+    font-size: clamp(36px, 5vw, 60px);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+  }
+
+  .headline-section {
+    font-size: clamp(26px, 3.5vw, 38px);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.15;
+  }
+
+  .headline-sub {
+    font-size: clamp(20px, 2.5vw, 28px);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .text-body {
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.65;
+  }
+
+  .text-caption {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    opacity: 0.6;
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+  }
+}

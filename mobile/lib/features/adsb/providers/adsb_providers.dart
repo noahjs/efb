@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +12,7 @@ import '../models/ownship_position.dart';
 import '../models/traffic_target.dart';
 import '../models/receiver_config.dart';
 import '../protocol/traffic_report_decoder.dart';
+import '../../traffic/services/traffic_enrichment.dart';
 
 // ── GPS Source preference ──
 
@@ -188,48 +188,10 @@ class TrafficTargetsNotifier extends Notifier<Map<int, TrafficTarget>> {
     );
 
     if (_ownship != null) {
-      target = _enrichTarget(target, _ownship!);
+      target = TrafficEnrichment.enrichWithOwnship(target, _ownship!);
     }
 
     state = {...state, report.icaoAddress: target};
-  }
-
-  TrafficTarget _enrichTarget(TrafficTarget target, OwnshipPosition ownship) {
-    // Haversine distance
-    final dLat = (target.latitude - ownship.latitude) * pi / 180;
-    final dLon = (target.longitude - ownship.longitude) * pi / 180;
-    final lat1 = ownship.latitude * pi / 180;
-    final lat2 = target.latitude * pi / 180;
-
-    final a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2);
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    final distanceNm = 3440.065 * c; // Earth radius in nautical miles
-
-    // Bearing from ownship to target
-    final y = sin(dLon) * cos(lat2);
-    final x =
-        cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
-    final bearing = (atan2(y, x) * 180 / pi + 360) % 360;
-
-    final altDelta = target.altitude - ownship.pressureAltitude;
-
-    // Threat classification per spec
-    ThreatLevel threat = ThreatLevel.none;
-    if (distanceNm < 1 && altDelta.abs() < 300) {
-      threat = ThreatLevel.resolution;
-    } else if (distanceNm < 3 && altDelta.abs() < 600) {
-      threat = ThreatLevel.alert;
-    } else if (distanceNm < 6 && altDelta.abs() < 1200) {
-      threat = ThreatLevel.proximate;
-    }
-
-    return target.copyWith(
-      relativeBearing: bearing,
-      relativeDistance: distanceNm,
-      relativeAltitude: altDelta,
-      threatLevel: threat,
-    );
   }
 
   /// Remove targets not updated in the last 60 seconds.

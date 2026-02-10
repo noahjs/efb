@@ -861,9 +861,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
                 'alert', '#FF5252',
                 'proximate', '#FFC107',
                 '#AAAAAA'],
-              'line-width': 1.5,
-              'line-opacity': 0.5,
-              'line-dasharray': [4, 3]
+              'line-width': 2.5,
+              'line-opacity': 0.9
             }
           });
           // 5-min head markers
@@ -876,15 +875,15 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               ['==', ['get', 'head_interval'], 300]
             ],
             paint: {
-              'circle-radius': 4,
+              'circle-radius': 2.5,
               'circle-color': ['match', ['get', 'threat'],
                 'resolution', '#FF5252',
                 'alert', '#FF5252',
                 'proximate', '#FFC107',
                 '#FFFFFF'],
-              'circle-opacity': 0.4,
-              'circle-stroke-width': 1,
-              'circle-stroke-color': 'rgba(255,255,255,0.3)'
+              'circle-opacity': 0.85,
+              'circle-stroke-width': 0.5,
+              'circle-stroke-color': 'rgba(255,255,255,0.9)'
             }
           });
           // 2-min head markers
@@ -897,15 +896,15 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               ['==', ['get', 'head_interval'], 120]
             ],
             paint: {
-              'circle-radius': 5,
+              'circle-radius': 3,
               'circle-color': ['match', ['get', 'threat'],
                 'resolution', '#FF5252',
                 'alert', '#FF5252',
                 'proximate', '#FFC107',
                 '#FFFFFF'],
-              'circle-opacity': 0.6,
-              'circle-stroke-width': 1,
-              'circle-stroke-color': 'rgba(255,255,255,0.4)'
+              'circle-opacity': 0.9,
+              'circle-stroke-width': 0.5,
+              'circle-stroke-color': 'rgba(255,255,255,0.9)'
             }
           });
           // Head altitude labels
@@ -951,7 +950,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             filter: ['==', ['get', 'featureType'], 'target'],
             layout: {
               'icon-image': 'traffic-chevron',
-              'icon-size': 0.6,
+              'icon-size': 0.9,
               'icon-rotate': ['get', 'track'],
               'icon-rotation-alignment': 'map',
               'icon-allow-overlap': true,

@@ -1,5 +1,6 @@
 import '../../adsb/models/traffic_target.dart';
 import '../../../services/api_client.dart';
+import 'traffic_enrichment.dart';
 
 /// Converts raw API response maps into [TrafficTarget] instances.
 class TrafficApiService {
@@ -40,7 +41,8 @@ class TrafficApiService {
         groundspeed: (item['groundspeed'] as num?)?.toInt() ?? 0,
         track: (item['track'] as num?)?.toInt() ?? 0,
         verticalRate: (item['verticalRate'] as num?)?.toInt() ?? 0,
-        emitterCategory: 0,
+        emitterCategory: TrafficEnrichment.categoryStringToInt(
+            (item['emitterCategory'] as String?) ?? ''),
         nic: 0,
         nacp: 0,
         isAirborne: item['isAirborne'] == true,

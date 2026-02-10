@@ -7,6 +7,7 @@
  */
 
 import { DataSource } from 'typeorm';
+import * as bcrypt from 'bcryptjs';
 import { User } from '../users/entities/user.entity';
 import { StarredAirport } from '../users/entities/starred-airport.entity';
 import { dbConfig } from '../db.config';
@@ -26,12 +27,23 @@ async function seed() {
 
   const existing = await userRepo.findOne({ where: { id: DEMO_USER_ID } });
   if (existing) {
-    console.log('Demo user already exists, skipping.');
+    // Update existing demo user with auth fields
+    const password_hash = await bcrypt.hash('demo1234', 12);
+    existing.password_hash = password_hash;
+    existing.auth_provider = 'email';
+    existing.email_verified = true;
+    if (!existing.email) existing.email = 'demo@efb.app';
+    await userRepo.save(existing);
+    console.log('Demo user updated with auth fields.');
   } else {
+    const password_hash = await bcrypt.hash('demo1234', 12);
     await userRepo.save({
       id: DEMO_USER_ID,
       name: 'Demo Pilot',
       email: 'demo@efb.app',
+      password_hash,
+      auth_provider: 'email',
+      email_verified: true,
     });
     console.log('Demo user created.');
   }

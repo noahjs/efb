@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/models/tab_item.dart';
 import '../../core/theme/app_theme.dart';
+import '../../services/auth_providers.dart';
 import '../../services/tab_order_provider.dart';
 
 class MoreScreen extends ConsumerStatefulWidget {
@@ -238,6 +239,15 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             iconColor: const Color(0xFF42A5F5),
             label: 'About',
             onTap: () => _showComingSoon('About'),
+          ),
+
+          const Divider(),
+
+          _MenuItem(
+            icon: Icons.logout,
+            iconColor: AppColors.error,
+            label: 'Sign Out',
+            onTap: () => ref.read(authProvider.notifier).logout(),
           ),
 
           const SizedBox(height: 16),

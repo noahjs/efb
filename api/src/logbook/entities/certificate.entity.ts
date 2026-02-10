@@ -4,7 +4,10 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 import { DataGroup } from '../../config/constants';
 
 @Entity('u_certificates')
@@ -12,6 +15,13 @@ export class Certificate {
   static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  user_id: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
   @Column({ type: 'varchar', nullable: true })
   certificate_type: string;

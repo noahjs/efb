@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { LogbookEntry } from './entities/logbook-entry.entity';
 import { Certificate } from './entities/certificate.entity';
 
@@ -22,9 +22,14 @@ export class CurrencyService {
     private readonly certRepo: Repository<Certificate>,
   ) {}
 
-  async getCurrency(): Promise<CurrencyItem[]> {
-    const entries = await this.entryRepo.find({ order: { date: 'DESC' } });
-    const certificates = await this.certRepo.find();
+  async getCurrency(userId: string): Promise<CurrencyItem[]> {
+    const entries = await this.entryRepo.find({
+      where: [{ user_id: userId }, { user_id: IsNull() }],
+      order: { date: 'DESC' },
+    });
+    const certificates = await this.certRepo.find({
+      where: [{ user_id: userId }, { user_id: IsNull() }],
+    });
     const now = new Date();
 
     const items: CurrencyItem[] = [];

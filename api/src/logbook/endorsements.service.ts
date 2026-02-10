@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Endorsement } from './entities/endorsement.entity';
 import { CreateEndorsementDto } from './dto/create-endorsement.dto';
 import { UpdateEndorsementDto } from './dto/update-endorsement.dto';
@@ -13,6 +13,7 @@ export class EndorsementsService {
   ) {}
 
   async findAll(
+    userId: string,
     query?: string,
     limit = 50,
     offset = 0,
@@ -32,6 +33,8 @@ export class EndorsementsService {
       );
     }
 
+    qb.andWhere('(e.user_id = :userId OR e.user_id IS NULL)', { userId });
+
     qb.orderBy('e.date', 'DESC')
       .addOrderBy('e.id', 'DESC')
       .skip(offset)
@@ -41,27 +44,42 @@ export class EndorsementsService {
     return { items, total, limit, offset };
   }
 
-  async findOne(id: number): Promise<Endorsement> {
-    const endorsement = await this.endorsementRepo.findOne({ where: { id } });
+  async findOne(userId: string, id: number): Promise<Endorsement> {
+    const endorsement = await this.endorsementRepo.findOne({
+      where: [
+        { id, user_id: userId },
+        { id, user_id: IsNull() },
+      ],
+    });
     if (!endorsement) {
       throw new NotFoundException(`Endorsement #${id} not found`);
     }
     return endorsement;
   }
 
-  async create(dto: CreateEndorsementDto): Promise<Endorsement> {
-    const endorsement = this.endorsementRepo.create(dto);
+  async create(
+    userId: string,
+    dto: CreateEndorsementDto,
+  ): Promise<Endorsement> {
+    const endorsement = this.endorsementRepo.create({
+      ...dto,
+      user_id: userId,
+    });
     return this.endorsementRepo.save(endorsement);
   }
 
-  async update(id: number, dto: UpdateEndorsementDto): Promise<Endorsement> {
-    const endorsement = await this.findOne(id);
+  async update(
+    userId: string,
+    id: number,
+    dto: UpdateEndorsementDto,
+  ): Promise<Endorsement> {
+    const endorsement = await this.findOne(userId, id);
     Object.assign(endorsement, dto);
     return this.endorsementRepo.save(endorsement);
   }
 
-  async remove(id: number): Promise<void> {
-    const endorsement = await this.findOne(id);
+  async remove(userId: string, id: number): Promise<void> {
+    const endorsement = await this.findOne(userId, id);
     await this.endorsementRepo.remove(endorsement);
   }
 }

@@ -8,6 +8,7 @@ import '../../adsb/models/traffic_target.dart';
 import '../../adsb/providers/adsb_providers.dart';
 import '../models/traffic_settings.dart';
 import '../services/traffic_api_service.dart';
+import '../services/traffic_enrichment.dart';
 import '../services/traffic_interpolation.dart';
 
 // ── Settings ──
@@ -116,13 +117,14 @@ final apiTrafficProvider =
 
 // ── Unified Traffic ──
 
-/// Combines GDL 90 and API traffic into a single map, with interpolation
-/// and projected heads applied.
+/// Combines GDL 90 and API traffic into a single map, with interpolation,
+/// projected heads, and threat enrichment applied.
 final unifiedTrafficProvider = Provider<Map<String, TrafficTarget>>((ref) {
   final source = ref.watch(trafficSourceProvider);
   final settings = ref.watch(trafficSettingsProvider).value;
   final showHeads = settings?.showHeads ?? true;
   final headIntervals = settings?.headIntervals ?? const [120, 300];
+  final ownship = ref.watch(activePositionProvider);
   final now = DateTime.now();
 
   Map<String, TrafficTarget> targets;
@@ -139,7 +141,7 @@ final unifiedTrafficProvider = Provider<Map<String, TrafficTarget>>((ref) {
     targets = ref.watch(apiTrafficProvider);
   }
 
-  // Apply interpolation and heads
+  // Apply interpolation, heads, and threat enrichment
   final enriched = <String, TrafficTarget>{};
   for (final entry in targets.entries) {
     var target = entry.value;
@@ -160,10 +162,73 @@ final unifiedTrafficProvider = Provider<Map<String, TrafficTarget>>((ref) {
       target = target.copyWith(heads: heads);
     }
 
+    // Enrich with ownship-relative data (threat level, bearing, distance)
+    if (ownship != null) {
+      target = TrafficEnrichment.enrichWithOwnship(target, ownship);
+    }
+
     enriched[entry.key] = target;
   }
 
   return enriched;
+});
+
+// ── Filtered Traffic ──
+
+/// Applies altitude and ground filters from settings to the unified traffic.
+final filteredTrafficProvider = Provider<Map<String, TrafficTarget>>((ref) {
+  final targets = ref.watch(unifiedTrafficProvider);
+  final settings = ref.watch(trafficSettingsProvider).value;
+  final ownship = ref.watch(activePositionProvider);
+  if (settings == null) return targets;
+
+  final hideGround = settings.hideGround;
+  final filter = settings.altitudeFilter;
+
+  // No filtering needed
+  if (!hideGround && filter == AltitudeFilter.all) return targets;
+
+  final filtered = <String, TrafficTarget>{};
+  for (final entry in targets.entries) {
+    final t = entry.value;
+
+    // Hide ground traffic
+    if (hideGround && (!t.isAirborne || t.altitude == 0)) continue;
+
+    // Altitude filter
+    switch (filter) {
+      case AltitudeFilter.all:
+        break;
+      case AltitudeFilter.within1000:
+        if (ownship != null &&
+            (t.altitude - ownship.pressureAltitude).abs() > 1000) {
+          continue;
+        }
+        break;
+      case AltitudeFilter.within3000:
+        if (ownship != null &&
+            (t.altitude - ownship.pressureAltitude).abs() > 3000) {
+          continue;
+        }
+        break;
+      case AltitudeFilter.within5000:
+        if (ownship != null &&
+            (t.altitude - ownship.pressureAltitude).abs() > 5000) {
+          continue;
+        }
+        break;
+      case AltitudeFilter.belowFL180:
+        if (t.altitude >= 18000) continue;
+        break;
+      case AltitudeFilter.aboveFL180:
+        if (t.altitude < 18000) continue;
+        break;
+    }
+
+    filtered[entry.key] = t;
+  }
+
+  return filtered;
 });
 
 // ── Traffic GeoJSON ──
@@ -171,11 +236,13 @@ final unifiedTrafficProvider = Provider<Map<String, TrafficTarget>>((ref) {
 /// Builds GeoJSON FeatureCollection for traffic display on the map.
 /// Includes target positions, leader lines, and projected heads.
 final trafficGeoJsonProvider = Provider<Map<String, dynamic>?>((ref) {
-  final targets = ref.watch(unifiedTrafficProvider);
+  final targets = ref.watch(filteredTrafficProvider);
   if (targets.isEmpty) return null;
 
   final settings = ref.watch(trafficSettingsProvider).value;
   final showHeads = settings?.showHeads ?? true;
+  final showLabels = settings?.showLabels ?? true;
+  final headStyle = settings?.headStyle ?? HeadStyle.bubbles2m5m;
   final features = <Map<String, dynamic>>[];
 
   for (final target in targets.values) {
@@ -196,7 +263,7 @@ final trafficGeoJsonProvider = Provider<Map<String, dynamic>?>((ref) {
       },
       'properties': {
         'featureType': 'target',
-        'callsign': label,
+        'callsign': showLabels ? label : '',
         'threat': threatStr,
         'alt_tag': target.altitudeTag ?? '${(displayAlt / 100).round()}',
         'groundspeed': target.groundspeed,
@@ -212,23 +279,25 @@ final trafficGeoJsonProvider = Provider<Map<String, dynamic>?>((ref) {
       ];
 
       for (final head in target.heads) {
-        // Head point
-        features.add({
-          'type': 'Feature',
-          'geometry': {
-            'type': 'Point',
-            'coordinates': [head.longitude, head.latitude],
-          },
-          'properties': {
-            'featureType': 'head',
-            'head_interval': head.intervalSeconds,
-            'callsign': label,
-            'alt_tag': head.altitude != null
-                ? '${(head.altitude! / 100).round()}'
-                : '',
-            'threat': threatStr,
-          },
-        });
+        // Head bubble points (only for 2m/5m style)
+        if (headStyle == HeadStyle.bubbles2m5m) {
+          features.add({
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [head.longitude, head.latitude],
+            },
+            'properties': {
+              'featureType': 'head',
+              'head_interval': head.intervalSeconds,
+              'callsign': showLabels ? label : '',
+              'alt_tag': head.altitude != null
+                  ? '${(head.altitude! / 100).round()}'
+                  : '',
+              'threat': threatStr,
+            },
+          });
+        }
 
         leaderCoords.add([head.longitude, head.latitude]);
       }

@@ -1,6 +1,7 @@
 import { Controller, Post, Body } from '@nestjs/common';
 import { IsOptional, IsString, IsNumber, IsArray } from 'class-validator';
 import { CalculateService } from './calculate.service';
+import { Public } from '../auth/guards/public.decorator';
 
 class CalculateDto {
   @IsOptional()
@@ -41,6 +42,7 @@ class CalculateAltitudesDto extends CalculateDto {
   altitudes: number[];
 }
 
+@Public()
 @Controller('calculate')
 export class CalculateController {
   constructor(private readonly calculateService: CalculateService) {}

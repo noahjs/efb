@@ -12,6 +12,7 @@ import {
 import { CertificatesService } from './certificates.service';
 import { CreateCertificateDto } from './dto/create-certificate.dto';
 import { UpdateCertificateDto } from './dto/update-certificate.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('certificates')
 export class CertificatesController {
@@ -19,11 +20,13 @@ export class CertificatesController {
 
   @Get()
   findAll(
+    @CurrentUser() user: { id: string },
     @Query('q') query?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.certificatesService.findAll(
+      user.id,
       query,
       limit ? parseInt(limit, 10) : 50,
       offset ? parseInt(offset, 10) : 0,
@@ -31,25 +34,35 @@ export class CertificatesController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.certificatesService.findOne(id);
+  findOne(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.certificatesService.findOne(user.id, id);
   }
 
   @Post()
-  create(@Body() dto: CreateCertificateDto) {
-    return this.certificatesService.create(dto);
+  create(
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateCertificateDto,
+  ) {
+    return this.certificatesService.create(user.id, dto);
   }
 
   @Put(':id')
   update(
+    @CurrentUser() user: { id: string },
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCertificateDto,
   ) {
-    return this.certificatesService.update(id, dto);
+    return this.certificatesService.update(user.id, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.certificatesService.remove(id);
+  remove(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.certificatesService.remove(user.id, id);
   }
 }

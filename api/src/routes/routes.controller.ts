@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { RoutesService } from './routes.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller()
 export class RoutesController {
   constructor(private readonly routesService: RoutesService) {}

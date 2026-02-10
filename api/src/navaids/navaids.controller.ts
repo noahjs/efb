@@ -6,7 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { NavaidsService } from './navaids.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller()
 export class NavaidsController {
   constructor(private readonly navaidsService: NavaidsService) {}

@@ -1,7 +1,9 @@
 import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ImageryService } from './imagery.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('imagery')
 export class ImageryController {
   constructor(private readonly imageryService: ImageryService) {}

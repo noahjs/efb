@@ -9,33 +9,40 @@ import {
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  async getMe() {
-    const user = await this.usersService.getDemoUser();
-    if (!user) {
-      throw new NotFoundException('Demo user not found. Run the seed script.');
+  async getMe(@CurrentUser() user: { id: string; email: string }) {
+    const found = await this.usersService.findById(user.id);
+    if (!found) {
+      throw new NotFoundException('User not found');
     }
-    return user;
+    return found;
   }
 
   @Put('me')
-  async updateProfile(@Body() dto: UpdateUserDto) {
-    return this.usersService.updateProfile(dto);
+  async updateProfile(
+    @CurrentUser() user: { id: string; email: string },
+    @Body() dto: UpdateUserDto,
+  ) {
+    return this.usersService.updateProfile(user.id, dto);
   }
 
   @Get('me/starred-airports')
-  async getStarredAirports() {
-    return this.usersService.getStarredAirports();
+  async getStarredAirports(@CurrentUser() user: { id: string; email: string }) {
+    return this.usersService.getStarredAirports(user.id);
   }
 
   @Put('me/starred-airports/:airportId')
-  async starAirport(@Param('airportId') airportId: string) {
-    const airport = await this.usersService.starAirport(airportId);
+  async starAirport(
+    @CurrentUser() user: { id: string; email: string },
+    @Param('airportId') airportId: string,
+  ) {
+    const airport = await this.usersService.starAirport(user.id, airportId);
     if (!airport) {
       throw new NotFoundException(`Airport ${airportId} not found`);
     }
@@ -43,8 +50,11 @@ export class UsersController {
   }
 
   @Delete('me/starred-airports/:airportId')
-  async unstarAirport(@Param('airportId') airportId: string) {
-    await this.usersService.unstarAirport(airportId);
+  async unstarAirport(
+    @CurrentUser() user: { id: string; email: string },
+    @Param('airportId') airportId: string,
+  ) {
+    await this.usersService.unstarAirport(user.id, airportId);
     return { success: true };
   }
 }

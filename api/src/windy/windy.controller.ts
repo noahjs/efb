@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Query, Body } from '@nestjs/common';
 import { WindyService } from './windy.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('windy')
 export class WindyController {
   constructor(private readonly windyService: WindyService) {}

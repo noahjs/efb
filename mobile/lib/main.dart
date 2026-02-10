@@ -19,16 +19,18 @@ void main() {
   runApp(const ProviderScope(child: EfbApp()));
 }
 
-class EfbApp extends StatelessWidget {
+class EfbApp extends ConsumerWidget {
   const EfbApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(appRouterProvider);
+
     return MaterialApp.router(
       title: 'EFB',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      routerConfig: appRouter,
+      routerConfig: router,
     );
   }
 }

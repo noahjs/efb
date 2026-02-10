@@ -9,7 +9,9 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ProceduresService } from './procedures.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('procedures')
 export class ProceduresController {
   constructor(private readonly proceduresService: ProceduresService) {}

@@ -57,6 +57,7 @@ import { DocumentsModule } from './documents/documents.module';
 import { Document } from './documents/entities/document.entity';
 import { DocumentFolder } from './documents/entities/document-folder.entity';
 import { TrafficModule } from './traffic/traffic.module';
+import { AuthModule } from './auth/auth.module';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -123,6 +124,7 @@ import { dbConfig } from './db.config';
     WindyModule,
     DocumentsModule,
     TrafficModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

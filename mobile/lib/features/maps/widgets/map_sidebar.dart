@@ -5,6 +5,9 @@ class MapSidebar extends StatefulWidget {
   final VoidCallback? onZoomIn;
   final VoidCallback? onZoomOut;
   final VoidCallback? onAeroSettingsTap;
+  final VoidCallback? onTrafficSettingsTap;
+  final bool isTrafficActive;
+  final bool isTrafficLoading;
   final VoidCallback? onApproachTap;
   final bool isApproachActive;
   final VoidCallback? onCenterOnMe;
@@ -14,6 +17,9 @@ class MapSidebar extends StatefulWidget {
     this.onZoomIn,
     this.onZoomOut,
     this.onAeroSettingsTap,
+    this.onTrafficSettingsTap,
+    this.isTrafficActive = false,
+    this.isTrafficLoading = false,
     this.onApproachTap,
     this.isApproachActive = false,
     this.onCenterOnMe,
@@ -23,7 +29,37 @@ class MapSidebar extends StatefulWidget {
   State<MapSidebar> createState() => _MapSidebarState();
 }
 
-class _MapSidebarState extends State<MapSidebar> {
+class _MapSidebarState extends State<MapSidebar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spinController;
+
+  @override
+  void initState() {
+    super.initState();
+    _spinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    if (widget.isTrafficLoading) _spinController.repeat();
+  }
+
+  @override
+  void didUpdateWidget(MapSidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isTrafficLoading && !_spinController.isAnimating) {
+      _spinController.repeat();
+    } else if (!widget.isTrafficLoading && _spinController.isAnimating) {
+      _spinController.stop();
+      _spinController.reset();
+    }
+  }
+
+  @override
+  void dispose() {
+    _spinController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -68,6 +104,17 @@ class _MapSidebarState extends State<MapSidebar> {
           ),
           const SizedBox(height: 12),
 
+          // Traffic settings
+          _SidebarButton(
+            icon: Icons.flight,
+            size: 18,
+            active: widget.isTrafficActive,
+            onTap: () => widget.onTrafficSettingsTap?.call(),
+            spinController:
+                widget.isTrafficLoading ? _spinController : null,
+          ),
+          const SizedBox(height: 12),
+
           // Approach plate overlay
           _SidebarButton(
             icon: Icons.flight_land,
@@ -106,16 +153,31 @@ class _SidebarButton extends StatelessWidget {
   final VoidCallback onTap;
   final double size;
   final bool active;
+  final AnimationController? spinController;
 
   const _SidebarButton({
     required this.icon,
     required this.onTap,
     this.size = 20,
     this.active = false,
+    this.spinController,
   });
 
   @override
   Widget build(BuildContext context) {
+    Widget iconWidget = Icon(
+      icon,
+      color: active ? Colors.white : Colors.white70,
+      size: size,
+    );
+
+    if (spinController != null) {
+      iconWidget = RotationTransition(
+        turns: spinController!,
+        child: iconWidget,
+      );
+    }
+
     return Material(
       color: active
           ? AppColors.accent.withValues(alpha: 0.85)
@@ -126,8 +188,7 @@ class _SidebarButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(8),
-          child: Icon(icon,
-              color: active ? Colors.white : Colors.white70, size: size),
+          child: iconWidget,
         ),
       ),
     );

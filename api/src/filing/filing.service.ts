@@ -33,9 +33,12 @@ export class FilingService {
 
   // --- Validation ---
 
-  async validateForFiling(flightId: number): Promise<FilingValidationResult> {
-    const flight = await this.flightsService.findById(flightId);
-    const user = await this.usersService.getDemoUser();
+  async validateForFiling(
+    flightId: number,
+    userId: string,
+  ): Promise<FilingValidationResult> {
+    const flight = await this.flightsService.findById(flightId, userId);
+    const user = await this.usersService.findById(userId);
 
     let aircraft: Aircraft | null = null;
     if (flight.aircraft_id) {
@@ -190,8 +193,11 @@ export class FilingService {
 
   // --- ICAO Transformation ---
 
-  async buildIcaoFlightPlan(flight: Flight): Promise<IcaoFlightPlan> {
-    const user = await this.usersService.getDemoUser();
+  async buildIcaoFlightPlan(
+    flight: Flight,
+    userId: string,
+  ): Promise<IcaoFlightPlan> {
+    const user = await this.usersService.findById(userId);
     let aircraft: Aircraft | null = null;
     if (flight.aircraft_id) {
       aircraft = await this.aircraftService.findOne(flight.aircraft_id);
@@ -247,8 +253,11 @@ export class FilingService {
 
   // --- File ---
 
-  async fileFlight(flightId: number): Promise<FilingResponse> {
-    const flight = await this.flightsService.findById(flightId);
+  async fileFlight(
+    flightId: number,
+    userId: string,
+  ): Promise<FilingResponse> {
+    const flight = await this.flightsService.findById(flightId, userId);
 
     // Validate state
     if (flight.filing_status !== 'not_filed') {
@@ -258,7 +267,7 @@ export class FilingService {
     }
 
     // Validate completeness
-    const validation = await this.validateForFiling(flightId);
+    const validation = await this.validateForFiling(flightId, userId);
     if (!validation.ready) {
       const missing = validation.checks
         .filter((c) => !c.passed && c.severity === 'error')
@@ -268,8 +277,8 @@ export class FilingService {
       );
     }
 
-    const user = await this.usersService.getDemoUser();
-    const icao = await this.buildIcaoFlightPlan(flight);
+    const user = await this.usersService.findById(userId);
+    const icao = await this.buildIcaoFlightPlan(flight, userId);
 
     const payload: LeidosFlightPlanPayload = {
       aircraftIdentifier: icao.aircraftId,
@@ -315,7 +324,7 @@ export class FilingService {
       filing_version_stamp: result.versionStamp,
       filed_at: new Date().toISOString(),
       filing_format: 'icao',
-    });
+    }, userId);
 
     return {
       success: true,
@@ -329,8 +338,11 @@ export class FilingService {
 
   // --- Amend ---
 
-  async amendFlight(flightId: number): Promise<FilingResponse> {
-    const flight = await this.flightsService.findById(flightId);
+  async amendFlight(
+    flightId: number,
+    userId: string,
+  ): Promise<FilingResponse> {
+    const flight = await this.flightsService.findById(flightId, userId);
 
     if (!['filed', 'accepted'].includes(flight.filing_status)) {
       throw new BadRequestException(
@@ -342,8 +354,8 @@ export class FilingService {
       throw new BadRequestException('No filing reference found');
     }
 
-    const user = await this.usersService.getDemoUser();
-    const icao = await this.buildIcaoFlightPlan(flight);
+    const user = await this.usersService.findById(userId);
+    const icao = await this.buildIcaoFlightPlan(flight, userId);
 
     const payload: LeidosFlightPlanPayload = {
       aircraftIdentifier: icao.aircraftId,
@@ -388,7 +400,7 @@ export class FilingService {
       filing_status: 'filed',
       filing_version_stamp: result.versionStamp,
       filed_at: new Date().toISOString(),
-    });
+    }, userId);
 
     return {
       success: true,
@@ -402,8 +414,11 @@ export class FilingService {
 
   // --- Cancel ---
 
-  async cancelFiling(flightId: number): Promise<FilingResponse> {
-    const flight = await this.flightsService.findById(flightId);
+  async cancelFiling(
+    flightId: number,
+    userId: string,
+  ): Promise<FilingResponse> {
+    const flight = await this.flightsService.findById(flightId, userId);
 
     if (!['filed', 'accepted'].includes(flight.filing_status)) {
       throw new BadRequestException(
@@ -415,7 +430,7 @@ export class FilingService {
       throw new BadRequestException('No filing reference found');
     }
 
-    const user = await this.usersService.getDemoUser();
+    const user = await this.usersService.findById(userId);
 
     const result = await this.leidosClient.cancelFlightPlan({
       webUserName: user?.leidos_username || 'demo',
@@ -438,7 +453,7 @@ export class FilingService {
       filing_reference: null as any,
       filing_version_stamp: null as any,
       filed_at: null as any,
-    });
+    }, userId);
 
     return {
       success: true,
@@ -449,8 +464,11 @@ export class FilingService {
 
   // --- Close ---
 
-  async closeFiling(flightId: number): Promise<FilingResponse> {
-    const flight = await this.flightsService.findById(flightId);
+  async closeFiling(
+    flightId: number,
+    userId: string,
+  ): Promise<FilingResponse> {
+    const flight = await this.flightsService.findById(flightId, userId);
 
     if (!['filed', 'accepted'].includes(flight.filing_status)) {
       throw new BadRequestException(
@@ -462,7 +480,7 @@ export class FilingService {
       throw new BadRequestException('No filing reference found');
     }
 
-    const user = await this.usersService.getDemoUser();
+    const user = await this.usersService.findById(userId);
 
     const result = await this.leidosClient.closeFlightPlan({
       webUserName: user?.leidos_username || 'demo',
@@ -480,7 +498,7 @@ export class FilingService {
 
     await this.flightsService.update(flightId, {
       filing_status: 'closed',
-    });
+    }, userId);
 
     return {
       success: true,
@@ -492,8 +510,11 @@ export class FilingService {
 
   // --- Status ---
 
-  async getFilingStatus(flightId: number): Promise<FilingResponse> {
-    const flight = await this.flightsService.findById(flightId);
+  async getFilingStatus(
+    flightId: number,
+    userId: string,
+  ): Promise<FilingResponse> {
+    const flight = await this.flightsService.findById(flightId, userId);
 
     if (!flight.filing_reference) {
       return {
@@ -503,7 +524,7 @@ export class FilingService {
       };
     }
 
-    const user = await this.usersService.getDemoUser();
+    const user = await this.usersService.findById(userId);
 
     const result = await this.leidosClient.getFlightPlanStatus(
       user?.leidos_username || 'demo',

@@ -13,6 +13,8 @@ describe('FilingService', () => {
   let mockAirportsService: Partial<AirportsService>;
   let mockLeidosClient: any;
 
+  const userId = 'test-user-id';
+
   const mockFlight = {
     id: 1,
     aircraft_id: 10,
@@ -61,7 +63,7 @@ describe('FilingService', () => {
     };
 
     mockUsersService = {
-      getDemoUser: jest.fn().mockResolvedValue({ ...mockUser }),
+      findById: jest.fn().mockResolvedValue({ ...mockUser }),
     };
 
     mockAirportsService = {
@@ -125,7 +127,7 @@ describe('FilingService', () => {
 
   describe('validateForFiling', () => {
     it('should return ready=true when all required fields are present', async () => {
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(true);
       expect(
         result.checks.every((c) => (c.severity === 'error' ? c.passed : true)),
@@ -138,7 +140,7 @@ describe('FilingService', () => {
         aircraft_identifier: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find(
         (c) => c.field === 'aircraft_identifier',
@@ -152,7 +154,7 @@ describe('FilingService', () => {
         aircraft_identifier: 'N1234567890',
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find(
         (c) => c.field === 'aircraft_identifier',
@@ -161,24 +163,24 @@ describe('FilingService', () => {
     });
 
     it('should fail when pilot_name is missing', async () => {
-      (mockUsersService.getDemoUser as jest.Mock).mockResolvedValue({
+      (mockUsersService.findById as jest.Mock).mockResolvedValue({
         ...mockUser,
         pilot_name: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'pilot_name');
       expect(check?.passed).toBe(false);
     });
 
     it('should fail when phone_number is missing', async () => {
-      (mockUsersService.getDemoUser as jest.Mock).mockResolvedValue({
+      (mockUsersService.findById as jest.Mock).mockResolvedValue({
         ...mockUser,
         phone_number: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'phone_number');
       expect(check?.passed).toBe(false);
@@ -190,7 +192,7 @@ describe('FilingService', () => {
         alternate_identifier: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(true);
       const check = result.checks.find(
         (c) => c.field === 'alternate_identifier',
@@ -205,7 +207,7 @@ describe('FilingService', () => {
         ete_minutes: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'ete_minutes');
       expect(check?.passed).toBe(false);
@@ -217,7 +219,7 @@ describe('FilingService', () => {
         departure_identifier: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find(
         (c) => c.field === 'departure_identifier',
@@ -231,7 +233,7 @@ describe('FilingService', () => {
         destination_identifier: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find(
         (c) => c.field === 'destination_identifier',
@@ -245,7 +247,7 @@ describe('FilingService', () => {
         cruise_altitude: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
     });
 
@@ -255,7 +257,7 @@ describe('FilingService', () => {
         true_airspeed: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
     });
 
@@ -265,7 +267,7 @@ describe('FilingService', () => {
         etd: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
     });
 
@@ -275,7 +277,7 @@ describe('FilingService', () => {
         people_count: 0,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
     });
 
@@ -287,7 +289,7 @@ describe('FilingService', () => {
         flight_rules: 'IFR',
       });
 
-      let result = await service.validateForFiling(1);
+      let result = await service.validateForFiling(1, userId);
       let routeCheck = result.checks.find((c) => c.field === 'route_string');
       expect(routeCheck?.severity).toBe('error');
       expect(result.ready).toBe(false);
@@ -299,7 +301,7 @@ describe('FilingService', () => {
         flight_rules: 'VFR',
       });
 
-      result = await service.validateForFiling(1);
+      result = await service.validateForFiling(1, userId);
       routeCheck = result.checks.find((c) => c.field === 'route_string');
       expect(routeCheck?.severity).toBe('warning');
       expect(result.ready).toBe(true);
@@ -311,7 +313,7 @@ describe('FilingService', () => {
         icao_type_code: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'icao_type_code');
       expect(check?.passed).toBe(false);
@@ -323,7 +325,7 @@ describe('FilingService', () => {
         equipment: { equipment_codes: null },
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const check = result.checks.find((c) => c.field === 'equipment_codes');
       expect(check?.passed).toBe(false);
@@ -335,14 +337,14 @@ describe('FilingService', () => {
         aircraft_id: null,
       });
 
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       expect(result.ready).toBe(false);
       const icaoCheck = result.checks.find((c) => c.field === 'icao_type_code');
       expect(icaoCheck?.passed).toBe(false);
     });
 
     it('should include value fields in check results', async () => {
-      const result = await service.validateForFiling(1);
+      const result = await service.validateForFiling(1, userId);
       const depCheck = result.checks.find(
         (c) => c.field === 'departure_identifier',
       );
@@ -412,7 +414,7 @@ describe('FilingService', () => {
 
   describe('buildIcaoFlightPlan', () => {
     it('should map flight data to ICAO fields', async () => {
-      const plan = await service.buildIcaoFlightPlan(mockFlight as any);
+      const plan = await service.buildIcaoFlightPlan(mockFlight as any, userId);
 
       expect(plan.aircraftId).toBe('N12345');
       expect(plan.flightRules).toBe('I');
@@ -435,7 +437,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         flight_rules: 'VFR',
-      } as any);
+      } as any, userId);
       expect(plan.flightRules).toBe('V');
     });
 
@@ -447,7 +449,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         aircraft_id: null,
-      } as any);
+      } as any, userId);
       expect(plan.aircraftType).toBe('ZZZZ');
     });
 
@@ -455,7 +457,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         route_string: null,
-      } as any);
+      } as any, userId);
       expect(plan.route).toBe('DCT');
     });
 
@@ -463,12 +465,12 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         alternate_identifier: null,
-      } as any);
+      } as any, userId);
       expect(plan.alternateIcao).toBeUndefined();
     });
 
     it('should compute endurance from fuel data', async () => {
-      const plan = await service.buildIcaoFlightPlan(mockFlight as any);
+      const plan = await service.buildIcaoFlightPlan(mockFlight as any, userId);
       // 48 gal / 8.5 GPH ≈ 5.647 hours → 5h 39m → 0539
       expect(plan.endurance).toBe('0539');
     });
@@ -479,7 +481,7 @@ describe('FilingService', () => {
         fuel_burn_rate: null,
         start_fuel_gallons: null,
         ete_minutes: 90,
-      } as any);
+      } as any, userId);
       // 1.5h + 1h = 2.5h → 0230
       expect(plan.endurance).toBe('0230');
     });
@@ -488,7 +490,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         aircraft_identifier: 'N1234567890',
-      } as any);
+      } as any, userId);
       expect(plan.aircraftId).toBe('N123456');
     });
 
@@ -498,12 +500,12 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         departure_identifier: 'XYZ',
-      } as any);
+      } as any, userId);
       expect(plan.departureIcao).toBe('KXYZ');
     });
 
     it('should format departure time from ETD', async () => {
-      const plan = await service.buildIcaoFlightPlan(mockFlight as any);
+      const plan = await service.buildIcaoFlightPlan(mockFlight as any, userId);
       expect(plan.departureTime).toBe('1400');
     });
 
@@ -511,7 +513,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         etd: '',
-      } as any);
+      } as any, userId);
       expect(plan.departureTime).toBe('0000');
     });
 
@@ -519,7 +521,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         remarks: '/v/ VFR ON TOP',
-      } as any);
+      } as any, userId);
       expect(plan.otherInfo).toBe('/v/ VFR ON TOP');
     });
 
@@ -527,7 +529,7 @@ describe('FilingService', () => {
       const plan = await service.buildIcaoFlightPlan({
         ...mockFlight,
         people_count: 0,
-      } as any);
+      } as any, userId);
       expect(plan.personsOnBoard).toBe(1);
     });
   });
@@ -536,7 +538,7 @@ describe('FilingService', () => {
 
   describe('fileFlight', () => {
     it('should file a valid not_filed flight', async () => {
-      const result = await service.fileFlight(1);
+      const result = await service.fileFlight(1, userId);
 
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('filed');
@@ -548,6 +550,7 @@ describe('FilingService', () => {
           filing_status: 'filed',
           filing_reference: 'FP1001',
         }),
+        userId,
       );
     });
 
@@ -557,7 +560,7 @@ describe('FilingService', () => {
         filing_status: 'filed',
       });
 
-      await expect(service.fileFlight(1)).rejects.toThrow('Cannot file');
+      await expect(service.fileFlight(1, userId)).rejects.toThrow('Cannot file');
     });
 
     it('should reject filing if status is accepted', async () => {
@@ -566,7 +569,7 @@ describe('FilingService', () => {
         filing_status: 'accepted',
       });
 
-      await expect(service.fileFlight(1)).rejects.toThrow('Cannot file');
+      await expect(service.fileFlight(1, userId)).rejects.toThrow('Cannot file');
     });
 
     it('should reject filing if status is closed', async () => {
@@ -575,7 +578,7 @@ describe('FilingService', () => {
         filing_status: 'closed',
       });
 
-      await expect(service.fileFlight(1)).rejects.toThrow('Cannot file');
+      await expect(service.fileFlight(1, userId)).rejects.toThrow('Cannot file');
     });
 
     it('should reject filing when validation fails', async () => {
@@ -584,7 +587,7 @@ describe('FilingService', () => {
         departure_identifier: null,
       });
 
-      await expect(service.fileFlight(1)).rejects.toThrow(
+      await expect(service.fileFlight(1, userId)).rejects.toThrow(
         'Flight plan is not ready',
       );
     });
@@ -597,7 +600,7 @@ describe('FilingService', () => {
         errors: ['Server unavailable'],
       });
 
-      const result = await service.fileFlight(1);
+      const result = await service.fileFlight(1, userId);
 
       expect(result.success).toBe(false);
       expect(result.filingStatus).toBe('not_filed');
@@ -607,18 +610,19 @@ describe('FilingService', () => {
     });
 
     it('should store filing_format as icao', async () => {
-      await service.fileFlight(1);
+      await service.fileFlight(1, userId);
 
       expect(mockFlightsService.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
           filing_format: 'icao',
         }),
+        userId,
       );
     });
 
     it('should store filed_at timestamp', async () => {
-      const result = await service.fileFlight(1);
+      const result = await service.fileFlight(1, userId);
 
       expect(result.filedAt).toBeDefined();
       expect(mockFlightsService.update).toHaveBeenCalledWith(
@@ -626,11 +630,12 @@ describe('FilingService', () => {
         expect.objectContaining({
           filed_at: expect.any(String),
         }),
+        userId,
       );
     });
 
     it('should pass correct payload to Leidos', async () => {
-      await service.fileFlight(1);
+      await service.fileFlight(1, userId);
 
       expect(mockLeidosClient.fileFlightPlan).toHaveBeenCalledWith({
         webUserName: 'jdoe',
@@ -659,7 +664,7 @@ describe('FilingService', () => {
         filing_version_stamp: 'v123',
       });
 
-      const result = await service.amendFlight(1);
+      const result = await service.amendFlight(1, userId);
 
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('filed');
@@ -674,12 +679,12 @@ describe('FilingService', () => {
         filing_version_stamp: 'v123',
       });
 
-      const result = await service.amendFlight(1);
+      const result = await service.amendFlight(1, userId);
       expect(result.success).toBe(true);
     });
 
     it('should reject amend if not filed', async () => {
-      await expect(service.amendFlight(1)).rejects.toThrow('Cannot amend');
+      await expect(service.amendFlight(1, userId)).rejects.toThrow('Cannot amend');
     });
 
     it('should reject amend if no filing reference', async () => {
@@ -689,7 +694,7 @@ describe('FilingService', () => {
         filing_reference: null,
       });
 
-      await expect(service.amendFlight(1)).rejects.toThrow(
+      await expect(service.amendFlight(1, userId)).rejects.toThrow(
         'No filing reference',
       );
     });
@@ -702,7 +707,7 @@ describe('FilingService', () => {
         filing_version_stamp: 'v123',
       });
 
-      await service.amendFlight(1);
+      await service.amendFlight(1, userId);
 
       expect(mockLeidosClient.amendFlightPlan).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -720,13 +725,14 @@ describe('FilingService', () => {
         filing_version_stamp: 'v123',
       });
 
-      await service.amendFlight(1);
+      await service.amendFlight(1, userId);
 
       expect(mockFlightsService.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
           filing_version_stamp: 'v124',
         }),
+        userId,
       );
     });
 
@@ -743,7 +749,7 @@ describe('FilingService', () => {
         errors: ['Version conflict'],
       });
 
-      const result = await service.amendFlight(1);
+      const result = await service.amendFlight(1, userId);
 
       expect(result.success).toBe(false);
       expect(result.message).toBe('Amendment failed');
@@ -759,7 +765,7 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
       });
 
-      const result = await service.cancelFiling(1);
+      const result = await service.cancelFiling(1, userId);
 
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('not_filed');
@@ -773,13 +779,13 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
       });
 
-      const result = await service.cancelFiling(1);
+      const result = await service.cancelFiling(1, userId);
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('not_filed');
     });
 
     it('should reject cancel if not filed', async () => {
-      await expect(service.cancelFiling(1)).rejects.toThrow('Cannot cancel');
+      await expect(service.cancelFiling(1, userId)).rejects.toThrow('Cannot cancel');
     });
 
     it('should reject cancel if no filing reference', async () => {
@@ -789,7 +795,7 @@ describe('FilingService', () => {
         filing_reference: null,
       });
 
-      await expect(service.cancelFiling(1)).rejects.toThrow(
+      await expect(service.cancelFiling(1, userId)).rejects.toThrow(
         'No filing reference',
       );
     });
@@ -801,7 +807,7 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
       });
 
-      await service.cancelFiling(1);
+      await service.cancelFiling(1, userId);
 
       expect(mockFlightsService.update).toHaveBeenCalledWith(
         1,
@@ -811,6 +817,7 @@ describe('FilingService', () => {
           filing_version_stamp: null,
           filed_at: null,
         }),
+        userId,
       );
     });
 
@@ -826,7 +833,7 @@ describe('FilingService', () => {
         errors: ['Flight not found in system'],
       });
 
-      const result = await service.cancelFiling(1);
+      const result = await service.cancelFiling(1, userId);
 
       expect(result.success).toBe(false);
       expect(result.message).toBe('Cancellation failed');
@@ -842,7 +849,7 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
       });
 
-      const result = await service.closeFiling(1);
+      const result = await service.closeFiling(1, userId);
 
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('closed');
@@ -856,13 +863,13 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
       });
 
-      const result = await service.closeFiling(1);
+      const result = await service.closeFiling(1, userId);
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('closed');
     });
 
     it('should reject close if not filed', async () => {
-      await expect(service.closeFiling(1)).rejects.toThrow('Cannot close');
+      await expect(service.closeFiling(1, userId)).rejects.toThrow('Cannot close');
     });
 
     it('should reject close if no filing reference', async () => {
@@ -872,7 +879,7 @@ describe('FilingService', () => {
         filing_reference: null,
       });
 
-      await expect(service.closeFiling(1)).rejects.toThrow(
+      await expect(service.closeFiling(1, userId)).rejects.toThrow(
         'No filing reference',
       );
     });
@@ -889,7 +896,7 @@ describe('FilingService', () => {
         errors: ['Already closed'],
       });
 
-      const result = await service.closeFiling(1);
+      const result = await service.closeFiling(1, userId);
 
       expect(result.success).toBe(false);
       expect(result.message).toBe('Close failed');
@@ -907,7 +914,7 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
       });
 
-      const result = await service.getFilingStatus(1);
+      const result = await service.getFilingStatus(1, userId);
 
       expect(result.success).toBe(true);
       expect(result.filingReference).toBe('FP1001');
@@ -918,7 +925,7 @@ describe('FilingService', () => {
     });
 
     it('should return status without Leidos call for unfiled flight', async () => {
-      const result = await service.getFilingStatus(1);
+      const result = await service.getFilingStatus(1, userId);
 
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('not_filed');
@@ -932,7 +939,7 @@ describe('FilingService', () => {
   describe('filing lifecycle', () => {
     it('should support file → amend → cancel flow', async () => {
       // File
-      const fileResult = await service.fileFlight(1);
+      const fileResult = await service.fileFlight(1, userId);
       expect(fileResult.success).toBe(true);
 
       // Amend
@@ -942,18 +949,18 @@ describe('FilingService', () => {
         filing_reference: 'FP1001',
         filing_version_stamp: 'v123',
       });
-      const amendResult = await service.amendFlight(1);
+      const amendResult = await service.amendFlight(1, userId);
       expect(amendResult.success).toBe(true);
 
       // Cancel
-      const cancelResult = await service.cancelFiling(1);
+      const cancelResult = await service.cancelFiling(1, userId);
       expect(cancelResult.success).toBe(true);
       expect(cancelResult.filingStatus).toBe('not_filed');
     });
 
     it('should support file → close flow', async () => {
       // File
-      const fileResult = await service.fileFlight(1);
+      const fileResult = await service.fileFlight(1, userId);
       expect(fileResult.success).toBe(true);
 
       // Close
@@ -962,7 +969,7 @@ describe('FilingService', () => {
         filing_status: 'filed',
         filing_reference: 'FP1001',
       });
-      const closeResult = await service.closeFiling(1);
+      const closeResult = await service.closeFiling(1, userId);
       expect(closeResult.success).toBe(true);
       expect(closeResult.filingStatus).toBe('closed');
     });

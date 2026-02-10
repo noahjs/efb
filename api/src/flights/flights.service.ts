@@ -14,12 +14,16 @@ export class FlightsService {
     private calculateService: CalculateService,
   ) {}
 
-  async findAll(query?: string, limit = 50, offset = 0) {
+  async findAll(userId: string, query?: string, limit = 50, offset = 0) {
     const qb = this.flightRepo.createQueryBuilder('flight');
+
+    qb.where('(flight.user_id = :userId OR flight.user_id IS NULL)', {
+      userId,
+    });
 
     if (query) {
       const q = `%${query}%`;
-      qb.where(
+      qb.andWhere(
         '(flight.departure_identifier LIKE :q OR flight.destination_identifier LIKE :q OR flight.aircraft_identifier LIKE :q OR flight.route_string LIKE :q)',
         { q },
       );
@@ -34,22 +38,26 @@ export class FlightsService {
     return { items, total, limit, offset };
   }
 
-  async findById(id: number) {
-    const flight = await this.flightRepo.findOne({ where: { id } });
+  async findById(id: number, userId?: string) {
+    const where: any = { id };
+    if (userId) {
+      where.user_id = userId;
+    }
+    const flight = await this.flightRepo.findOne({ where });
     if (!flight) {
       throw new NotFoundException(`Flight ${id} not found`);
     }
     return flight;
   }
 
-  async create(dto: CreateFlightDto) {
-    const flight = this.flightRepo.create(dto);
+  async create(dto: CreateFlightDto, userId?: string) {
+    const flight = this.flightRepo.create({ ...dto, user_id: userId });
     await this.calculate(flight);
     return this.flightRepo.save(flight);
   }
 
-  async update(id: number, dto: UpdateFlightDto) {
-    const flight = await this.findById(id);
+  async update(id: number, dto: UpdateFlightDto, userId?: string) {
+    const flight = await this.findById(id, userId);
     Object.assign(flight, dto);
     await this.calculate(flight);
     return this.flightRepo.save(flight);
@@ -81,8 +89,8 @@ export class FlightsService {
   /**
    * Return a step-by-step breakdown of the calculation for debugging.
    */
-  async calculateDebug(id: number) {
-    const flight = await this.findById(id);
+  async calculateDebug(id: number, userId?: string) {
+    const flight = await this.findById(id, userId);
     return this.calculateService.calculateDebug({
       departure_identifier: flight.departure_identifier,
       destination_identifier: flight.destination_identifier,
@@ -95,14 +103,15 @@ export class FlightsService {
     });
   }
 
-  async remove(id: number) {
-    const flight = await this.findById(id);
+  async remove(id: number, userId?: string) {
+    const flight = await this.findById(id, userId);
     return this.flightRepo.remove(flight);
   }
 
-  async copy(id: number) {
-    const source = await this.findById(id);
+  async copy(id: number, userId?: string) {
+    const source = await this.findById(id, userId);
     const copy = this.flightRepo.create({
+      user_id: userId,
       departure_identifier: source.departure_identifier,
       destination_identifier: source.destination_identifier,
       alternate_identifier: source.alternate_identifier,

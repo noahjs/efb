@@ -17,8 +17,23 @@ export class User {
   @Column({ type: 'varchar' })
   name: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', unique: true })
   email: string;
+
+  @Column({ type: 'varchar', nullable: true, select: false })
+  password_hash: string;
+
+  @Column({ type: 'varchar', default: 'email' })
+  auth_provider: string;
+
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  provider_id: string;
+
+  @Column({ type: 'boolean', default: false })
+  email_verified: boolean;
+
+  @Column({ type: 'varchar', nullable: true, select: false })
+  refresh_token_hash: string;
 
   @Column({ type: 'varchar', nullable: true })
   pilot_name: string;

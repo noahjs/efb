@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
+import { IsNull } from 'typeorm';
 import { EndorsementsService } from './endorsements.service';
 import { Endorsement } from './entities/endorsement.entity';
 
@@ -18,7 +19,7 @@ describe('EndorsementsService', () => {
     cfi_name: 'Jane Smith',
     cfi_certificate_number: 'CFI123456',
     cfi_expiration_date: '2026-01-15',
-    expiration_date: null,
+    expiration_date: undefined,
     comments: 'Completed in PA-32R',
   };
 
@@ -37,6 +38,7 @@ describe('EndorsementsService', () => {
   beforeEach(async () => {
     const mockQb = {
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
@@ -77,7 +79,7 @@ describe('EndorsementsService', () => {
 
   describe('findAll', () => {
     it('should return paginated results', async () => {
-      const result = await service.findAll();
+      const result = await service.findAll('test-user');
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
       expect(result.limit).toBe(50);
@@ -86,20 +88,20 @@ describe('EndorsementsService', () => {
 
     it('should apply query filter when provided', async () => {
       const mockQb = mockEndorsementRepo.createQueryBuilder();
-      await service.findAll('High Performance');
+      await service.findAll('test-user', 'High Performance');
       expect(mockQb.where).toHaveBeenCalled();
     });
 
     it('should respect custom limit and offset', async () => {
       const mockQb = mockEndorsementRepo.createQueryBuilder();
-      await service.findAll(undefined, 5, 10);
+      await service.findAll('test-user', undefined, 5, 10);
       expect(mockQb.skip).toHaveBeenCalledWith(10);
       expect(mockQb.take).toHaveBeenCalledWith(5);
     });
 
     it('should order by date DESC then id DESC', async () => {
       const mockQb = mockEndorsementRepo.createQueryBuilder();
-      await service.findAll();
+      await service.findAll('test-user');
       expect(mockQb.orderBy).toHaveBeenCalledWith('e.date', 'DESC');
       expect(mockQb.addOrderBy).toHaveBeenCalledWith('e.id', 'DESC');
     });
@@ -109,7 +111,7 @@ describe('EndorsementsService', () => {
 
   describe('findOne', () => {
     it('should return endorsement when found', async () => {
-      const result = await service.findOne(1);
+      const result = await service.findOne('test-user', 1);
       expect(result.id).toBe(1);
       expect(result.endorsement_type).toBe('High Performance');
       expect(result.far_reference).toBe('61.31(f)');
@@ -117,7 +119,7 @@ describe('EndorsementsService', () => {
 
     it('should throw NotFoundException when not found', async () => {
       mockEndorsementRepo.findOne.mockResolvedValue(null);
-      await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('test-user', 999)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -133,9 +135,12 @@ describe('EndorsementsService', () => {
         cfi_certificate_number: 'CFI123456',
       };
 
-      const result = await service.create(dto as any);
+      const result = await service.create('test-user', dto as any);
 
-      expect(mockEndorsementRepo.create).toHaveBeenCalledWith(dto);
+      expect(mockEndorsementRepo.create).toHaveBeenCalledWith({
+        ...dto,
+        user_id: 'test-user',
+      });
       expect(mockEndorsementRepo.save).toHaveBeenCalledTimes(1);
       expect(result.id).toBeDefined();
     });
@@ -146,17 +151,20 @@ describe('EndorsementsService', () => {
   describe('update', () => {
     it('should update an existing endorsement', async () => {
       const dto = { comments: 'Updated comments' };
-      await service.update(1, dto as any);
+      await service.update('test-user', 1, dto as any);
 
       expect(mockEndorsementRepo.findOne).toHaveBeenCalledWith({
-        where: { id: 1 },
+        where: [
+          { id: 1, user_id: 'test-user' },
+          { id: 1, user_id: IsNull() },
+        ],
       });
       expect(mockEndorsementRepo.save).toHaveBeenCalledTimes(1);
     });
 
     it('should merge updated fields into existing endorsement', async () => {
       const dto = { comments: 'Updated', cfi_name: 'New CFI' };
-      await service.update(1, dto as any);
+      await service.update('test-user', 1, dto as any);
 
       const saved = mockEndorsementRepo.save.mock.calls[0][0];
       expect(saved.comments).toBe('Updated');
@@ -168,7 +176,7 @@ describe('EndorsementsService', () => {
     it('should throw NotFoundException when updating non-existent endorsement', async () => {
       mockEndorsementRepo.findOne.mockResolvedValue(null);
       await expect(
-        service.update(999, { comments: 'Test' } as any),
+        service.update('test-user', 999, { comments: 'Test' } as any),
       ).rejects.toThrow(NotFoundException);
     });
   });
@@ -177,13 +185,13 @@ describe('EndorsementsService', () => {
 
   describe('remove', () => {
     it('should remove an existing endorsement', async () => {
-      await service.remove(1);
+      await service.remove('test-user', 1);
       expect(mockEndorsementRepo.remove).toHaveBeenCalledTimes(1);
     });
 
     it('should throw NotFoundException when removing non-existent endorsement', async () => {
       mockEndorsementRepo.findOne.mockResolvedValue(null);
-      await expect(service.remove(999)).rejects.toThrow(NotFoundException);
+      await expect(service.remove('test-user', 999)).rejects.toThrow(NotFoundException);
     });
   });
 });

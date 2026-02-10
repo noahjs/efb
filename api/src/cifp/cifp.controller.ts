@@ -6,7 +6,9 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { CifpService } from './cifp.service';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('cifp')
 export class CifpController {
   constructor(private readonly cifpService: CifpService) {}

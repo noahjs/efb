@@ -18,4 +18,13 @@ class AppConfig {
   static const String mapboxToken = String.fromEnvironment(
     'MAPBOX_TOKEN',
   );
+
+  static const String googleClientId = String.fromEnvironment(
+    'GOOGLE_CLIENT_ID',
+  );
+
+  static const bool devAutoLogin = bool.fromEnvironment(
+    'DEV_AUTO_LOGIN',
+    defaultValue: false,
+  );
 }

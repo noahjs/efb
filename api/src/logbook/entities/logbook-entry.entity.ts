@@ -8,6 +8,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Aircraft } from '../../aircraft/entities/aircraft.entity';
+import { User } from '../../users/entities/user.entity';
 import { DataGroup } from '../../config/constants';
 
 @Entity('u_logbook_entries')
@@ -15,6 +16,13 @@ export class LogbookEntry {
   static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  user_id: string;
+
+  @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 
   // Date of flight
   @Column({ type: 'varchar', nullable: true })

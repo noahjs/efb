@@ -19,11 +19,9 @@ import { DocumentsService } from './documents.service';
 import { CreateDocumentFolderDto } from './dto/create-document-folder.dto';
 import { UpdateDocumentFolderDto } from './dto/update-document-folder.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 const ALLOWED_MIMES = ['application/pdf', 'image/jpeg', 'image/png'];
-
-// TODO: replace with real auth when user system is wired up
-const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 @Controller('documents')
 export class DocumentsController {
@@ -63,6 +61,7 @@ export class DocumentsController {
     FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }),
   )
   uploadDocument(
+    @CurrentUser() user: { id: string; email: string },
     @UploadedFile() file: Express.Multer.File,
     @Body('aircraft_id') aircraftId?: string,
     @Body('folder_id') folderId?: string,
@@ -77,7 +76,7 @@ export class DocumentsController {
     }
     return this.documentsService.uploadDocument(
       file,
-      DEMO_USER_ID,
+      user.id,
       aircraftId ? parseInt(aircraftId, 10) : undefined,
       folderId ? parseInt(folderId, 10) : undefined,
     );

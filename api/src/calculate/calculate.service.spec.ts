@@ -8,6 +8,7 @@ import {
 import { Airport } from '../airports/entities/airport.entity';
 import { PerformanceProfile } from '../aircraft/entities/performance-profile.entity';
 import { NavaidsService } from '../navaids/navaids.service';
+import { WindyService } from '../windy/windy.service';
 
 describe('haversineNm', () => {
   it('should return 0 for identical points', () => {
@@ -52,6 +53,7 @@ describe('haversineNm', () => {
 describe('CalculateService', () => {
   let service: CalculateService;
   let mockNavaidsService: any;
+  let mockWindyService: any;
   let mockAirportRepo: any;
   let mockProfileRepo: any;
 
@@ -92,6 +94,10 @@ describe('CalculateService', () => {
       resolveRoute: jest.fn().mockResolvedValue([]),
     };
 
+    mockWindyService = {
+      getRouteWinds: jest.fn().mockResolvedValue(null),
+    };
+
     mockAirportRepo = {
       findOne: jest.fn().mockResolvedValue(null),
     };
@@ -104,6 +110,7 @@ describe('CalculateService', () => {
       providers: [
         CalculateService,
         { provide: NavaidsService, useValue: mockNavaidsService },
+        { provide: WindyService, useValue: mockWindyService },
         { provide: getRepositoryToken(Airport), useValue: mockAirportRepo },
         {
           provide: getRepositoryToken(PerformanceProfile),

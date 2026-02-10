@@ -62,6 +62,7 @@ describe('FlightsService', () => {
   beforeEach(async () => {
     const mockQb = {
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
@@ -104,7 +105,7 @@ describe('FlightsService', () => {
 
   describe('findAll', () => {
     it('should return paginated results', async () => {
-      const result = await service.findAll();
+      const result = await service.findAll('test-user');
       expect(result.items).toHaveLength(1);
       expect(result.total).toBe(1);
       expect(result.limit).toBe(50);
@@ -113,13 +114,13 @@ describe('FlightsService', () => {
 
     it('should apply query filter when provided', async () => {
       const mockQb = mockFlightRepo.createQueryBuilder();
-      await service.findAll('KAPA');
+      await service.findAll('test-user', 'KAPA');
       expect(mockQb.where).toHaveBeenCalled();
     });
 
     it('should respect custom limit and offset', async () => {
       const mockQb = mockFlightRepo.createQueryBuilder();
-      await service.findAll(undefined, 10, 20);
+      await service.findAll('test-user', undefined, 10, 20);
       expect(mockQb.skip).toHaveBeenCalledWith(20);
       expect(mockQb.take).toHaveBeenCalledWith(10);
     });

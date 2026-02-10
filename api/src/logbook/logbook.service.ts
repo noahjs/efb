@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { LogbookEntry } from './entities/logbook-entry.entity';
 import { CreateLogbookEntryDto } from './dto/create-logbook-entry.dto';
 import { UpdateLogbookEntryDto } from './dto/update-logbook-entry.dto';
@@ -13,6 +13,7 @@ export class LogbookService {
   ) {}
 
   async findAll(
+    userId: string,
     query?: string,
     limit = 50,
     offset = 0,
@@ -32,6 +33,10 @@ export class LogbookService {
       );
     }
 
+    qb.andWhere('(entry.user_id = :userId OR entry.user_id IS NULL)', {
+      userId,
+    });
+
     qb.orderBy('entry.date', 'DESC')
       .addOrderBy('entry.id', 'DESC')
       .skip(offset)
@@ -41,7 +46,7 @@ export class LogbookService {
     return { items, total, limit, offset };
   }
 
-  async getSummary(): Promise<{
+  async getSummary(userId: string): Promise<{
     totalEntries: number;
     totalTime: number;
     last7Days: number;
@@ -50,7 +55,9 @@ export class LogbookService {
     last6Months: number;
     last12Months: number;
   }> {
-    const allEntries = await this.entryRepo.find();
+    const allEntries = await this.entryRepo.find({
+      where: [{ user_id: userId }, { user_id: IsNull() }],
+    });
     const now = new Date();
 
     const totalEntries = allEntries.length;
@@ -79,11 +86,16 @@ export class LogbookService {
     };
   }
 
-  async getExperienceReport(period?: string): Promise<{
+  async getExperienceReport(
+    userId: string,
+    period?: string,
+  ): Promise<{
     rows: Record<string, any>[];
     totals: Record<string, any>;
   }> {
-    const allEntries = await this.entryRepo.find();
+    const allEntries = await this.entryRepo.find({
+      where: [{ user_id: userId }, { user_id: IsNull() }],
+    });
     const now = new Date();
 
     // Filter by period if specified
@@ -166,27 +178,39 @@ export class LogbookService {
     return { rows, totals };
   }
 
-  async findOne(id: number): Promise<LogbookEntry> {
-    const entry = await this.entryRepo.findOne({ where: { id } });
+  async findOne(userId: string, id: number): Promise<LogbookEntry> {
+    const entry = await this.entryRepo.findOne({
+      where: [
+        { id, user_id: userId },
+        { id, user_id: IsNull() },
+      ],
+    });
     if (!entry) {
       throw new NotFoundException(`Logbook entry #${id} not found`);
     }
     return entry;
   }
 
-  async create(dto: CreateLogbookEntryDto): Promise<LogbookEntry> {
-    const entry = this.entryRepo.create(dto);
+  async create(
+    userId: string,
+    dto: CreateLogbookEntryDto,
+  ): Promise<LogbookEntry> {
+    const entry = this.entryRepo.create({ ...dto, user_id: userId });
     return this.entryRepo.save(entry);
   }
 
-  async update(id: number, dto: UpdateLogbookEntryDto): Promise<LogbookEntry> {
-    const entry = await this.findOne(id);
+  async update(
+    userId: string,
+    id: number,
+    dto: UpdateLogbookEntryDto,
+  ): Promise<LogbookEntry> {
+    const entry = await this.findOne(userId, id);
     Object.assign(entry, dto);
     return this.entryRepo.save(entry);
   }
 
-  async remove(id: number): Promise<void> {
-    const entry = await this.findOne(id);
+  async remove(userId: string, id: number): Promise<void> {
+    const entry = await this.findOne(userId, id);
     await this.entryRepo.remove(entry);
   }
 }

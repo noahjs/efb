@@ -4,19 +4,24 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/config/app_config.dart';
+import 'auth_interceptor.dart';
 
 /// Base API client for the NestJS backend
 class ApiClient {
   final Dio _dio;
 
-  ApiClient({String? baseUrl})
+  ApiClient({String? baseUrl, Ref? ref})
       : _dio = Dio(
           BaseOptions(
             baseUrl: baseUrl ?? '${AppConfig.apiBaseUrl}/api',
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 10),
           ),
-        );
+        ) {
+    if (ref != null) {
+      _dio.interceptors.add(AuthInterceptor(ref));
+    }
+  }
 
   // --- Airports ---
 
@@ -1225,5 +1230,5 @@ class ApiClient {
 
 /// Riverpod provider for the API client
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient();
+  return ApiClient(ref: ref);
 });

@@ -6,7 +6,9 @@ import {
 } from '@nestjs/common';
 import { TrafficService } from './traffic.service';
 import { TRAFFIC } from '../config/constants';
+import { Public } from '../auth/guards/public.decorator';
 
+@Public()
 @Controller('traffic')
 export class TrafficController {
   constructor(private readonly trafficService: TrafficService) {}

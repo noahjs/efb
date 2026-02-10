@@ -25,6 +25,7 @@ export class ImportService {
   ) {}
 
   async processImport(
+    userId: string,
     fileContent: string,
     source: string,
     preview: boolean,
@@ -121,7 +122,9 @@ export class ImportService {
     const toImport = parsed.entries.filter((_, i) => !duplicateSet.has(i));
 
     if (toImport.length > 0) {
-      const entities = toImport.map((dto) => this.entryRepo.create(dto));
+      const entities = toImport.map((dto) =>
+        this.entryRepo.create({ ...dto, user_id: userId }),
+      );
       await this.entryRepo.save(entities);
     }
 
