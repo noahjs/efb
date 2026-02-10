@@ -216,10 +216,10 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
 
           // Additional items
           _MenuItem(
-            icon: Icons.devices,
+            icon: Icons.sensors,
             iconColor: const Color(0xFF5C6BC0),
             label: 'Devices',
-            onTap: () => _showComingSoon('Devices'),
+            onTap: () => context.push('/settings/receiver'),
           ),
           _MenuItem(
             icon: Icons.person_outline,

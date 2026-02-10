@@ -16,6 +16,8 @@ export const WEATHER = {
   TIMEOUT_NOTAM_MS: 30_000,
   TAF_SEARCH_RADIUS_NM: 50,
   TAF_SEARCH_LIMIT: 20,
+  METAR_SEARCH_RADIUS_NM: 30,
+  METAR_SEARCH_LIMIT: 100,
   WINDS_SEARCH_RADIUS_NM: 100,
   WINDS_SEARCH_LIMIT: 50,
 };
@@ -35,6 +37,46 @@ export const IMAGERY = {
   TIMEOUT_TFR_TEXT_MS: 10_000,
   PIREP_DEFAULT_BBOX: '20,-130,55,-60',
   PIREP_DEFAULT_AGE_HOURS: 2,
+};
+
+// --- Wind Data (Open-Meteo) ---
+export const WINDS = {
+  // Open-Meteo free API — serves GFS, HRRR, NAM, ECMWF, ICON model data
+  API_BASE_URL: 'https://api.open-meteo.com/v1',
+  CACHE_TTL_POINT_MS: 30 * 60 * 1000, // 30 minutes
+  CACHE_TTL_GRID_MS: 15 * 60 * 1000, // 15 minutes
+  ROUTE_SAMPLE_INTERVAL_NM: 50,
+  // gfs_seamless auto-blends HRRR (3km short-range) with GFS (longer-range)
+  DEFAULT_MODEL: 'gfs_seamless',
+  FORECAST_DAYS: 2,
+  // Pressure levels to request (hPa) — maps to the same altitudes as before
+  PRESSURE_LEVELS: [1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 200, 150],
+  // Approximate altitude (ft MSL) for each pressure level
+  LEVEL_ALTITUDES: {
+    surface: 0,
+    1000: 360,
+    950: 1640,
+    925: 2500,
+    900: 3200,
+    850: 5000,
+    800: 6200,
+    700: 10000,
+    600: 14000,
+    500: 18000,
+    400: 24000,
+    300: 30000,
+    200: 39000,
+    150: 44000,
+  } as Record<string | number, number>,
+  // Model-to-endpoint mapping
+  MODEL_ENDPOINTS: {
+    gfs_seamless: '/gfs',      // HRRR+GFS blend (US, best default)
+    hrrr_conus: '/gfs',        // HRRR only (3km, 18h)
+    nam_conus: '/gfs',         // NAM (5km, 84h)
+    gfs_global: '/gfs',        // GFS only (22km, global)
+    ecmwf_ifs025: '/ecmwf',    // ECMWF IFS (9km, global)
+    icon_seamless: '/dwd-icon', // ICON (13km, global)
+  } as Record<string, string>,
 };
 
 // --- Airports ---

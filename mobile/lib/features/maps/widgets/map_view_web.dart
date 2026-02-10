@@ -12,6 +12,7 @@ class PlatformMapView extends StatefulWidget {
   final bool showFlightCategory;
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
+  final ValueChanged<Map<String, dynamic>>? onPirepTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final List<Map<String, dynamic>> airports;
@@ -20,10 +21,9 @@ class PlatformMapView extends StatefulWidget {
   final Map<String, dynamic>? airspaceGeoJson;
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
-  final Map<String, dynamic>? tfrGeoJson;
-  final Map<String, dynamic>? advisoryGeoJson;
-  final Map<String, dynamic>? pirepGeoJson;
-  final Map<String, dynamic>? metarOverlayGeoJson;
+
+  /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'advisories', 'pireps').
+  final Map<String, Map<String, dynamic>?> overlays;
 
   const PlatformMapView({
     super.key,
@@ -31,6 +31,7 @@ class PlatformMapView extends StatefulWidget {
     this.showFlightCategory = false,
     this.interactive = true,
     this.onAirportTapped,
+    this.onPirepTapped,
     this.onBoundsChanged,
     this.onMapLongPressed,
     this.airports = const [],
@@ -39,10 +40,7 @@ class PlatformMapView extends StatefulWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
-    this.tfrGeoJson,
-    this.advisoryGeoJson,
-    this.pirepGeoJson,
-    this.metarOverlayGeoJson,
+    this.overlays = const {},
   });
 
   @override
@@ -51,6 +49,9 @@ class PlatformMapView extends StatefulWidget {
 
 @JS('_efbOnAirportTap')
 external set _onAirportTapJs(JSFunction? fn);
+
+@JS('_efbOnPirepTap')
+external set _onPirepTapJs(JSFunction? fn);
 
 @JS('_efbOnBoundsChanged')
 external set _onBoundsChangedJs(JSFunction? fn);
@@ -69,6 +70,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     switch (layer) {
       case 'street':
         return 'mapbox://styles/mapbox/streets-v12';
+      case 'dark':
+        return 'mapbox://styles/mapbox/dark-v11';
       case 'vfr':
       case 'satellite':
       default:
@@ -156,6 +159,12 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       widget.onAirportTapped?.call(id.toDart);
     }).toJS;
 
+    _onPirepTapJs = ((JSString propsJson) {
+      final props = Map<String, dynamic>.from(
+          jsonDecode(propsJson.toDart) as Map);
+      widget.onPirepTapped?.call(props);
+    }).toJS;
+
     _onBoundsChangedJs =
         ((JSNumber minLng, JSNumber minLat, JSNumber maxLng, JSNumber maxLat) {
       widget.onBoundsChanged?.call((
@@ -178,6 +187,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         'airspace-fill': 'airspace',
         'artcc-lines': 'artcc',
         'airway-lines': 'airway',
+        'tfr-fill': 'tfr',
+        'advisory-fill': 'advisory',
       };
 
       for (var i = 0; i < propsList.length; i++) {
@@ -221,6 +232,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
     if (oldWidget.artccGeoJson != widget.artccGeoJson) {
       _updateAeroSource('artcc', widget.artccGeoJson);
+    }
+    // Update generic overlays
+    final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
+    for (final key in allKeys) {
+      if (oldWidget.overlays[key] != widget.overlays[key]) {
+        _updateOverlaySource(key, widget.overlays[key]);
+      }
     }
   }
 
@@ -281,7 +299,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final features = airports.where((a) {
       return a['latitude'] != null && a['longitude'] != null;
     }).map((a) {
-      final id = a['identifier'] ?? a['icao_identifier'] ?? '';
+      final id = a['icao_identifier'] ?? a['identifier'] ?? '';
       final lng = a['longitude'];
       final lat = a['latitude'];
       final category = a['category'] ?? 'unknown';
@@ -321,6 +339,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             ${_aeronauticalLayersJs()}
             ${_airportLayersJs(widget.showFlightCategory)}
             ${_routeLayerJs()}
+            ${_overlayLayersJs()}
             ${_airportClickHandlersJs()}
             ${_longPressHandlerJs()}
             ${_boundsHandlerJs()}
@@ -334,6 +353,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         _updateAeroSource('airspaces', widget.airspaceGeoJson);
         _updateAeroSource('airways', widget.airwayGeoJson);
         _updateAeroSource('artcc', widget.artccGeoJson);
+        for (final key in widget.overlays.keys) {
+          _updateOverlaySource(key, widget.overlays[key]);
+        }
       });
     } else {
       // Same Mapbox style — just toggle VFR layer visibility
@@ -377,12 +399,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           ${_aeronauticalLayersJs()}
           ${_airportLayersJs(widget.showFlightCategory)}
           ${_routeLayerJs()}
+          ${_overlayLayersJs()}
           ${_airportClickHandlersJs()}
           ${_longPressHandlerJs()}
           ${_boundsHandlerJs()}
-
-          // Navigation controls
-          map.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
 
           // Fire initial bounds
           var b = map.getBounds();
@@ -397,6 +417,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     // Mark map ready after init script runs (with margin for load event)
     Future.delayed(const Duration(milliseconds: 500), () {
       _mapReady = true;
+      // Push any overlay data that arrived before map was ready
+      for (final key in widget.overlays.keys) {
+        _updateOverlaySource(key, widget.overlays[key]);
+      }
     });
   }
 
@@ -646,6 +670,187 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     ''');
   }
 
+  /// Creates GeoJSON sources and layers for all generic overlays.
+  static String _overlayLayersJs() {
+    return '''
+          // ── TFR overlay ──
+          map.addSource('tfrs', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'tfr-fill',
+            type: 'fill',
+            source: 'tfrs',
+            paint: {
+              'fill-color': ['coalesce', ['get', 'color'], '#FF5252'],
+              'fill-opacity': 0.15
+            }
+          });
+          map.addLayer({
+            id: 'tfr-outline',
+            type: 'line',
+            source: 'tfrs',
+            paint: {
+              'line-color': ['coalesce', ['get', 'color'], '#FF5252'],
+              'line-width': 2,
+              'line-opacity': 0.8
+            }
+          });
+
+          // ── Advisory (AIR/SIGMET/CWA) overlay ──
+          map.addSource('advisories', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'advisory-fill',
+            type: 'fill',
+            source: 'advisories',
+            paint: {
+              'fill-color': ['coalesce', ['get', 'color'], '#B0B4BC'],
+              'fill-opacity': 0.2
+            }
+          });
+          map.addLayer({
+            id: 'advisory-outline',
+            type: 'line',
+            source: 'advisories',
+            paint: {
+              'line-color': ['coalesce', ['get', 'color'], '#B0B4BC'],
+              'line-width': 2
+            }
+          });
+
+          // ── PIREP overlay ──
+          map.addSource('pireps', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'pirep-dots',
+            type: 'circle',
+            source: 'pireps',
+            paint: {
+              'circle-radius': 6,
+              'circle-color': ['coalesce', ['get', 'color'], '#B0B4BC'],
+              'circle-stroke-width': 1.5,
+              'circle-stroke-color': 'rgba(255,255,255,0.3)'
+            }
+          });
+          map.addLayer({
+            id: 'pirep-urgent-ring',
+            type: 'circle',
+            source: 'pireps',
+            filter: ['==', 'isUrgent', true],
+            paint: {
+              'circle-radius': 10,
+              'circle-color': 'transparent',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#FF5252'
+            }
+          });
+
+          // ── METAR-derived overlay ──
+          map.addSource('metar-overlay', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'metar-overlay-dots',
+            type: 'circle',
+            source: 'metar-overlay',
+            paint: {
+              'circle-radius': 7,
+              'circle-color': ['coalesce', ['get', 'color'], '#888888'],
+              'circle-stroke-width': 1.5,
+              'circle-stroke-color': 'rgba(255,255,255,0.5)'
+            }
+          });
+          map.addLayer({
+            id: 'metar-overlay-labels',
+            type: 'symbol',
+            source: 'metar-overlay',
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 10,
+              'text-offset': [0, -1.5],
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
+            }
+          });
+
+          // ── Winds Aloft overlay ──
+          map.addSource('winds-aloft', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'winds-aloft-dots',
+            type: 'circle',
+            source: 'winds-aloft',
+            paint: {
+              'circle-radius': 4,
+              'circle-color': ['coalesce', ['get', 'color'], '#4CAF50'],
+              'circle-stroke-width': 1,
+              'circle-stroke-color': 'rgba(255,255,255,0.4)'
+            }
+          });
+          map.addLayer({
+            id: 'winds-aloft-labels',
+            type: 'symbol',
+            source: 'winds-aloft',
+            layout: {
+              'text-field': ['get', 'label'],
+              'text-size': 12,
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+            },
+            paint: {
+              'text-color': ['coalesce', ['get', 'color'], '#4CAF50'],
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
+            }
+          });
+    ''';
+  }
+
+  void _updateOverlaySource(String key, Map<String, dynamic>? data) {
+    if (!_mapReady) {
+      debugPrint('[EFB] _updateOverlaySource($key): map not ready');
+      return;
+    }
+    final featureCount = data != null
+        ? (data['features'] as List?)?.length ?? 0
+        : 0;
+    debugPrint('[EFB] _updateOverlaySource($key): $featureCount features');
+    final geojson = data != null
+        ? jsonEncode(data)
+        : '{"type":"FeatureCollection","features":[]}';
+    final escaped = geojson.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) { console.log('[EFB] overlay update: no map'); return; }
+        var src = map.getSource('$key');
+        if (src) {
+          try {
+            var data = JSON.parse('$escaped');
+            src.setData(data);
+            console.log('[EFB] overlay $key updated: ' + (data.features ? data.features.length : 0) + ' features');
+          } catch(e) {
+            console.error('[EFB] overlay $key JSON parse error:', e);
+          }
+        } else {
+          console.log('[EFB] overlay $key: source not found');
+        }
+      })();
+    ''');
+  }
+
   static String _airportClickHandlersJs() {
     return '''
           map.on('click', 'airport-dots', function(e) {
@@ -664,6 +869,23 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.on('mouseleave', 'airport-dots', function() {
             map.getCanvas().style.cursor = '';
           });
+
+          map.on('click', 'pirep-dots', function(e) {
+            if (e.features && e.features.length > 0) {
+              var props = JSON.stringify(e.features[0].properties);
+              if (window._efbOnPirepTap) {
+                window._efbOnPirepTap(props);
+              }
+            }
+          });
+
+          map.on('mouseenter', 'pirep-dots', function() {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+
+          map.on('mouseleave', 'pirep-dots', function() {
+            map.getCanvas().style.cursor = '';
+          });
     ''';
   }
 
@@ -672,15 +894,21 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.on('contextmenu', function(e) {
             var pad = 20;
             var box = [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]];
-            var layers = ['airspace-fill', 'artcc-lines', 'airway-lines'];
+            var layers = ['airspace-fill', 'artcc-lines', 'airway-lines', 'tfr-fill', 'advisory-fill'];
             var existingLayers = layers.filter(function(l) { return map.getLayer(l); });
             var allFeatures = existingLayers.length > 0
               ? map.queryRenderedFeatures(box, { layers: existingLayers })
               : [];
-            // Deduplicate by id + layer
+            // Deduplicate by id + layer (advisories use hazard+tag+time)
             var seen = {};
             var features = allFeatures.filter(function(f) {
-              var key = f.layer.id + ':' + (f.properties.id || f.properties.name || '');
+              var key;
+              if (f.layer.id === 'advisory-fill') {
+                var p = f.properties;
+                key = 'advisory:' + (p.hazard || '') + '|' + (p.tag || p.seriesId || p.cwsu || '') + '|' + (p.validTime || p.validTimeFrom || '');
+              } else {
+                key = f.layer.id + ':' + (f.properties.id || f.properties.name || '');
+              }
               if (seen[key]) return false;
               seen[key] = true;
               return true;

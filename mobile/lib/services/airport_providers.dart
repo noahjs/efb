@@ -47,11 +47,11 @@ final airportFrequenciesProvider =
   return client.getFrequencies(id);
 });
 
-/// Provider for METAR data
+/// Provider for METAR data (with nearest-station fallback and AWOS info)
 final metarProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
   final client = ref.read(apiClientProvider);
-  return client.getMetar(icao);
+  return client.getNearestMetar(icao);
 });
 
 /// Provider for TAF data (nearest TAF with station attribution)
@@ -66,6 +66,18 @@ final windsAloftProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
   final client = ref.read(apiClientProvider);
   return client.getWindsAloft(icao);
+});
+
+/// Provider for Windy-powered winds aloft (point forecast by lat/lng)
+final windyWindsAloftProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, airportId) async {
+  final client = ref.read(apiClientProvider);
+  final airport = await ref.read(airportDetailProvider(airportId).future);
+  if (airport == null) return null;
+  final lat = airport['latitude'] as double?;
+  final lng = airport['longitude'] as double?;
+  if (lat == null || lng == null) return null;
+  return client.getWindyPoint(lat: lat, lng: lng);
 });
 
 /// Provider for NOTAMs

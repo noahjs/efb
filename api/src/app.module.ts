@@ -41,6 +41,18 @@ import { FaaRegistryAircraft } from './registry/entities/faa-registry-aircraft.e
 import { RegistryModule } from './registry/registry.module';
 import { FilingModule } from './filing/filing.module';
 import { HealthModule } from './health/health.module';
+import { WeightBalanceModule } from './weight-balance/weight-balance.module';
+import { WBProfile } from './weight-balance/entities/wb-profile.entity';
+import { WBStation } from './weight-balance/entities/wb-station.entity';
+import { WBEnvelope } from './weight-balance/entities/wb-envelope.entity';
+import { WBScenario } from './weight-balance/entities/wb-scenario.entity';
+import { CifpModule } from './cifp/cifp.module';
+import { WindyModule } from './windy/windy.module';
+import { CifpApproach } from './cifp/entities/cifp-approach.entity';
+import { CifpLeg } from './cifp/entities/cifp-leg.entity';
+import { CifpIls } from './cifp/entities/cifp-ils.entity';
+import { CifpMsa } from './cifp/entities/cifp-msa.entity';
+import { CifpRunway } from './cifp/entities/cifp-runway.entity';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -72,6 +84,15 @@ import { dbConfig } from './db.config';
         Endorsement,
         Certificate,
         FaaRegistryAircraft,
+        WBProfile,
+        WBStation,
+        WBEnvelope,
+        WBScenario,
+        CifpApproach,
+        CifpLeg,
+        CifpIls,
+        CifpMsa,
+        CifpRunway,
       ],
     }),
     AirportsModule,
@@ -91,6 +112,9 @@ import { dbConfig } from './db.config';
     RegistryModule,
     FilingModule,
     HealthModule,
+    WeightBalanceModule,
+    CifpModule,
+    WindyModule,
   ],
 })
 export class AppModule {}

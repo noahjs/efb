@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,9 +9,20 @@ import '../../models/logbook_entry.dart';
 import '../../models/aircraft.dart';
 import '../../services/logbook_providers.dart';
 import '../../services/aircraft_providers.dart';
+import '../../services/airport_providers.dart';
 import '../flights/widgets/flight_section_header.dart';
 import '../flights/widgets/flight_field_row.dart';
 import '../flights/widgets/flight_edit_dialogs.dart';
+
+double _haversineNm(double lat1, double lon1, double lat2, double lon2) {
+  const R = 3440.065;
+  final dLat = (lat2 - lat1) * pi / 180;
+  final dLon = (lon2 - lon1) * pi / 180;
+  final a = sin(dLat / 2) * sin(dLat / 2) +
+      cos(lat1 * pi / 180) * cos(lat2 * pi / 180) *
+      sin(dLon / 2) * sin(dLon / 2);
+  return 2 * R * asin(sqrt(a));
+}
 
 class LogbookEntryScreen extends ConsumerStatefulWidget {
   final int? entryId;
@@ -25,6 +38,9 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
   LogbookEntry _entry = const LogbookEntry();
   bool _loaded = false;
   bool _saving = false;
+  double? _suggestedDistance;
+  String? _distanceFromKey;
+  String? _distanceToKey;
 
   bool get _isNew => widget.entryId == null && _entry.id == null;
 
@@ -37,6 +53,37 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
       );
       _loaded = true;
     }
+  }
+
+  void _computeSuggestedDistance() {
+    final from = _entry.fromAirport;
+    final to = _entry.toAirport;
+    if (from == null || from.isEmpty || to == null || to.isEmpty || from == to) {
+      if (_suggestedDistance != null) {
+        setState(() => _suggestedDistance = null);
+      }
+      return;
+    }
+    if (from == _distanceFromKey && to == _distanceToKey) return;
+    _distanceFromKey = from;
+    _distanceToKey = to;
+
+    Future(() async {
+      try {
+        final fromAirport = await ref.read(airportDetailProvider(from).future);
+        final toAirport = await ref.read(airportDetailProvider(to).future);
+        if (fromAirport == null || toAirport == null) return;
+        final lat1 = (fromAirport['latitude'] as num?)?.toDouble();
+        final lon1 = (fromAirport['longitude'] as num?)?.toDouble();
+        final lat2 = (toAirport['latitude'] as num?)?.toDouble();
+        final lon2 = (toAirport['longitude'] as num?)?.toDouble();
+        if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return;
+        final dist = _haversineNm(lat1, lon1, lat2, lon2);
+        if (mounted) {
+          setState(() => _suggestedDistance = double.parse(dist.toStringAsFixed(1)));
+        }
+      } catch (_) {}
+    });
   }
 
   void _goBackToList() {
@@ -68,7 +115,10 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        _computeSuggestedDistance();
+      }
     }
   }
 
@@ -142,6 +192,7 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
                 _entry = entry;
                 _loaded = true;
               });
+              _computeSuggestedDistance();
             });
           }
           return _buildScaffold();
@@ -167,10 +218,9 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: TextButton(
+        leading: IconButton(
+          icon: const Icon(Icons.chevron_left),
           onPressed: () => _goBackToList(),
-          child: const Text('Entries',
-              style: TextStyle(color: AppColors.accent, fontSize: 14)),
         ),
         title: Column(
           children: [
@@ -203,6 +253,7 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
           _buildCrossCountrySection(),
           _buildTakeoffsSection(),
           _buildLandingsSection(),
+          if (_entry.aircraftCategory == 'helicopter') _buildAutorotationsSection(),
           _buildInstrumentSection(),
           _buildTrainingSection(),
           _buildCommentsSection(),
@@ -355,12 +406,19 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
   // --- TIMES ---
   Widget _buildTimesSection() {
     final tt = _entry.totalTime;
+    double? hobbsSuggest;
+    if (_entry.hobbsStart != null && _entry.hobbsEnd != null &&
+        _entry.hobbsEnd! > _entry.hobbsStart!) {
+      hobbsSuggest = double.parse(
+          (_entry.hobbsEnd! - _entry.hobbsStart!).toStringAsFixed(1));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const FlightSectionHeader(title: 'Times'),
         _buildDecimalRow('Total Time', _entry.totalTime, (v) =>
-            _saveField(_entry.copyWith(totalTime: v ?? 0))),
+            _saveField(_entry.copyWith(totalTime: v ?? 0)),
+            suggestValue: hobbsSuggest),
         _buildDecimalRow('PIC', _entry.pic, (v) =>
             _saveField(_entry.copyWith(pic: v ?? 0)),
             suggestValue: tt),
@@ -388,7 +446,8 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
             _saveField(_entry.copyWith(crossCountry: v ?? 0)),
             suggestValue: tt),
         _buildDecimalRow('Distance', _entry.distance, (v) =>
-            _saveField(_entry.copyWith(distance: v))),
+            _saveField(_entry.copyWith(distance: v)),
+            suggestValue: _suggestedDistance),
       ],
     );
   }
@@ -427,6 +486,26 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
             icon: Icons.nightlight_round, iconColor: AppColors.textMuted,
             onChanged: (v) =>
                 _saveField(_entry.copyWith(nightLandingsFullStop: v))),
+      ],
+    );
+  }
+
+  // --- AUTOROTATIONS (helicopter) ---
+  Widget _buildAutorotationsSection() {
+    final total = _entry.autorotations + _entry.fullDownAutorotations + _entry.hoveringAutorotations;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FlightSectionHeader(title: 'Autorotations ($total)'),
+        _buildCounterRow('Autos', _entry.autorotations,
+            icon: Icons.rotate_left, iconColor: AppColors.accent,
+            onChanged: (v) => _saveField(_entry.copyWith(autorotations: v))),
+        _buildCounterRow('Full Down Autos', _entry.fullDownAutorotations,
+            icon: Icons.rotate_left, iconColor: AppColors.accent,
+            onChanged: (v) => _saveField(_entry.copyWith(fullDownAutorotations: v))),
+        _buildCounterRow('Hovering Autos', _entry.hoveringAutorotations,
+            icon: Icons.rotate_left, iconColor: AppColors.accent,
+            onChanged: (v) => _saveField(_entry.copyWith(hoveringAutorotations: v))),
       ],
     );
   }
@@ -635,6 +714,7 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
       aircraftId: a.id,
       aircraftIdentifier: a.tailNumber,
       aircraftType: a.aircraftType,
+      aircraftCategory: a.category,
     ));
   }
 

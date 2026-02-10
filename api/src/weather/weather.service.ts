@@ -138,6 +138,103 @@ export class WeatherService {
     }
   }
 
+  async getNearestMetar(icao: string): Promise<any> {
+    const cacheKey = `nearest-metar:${icao}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    // Look up airport to resolve identifiers and get AWOS info
+    const airport = await this.airportsService.findById(icao);
+
+    // Determine the ICAO code to query AWC with
+    const resolvedIcao = airport?.icao_identifier || icao;
+
+    // Try the station itself first
+    const directMetar = await this.getMetar(resolvedIcao);
+    if (directMetar) {
+      const result = {
+        metar: directMetar,
+        station: resolvedIcao,
+        isNearby: false,
+        distanceNm: 0,
+        requestedStation: icao,
+        awos: null,
+      };
+      this.setCache(cacheKey, result);
+      return result;
+    }
+
+    // Extract AWOS/ASOS frequency info if available
+    let awos: { name: string; frequency: string | null; phone: string | null } | null = null;
+    if (airport?.frequencies) {
+      const awosFreq = airport.frequencies.find(
+        (f) => f.type === 'AWOS' || f.type === 'ASOS',
+      );
+      if (awosFreq) {
+        awos = {
+          name: awosFreq.name || awosFreq.type,
+          frequency: awosFreq.frequency || null,
+          phone: awosFreq.phone || null,
+        };
+      }
+    }
+
+    if (!airport || airport.latitude == null || airport.longitude == null) {
+      const result = {
+        metar: null,
+        station: null,
+        isNearby: false,
+        distanceNm: null,
+        requestedStation: icao,
+        awos,
+      };
+      this.setCache(cacheKey, result);
+      return result;
+    }
+
+    // Search nearby airports for one with a METAR
+    const nearby = await this.airportsService.findNearby(
+      airport.latitude,
+      airport.longitude,
+      WEATHER.METAR_SEARCH_RADIUS_NM,
+      WEATHER.METAR_SEARCH_LIMIT,
+    );
+
+    const faaId = airport.identifier;
+
+    for (const candidate of nearby) {
+      const candidateIcao = candidate.icao_identifier;
+      if (!candidateIcao || candidateIcao === resolvedIcao) continue;
+      if (candidate.identifier === faaId) continue;
+
+      const metar = await this.getMetar(candidateIcao);
+      if (metar) {
+        const result = {
+          metar,
+          station: candidateIcao,
+          isNearby: true,
+          distanceNm: Math.round(candidate.distance_nm * 10) / 10,
+          requestedStation: icao,
+          awos,
+        };
+        this.setCache(cacheKey, result);
+        return result;
+      }
+    }
+
+    // No nearby METAR found
+    const result = {
+      metar: null,
+      station: null,
+      isNearby: false,
+      distanceNm: null,
+      requestedStation: icao,
+      awos,
+    };
+    this.setCache(cacheKey, result);
+    return result;
+  }
+
   async getNearestTaf(icao: string): Promise<any> {
     const cacheKey = `nearest-taf:${icao}`;
     const cached = this.getFromCache(cacheKey);
@@ -370,16 +467,41 @@ export class WeatherService {
     if (cached) return cached;
 
     try {
-      const { data } = await firstValueFrom(
-        this.http.get(`${WEATHER.AWC_BASE_URL}/windtemp`, {
-          params: { region: 'us', level: 'low', fcst },
-          responseType: 'text',
-          transformResponse: [(d: any) => d], // prevent JSON parsing
-        }),
-      );
+      // Fetch both low and high altitude winds in parallel
+      const [lowRes, highRes] = await Promise.all([
+        firstValueFrom(
+          this.http.get(`${WEATHER.AWC_BASE_URL}/windtemp`, {
+            params: { region: 'us', level: 'low', fcst },
+            responseType: 'text',
+            transformResponse: [(d: any) => d],
+          }),
+        ),
+        firstValueFrom(
+          this.http.get(`${WEATHER.AWC_BASE_URL}/windtemp`, {
+            params: { region: 'us', level: 'high', fcst },
+            responseType: 'text',
+            transformResponse: [(d: any) => d],
+          }),
+        ).catch(() => null), // high-level is optional fallback
+      ]);
 
-      const parsed = this.parseWindsAloftText(data as string);
-      const result = { data: parsed };
+      const lowParsed = this.parseWindsAloftText(lowRes.data as string);
+
+      // Merge high-altitude data if available
+      if (highRes) {
+        const highParsed = this.parseWindsAloftText(highRes.data as string);
+        for (const [station, highAlts] of highParsed) {
+          const lowAlts = lowParsed.get(station) ?? [];
+          const existingAltitudes = new Set(lowAlts.map((a) => a.altitude));
+          const merged = [
+            ...lowAlts,
+            ...highAlts.filter((a) => !existingAltitudes.has(a.altitude)),
+          ].sort((a, b) => a.altitude - b.altitude);
+          lowParsed.set(station, merged);
+        }
+      }
+
+      const result = { data: lowParsed };
       this.setCache(cacheKey, result, WEATHER.CACHE_TTL_WINDS_MS);
       return result;
     } catch (error) {

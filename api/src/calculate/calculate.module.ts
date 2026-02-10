@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CalculateController } from './calculate.controller';
 import { CalculateService } from './calculate.service';
 import { NavaidsModule } from '../navaids/navaids.module';
+import { WindyModule } from '../windy/windy.module';
 import { Airport } from '../airports/entities/airport.entity';
 import { PerformanceProfile } from '../aircraft/entities/performance-profile.entity';
 
@@ -10,6 +11,7 @@ import { PerformanceProfile } from '../aircraft/entities/performance-profile.ent
   imports: [
     TypeOrmModule.forFeature([Airport, PerformanceProfile]),
     NavaidsModule,
+    WindyModule,
   ],
   controllers: [CalculateController],
   providers: [CalculateService],

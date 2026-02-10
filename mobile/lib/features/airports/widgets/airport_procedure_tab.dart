@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../models/approach_chart.dart';
 import '../../../models/procedure.dart';
 import '../../../services/api_client.dart';
+import '../../../services/cifp_providers.dart';
 import '../../../services/procedure_providers.dart';
 import '../screens/procedure_pdf_screen.dart';
 
@@ -101,7 +104,7 @@ class _ProcedureTabView extends StatelessWidget {
                 _ProcedureList(airportId: airportId, items: airport),
                 _ProcedureList(airportId: airportId, items: departure),
                 _ProcedureList(airportId: airportId, items: arrival),
-                _ProcedureList(airportId: airportId, items: approach),
+                _ApproachTabContent(airportId: airportId, govCharts: approach),
                 _ProcedureList(airportId: airportId, items: other),
               ],
             ),
@@ -214,6 +217,203 @@ class _ProcedureRow extends ConsumerWidget {
                   ),
                 ),
               ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Combined approach tab: CIFP data views above GOV PDF charts.
+class _ApproachTabContent extends ConsumerWidget {
+  final String airportId;
+  final List<Procedure> govCharts;
+
+  const _ApproachTabContent({
+    required this.airportId,
+    required this.govCharts,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cifpAsync = ref.watch(approachListProvider(airportId));
+
+    return cifpAsync.when(
+      loading: () => _buildWithCifpSection(
+        context,
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Center(
+            child: SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      ),
+      error: (_, _) => _buildWithCifpSection(context, null),
+      data: (approaches) {
+        // Filter to base approaches only (skip transitions)
+        final base = approaches
+            .where((a) =>
+                a.transitionIdentifier == null ||
+                a.transitionIdentifier!.isEmpty)
+            .toList();
+
+        if (base.isEmpty) {
+          return _buildWithCifpSection(context, null);
+        }
+
+        return _buildWithCifpSection(
+          context,
+          Column(
+            children: base
+                .map((a) => _CifpApproachRow(
+                      airportId: airportId,
+                      approach: a,
+                    ))
+                .toList(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWithCifpSection(BuildContext context, Widget? cifpContent) {
+    return ListView(
+      children: [
+        // CIFP section
+        if (cifpContent != null) ...[
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+            child: const Text(
+              'CIFP DATA',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          cifpContent,
+          const Divider(height: 24, thickness: 0.5),
+        ],
+        // GOV charts section header
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+          child: const Text(
+            'GOV CHARTS',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textMuted,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        if (govCharts.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(
+              child: Text(
+                'No procedures available',
+                style: TextStyle(color: AppColors.textMuted),
+              ),
+            ),
+          )
+        else
+          ...govCharts.map((p) => _ProcedureRow(
+                airportId: airportId,
+                procedure: p,
+              )),
+      ],
+    );
+  }
+}
+
+class _CifpApproachRow extends StatelessWidget {
+  final String airportId;
+  final ApproachSummary approach;
+
+  const _CifpApproachRow({
+    required this.airportId,
+    required this.approach,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        context.push('/airports/$airportId/approaches/${approach.id}');
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: AppColors.divider, width: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Source badge
+            Container(
+              width: 32,
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: const Text(
+                  'CIFP',
+                  style: TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Procedure name
+            Expanded(
+              child: Text(
+                approach.procedureName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            // Route type badge
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              margin: const EdgeInsets.only(left: 8),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceLight,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                approach.routeTypeName,
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             const Icon(
               Icons.chevron_right,

@@ -54,6 +54,8 @@ NestJS modular monolith with four main modules:
 
 Database is PostgreSQL (port 5433, user/pass/db: efb) with TypeORM (auto-synchronize enabled in dev). Run `docker compose up -d` to start the database. All API endpoints are prefixed with `/api`.
 
+**Data pipeline status:** Weather, PIREP, TFR, and advisory data is currently live-proxied from third-party APIs with in-memory caching. Before launch, these need to move to server-side background polling into PostgreSQL. See [Third-Party API Audit](docs/modules/third-party-api-audit.md) for the full plan and [US Data Sources](docs/modules/us-data-sources.md) for implementation status.
+
 ### Frontend
 
 Flutter app using Riverpod for state management and GoRouter for navigation with a bottom-nav shell route pattern.

@@ -4,6 +4,7 @@ class LogbookEntry {
   final int? aircraftId;
   final String? aircraftIdentifier;
   final String? aircraftType;
+  final String? aircraftCategory;
   final String? fromAirport;
   final String? toAirport;
   final String? route;
@@ -35,6 +36,11 @@ class LogbookEntry {
   final int dayLandingsFullStop;
   final int nightLandingsFullStop;
   final int allLandings;
+
+  // Autorotations (helicopter)
+  final int autorotations;
+  final int fullDownAutorotations;
+  final int hoveringAutorotations;
 
   // Instrument
   final int holds;
@@ -70,6 +76,7 @@ class LogbookEntry {
     this.aircraftId,
     this.aircraftIdentifier,
     this.aircraftType,
+    this.aircraftCategory,
     this.fromAirport,
     this.toAirport,
     this.route,
@@ -95,6 +102,9 @@ class LogbookEntry {
     this.dayLandingsFullStop = 0,
     this.nightLandingsFullStop = 0,
     this.allLandings = 0,
+    this.autorotations = 0,
+    this.fullDownAutorotations = 0,
+    this.hoveringAutorotations = 0,
     this.holds = 0,
     this.approaches,
     this.dualGiven = 0,
@@ -124,6 +134,7 @@ class LogbookEntry {
       aircraftId: json['aircraft_id'] as int?,
       aircraftIdentifier: json['aircraft_identifier'] as String?,
       aircraftType: json['aircraft_type'] as String?,
+      aircraftCategory: json['aircraft_category'] as String?,
       fromAirport: json['from_airport'] as String?,
       toAirport: json['to_airport'] as String?,
       route: json['route'] as String?,
@@ -150,6 +161,9 @@ class LogbookEntry {
       dayLandingsFullStop: (json['day_landings_full_stop'] as int?) ?? 0,
       nightLandingsFullStop: (json['night_landings_full_stop'] as int?) ?? 0,
       allLandings: (json['all_landings'] as int?) ?? 0,
+      autorotations: (json['autorotations'] as int?) ?? 0,
+      fullDownAutorotations: (json['full_down_autorotations'] as int?) ?? 0,
+      hoveringAutorotations: (json['hovering_autorotations'] as int?) ?? 0,
       holds: (json['holds'] as int?) ?? 0,
       approaches: json['approaches'] as String?,
       dualGiven: (json['dual_given'] as num?)?.toDouble() ?? 0,
@@ -180,6 +194,7 @@ class LogbookEntry {
       'aircraft_id': aircraftId,
       'aircraft_identifier': aircraftIdentifier,
       'aircraft_type': aircraftType,
+      'aircraft_category': aircraftCategory,
       'from_airport': fromAirport,
       'to_airport': toAirport,
       'route': route,
@@ -205,6 +220,9 @@ class LogbookEntry {
       'day_landings_full_stop': dayLandingsFullStop,
       'night_landings_full_stop': nightLandingsFullStop,
       'all_landings': allLandings,
+      'autorotations': autorotations,
+      'full_down_autorotations': fullDownAutorotations,
+      'hovering_autorotations': hoveringAutorotations,
       'holds': holds,
       'approaches': approaches,
       'dual_given': dualGiven,
@@ -232,6 +250,7 @@ class LogbookEntry {
     int? aircraftId,
     String? aircraftIdentifier,
     String? aircraftType,
+    String? aircraftCategory,
     String? fromAirport,
     String? toAirport,
     String? route,
@@ -257,6 +276,9 @@ class LogbookEntry {
     int? dayLandingsFullStop,
     int? nightLandingsFullStop,
     int? allLandings,
+    int? autorotations,
+    int? fullDownAutorotations,
+    int? hoveringAutorotations,
     int? holds,
     String? approaches,
     double? dualGiven,
@@ -284,6 +306,7 @@ class LogbookEntry {
       aircraftId: aircraftId ?? this.aircraftId,
       aircraftIdentifier: aircraftIdentifier ?? this.aircraftIdentifier,
       aircraftType: aircraftType ?? this.aircraftType,
+      aircraftCategory: aircraftCategory ?? this.aircraftCategory,
       fromAirport: fromAirport ?? this.fromAirport,
       toAirport: toAirport ?? this.toAirport,
       route: route ?? this.route,
@@ -310,6 +333,9 @@ class LogbookEntry {
       nightLandingsFullStop:
           nightLandingsFullStop ?? this.nightLandingsFullStop,
       allLandings: allLandings ?? this.allLandings,
+      autorotations: autorotations ?? this.autorotations,
+      fullDownAutorotations: fullDownAutorotations ?? this.fullDownAutorotations,
+      hoveringAutorotations: hoveringAutorotations ?? this.hoveringAutorotations,
       holds: holds ?? this.holds,
       approaches: approaches ?? this.approaches,
       dualGiven: dualGiven ?? this.dualGiven,

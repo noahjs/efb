@@ -32,6 +32,9 @@ export class LogbookEntry {
   @Column({ type: 'varchar', nullable: true })
   aircraft_type: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  aircraft_category: string;
+
   // Route
   @Column({ type: 'varchar', nullable: true })
   from_airport: string;
@@ -110,6 +113,16 @@ export class LogbookEntry {
 
   @Column({ type: 'integer', default: 0 })
   all_landings: number;
+
+  // Autorotations (helicopter)
+  @Column({ type: 'integer', default: 0 })
+  autorotations: number;
+
+  @Column({ type: 'integer', default: 0 })
+  full_down_autorotations: number;
+
+  @Column({ type: 'integer', default: 0 })
+  hovering_autorotations: number;
 
   // Instrument
   @Column({ type: 'integer', default: 0 })

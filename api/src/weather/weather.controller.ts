@@ -5,6 +5,11 @@ import { WeatherService } from './weather.service';
 export class WeatherController {
   constructor(private readonly weatherService: WeatherService) {}
 
+  @Get('metar/:icao/nearest')
+  async nearestMetar(@Param('icao') icao: string) {
+    return this.weatherService.getNearestMetar(icao.toUpperCase());
+  }
+
   @Get('metar/:icao')
   async metar(@Param('icao') icao: string) {
     const data = await this.weatherService.getMetar(icao.toUpperCase());

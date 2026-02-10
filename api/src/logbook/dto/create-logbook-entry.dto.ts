@@ -19,6 +19,10 @@ export class CreateLogbookEntryDto {
 
   @IsOptional()
   @IsString()
+  aircraft_category?: string;
+
+  @IsOptional()
+  @IsString()
   from_airport?: string;
 
   @IsOptional()
@@ -116,6 +120,18 @@ export class CreateLogbookEntryDto {
   @IsOptional()
   @IsNumber()
   all_landings?: number;
+
+  @IsOptional()
+  @IsNumber()
+  autorotations?: number;
+
+  @IsOptional()
+  @IsNumber()
+  full_down_autorotations?: number;
+
+  @IsOptional()
+  @IsNumber()
+  hovering_autorotations?: number;
 
   @IsOptional()
   @IsNumber()

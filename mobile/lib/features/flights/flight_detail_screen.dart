@@ -7,6 +7,7 @@ import '../../services/api_client.dart';
 import '../../services/flight_providers.dart';
 import '../../services/aircraft_providers.dart';
 import '../../services/logbook_providers.dart';
+import '../../services/wb_providers.dart';
 import 'widgets/flight_stats_bar.dart';
 import 'widgets/flight_quick_actions.dart';
 import 'widgets/flight_departure_section.dart';
@@ -32,6 +33,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
   Flight _flight = const Flight();
   bool _loaded = false;
   bool _saving = false;
+  bool _autoCalcTriggered = false;
 
   bool get _isNew => widget.flightId == null && _flight.id == null;
 
@@ -78,7 +80,25 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
     } catch (_) {}
   }
 
+  /// Auto-trigger distance/time calculation if it hasn't been run yet.
+  void _autoCalculateIfNeeded() {
+    if (_autoCalcTriggered) return;
+    if (_flight.id == null) return;
+    if (_flight.calculatedAt != null) return;
+    if (_flight.departureIdentifier == null ||
+        _flight.destinationIdentifier == null) {
+      return;
+    }
+    _autoCalcTriggered = true;
+    _saveField(_flight);
+  }
+
   Future<void> _saveField(Flight updated) async {
+    // Track whether fuel fields changed for W&B sync
+    final fuelChanged = !_isNew &&
+        (updated.startFuelGallons != _flight.startFuelGallons ||
+         updated.fuelAtShutdownGallons != _flight.fuelAtShutdownGallons);
+
     setState(() {
       _flight = updated;
       _saving = true;
@@ -93,6 +113,12 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
         final saved =
             await service.updateFlight(_flight.id!, updated.toJson());
         setState(() => _flight = saved);
+
+        // If fuel changed, invalidate W&B and flight provider so both stay in sync
+        if (fuelChanged) {
+          ref.invalidate(flightWBProvider(_flight.id!));
+          ref.invalidate(flightDetailProvider(_flight.id!));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -107,6 +133,22 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen for external flight updates (e.g., fuel/people synced from W&B)
+    if (widget.flightId != null) {
+      ref.listen<AsyncValue<Flight?>>(
+        flightDetailProvider(widget.flightId!),
+        (prev, next) {
+          if (_loaded && !_saving) {
+            next.whenData((flight) {
+              if (flight != null && mounted) {
+                setState(() => _flight = flight);
+              }
+            });
+          }
+        },
+      );
+    }
+
     // Load existing flight from provider
     if (widget.flightId != null && !_loaded) {
       final flightAsync = ref.watch(flightDetailProvider(widget.flightId!));
@@ -139,6 +181,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                 _flight = flight;
                 _loaded = true;
               });
+              _autoCalculateIfNeeded();
             });
           }
           return _buildScaffold();
@@ -153,6 +196,15 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
     final dep = _flight.departureIdentifier ?? '----';
     final dest = _flight.destinationIdentifier ?? '----';
     final title = _isNew ? 'New Flight' : '$dep - $dest';
+
+    // Eagerly load W&B data so it's available immediately
+    bool? wbWithinLimits;
+    if (_flight.id != null && _flight.aircraftId != null) {
+      final wbAsync = ref.watch(flightWBProvider(_flight.id!));
+      wbWithinLimits = wbAsync.whenOrNull(
+        data: (data) => data.scenario.isWithinEnvelope,
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -182,6 +234,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
             flight: _flight,
             onRecalculate: () => _saveField(_flight),
             apiClient: ref.read(apiClientProvider),
+            wbWithinLimits: wbWithinLimits,
           ),
           Expanded(
             child: ListView(
@@ -200,10 +253,6 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                   onChanged: _saveField,
                   apiClient: ref.read(apiClientProvider),
                 ),
-                FlightPayloadSection(
-                  flight: _flight,
-                  onChanged: _saveField,
-                ),
                 FlightFuelSection(
                   flight: _flight,
                   onChanged: _saveField,
@@ -216,6 +265,10 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                           .whenData((a) => a)
                           .value
                       : null,
+                ),
+                FlightPayloadSection(
+                  flight: _flight,
+                  onChanged: _saveField,
                 ),
                 FlightActionsSection(
                   isNewFlight: _isNew,

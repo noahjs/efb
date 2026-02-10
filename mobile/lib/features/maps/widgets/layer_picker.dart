@@ -26,6 +26,7 @@ class _LayerPickerState extends State<LayerPicker> {
   static const baseLayers = [
     ('vfr', 'VFR Sectional'),
     ('satellite', 'Satellite'),
+    ('dark', 'Dark'),
     ('street', 'Street'),
   ];
 
@@ -35,10 +36,12 @@ class _LayerPickerState extends State<LayerPicker> {
 
   static const overlayLayers = [
     ('flight_category', 'Flight Category'),
+    ('traffic', 'Traffic'),
     ('tfrs', 'TFRs'),
     ('air_sigmet', 'AIR/SIGMET/CWAs'),
     ('pireps', 'PIREPs'),
     ('surface_wind', 'Surface Wind'),
+    ('winds_aloft', 'Winds Aloft'),
     ('temperature', 'Temperature'),
     ('visibility', 'Visibility'),
     ('ceiling', 'Ceiling'),

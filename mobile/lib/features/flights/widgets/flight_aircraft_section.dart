@@ -113,15 +113,17 @@ class FlightAircraftSection extends ConsumerWidget {
 
   void _selectAircraft(Aircraft a) {
     final defaultProfile = a.defaultProfile;
-    onChanged(flight.copyWith(
-      aircraftId: a.id,
-      aircraftIdentifier: a.tailNumber,
-      aircraftType: a.aircraftType,
-      performanceProfileId: defaultProfile?.id,
-      performanceProfile: defaultProfile?.name,
-      trueAirspeed: defaultProfile?.cruiseTas?.round(),
-      fuelBurnRate: defaultProfile?.cruiseFuelBurn,
-    ));
+    // Use toFullJson + fromJson so nullable profile fields can be
+    // explicitly cleared (copyWith treats null as "keep existing").
+    final json = flight.toFullJson();
+    json['aircraft_id'] = a.id;
+    json['aircraft_identifier'] = a.tailNumber;
+    json['aircraft_type'] = a.aircraftType;
+    json['performance_profile_id'] = defaultProfile?.id;
+    json['performance_profile'] = defaultProfile?.name;
+    json['true_airspeed'] = defaultProfile?.cruiseTas?.round();
+    json['fuel_burn_rate'] = defaultProfile?.cruiseFuelBurn;
+    onChanged(Flight.fromJson(json));
   }
 
   void _showProfilePicker(BuildContext context, WidgetRef ref) {

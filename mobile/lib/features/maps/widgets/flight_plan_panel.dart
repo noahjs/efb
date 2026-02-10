@@ -570,6 +570,7 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
       trueAirspeed: flight?.trueAirspeed,
       fuelBurnRate: flight?.fuelBurnRate,
       performanceProfileId: flight?.performanceProfileId,
+      flightRules: flight?.flightRules,
     );
     if (result != null) {
       _saveField(

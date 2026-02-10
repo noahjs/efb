@@ -32,6 +32,27 @@ export class CreateAircraftDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(['piston', 'turboprop', 'turbojet', 'turboshaft'])
+  engine_type?: string;
+
+  @IsOptional()
+  @IsNumber()
+  num_engines?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  pressurized?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  service_ceiling?: number;
+
+  @IsOptional()
+  @IsNumber()
+  max_cabin_altitude?: number;
+
+  @IsOptional()
+  @IsString()
   color?: string;
 
   @IsOptional()

@@ -12,6 +12,7 @@ import '../widgets/airport_runway_tab.dart';
 import '../widgets/airport_procedure_tab.dart';
 import '../widgets/airport_notam_tab.dart';
 import '../../../services/procedure_providers.dart';
+import 'package:go_router/go_router.dart';
 import 'airport_3d_view_screen.dart';
 import 'procedure_pdf_screen.dart';
 
@@ -262,9 +263,14 @@ class _AirportHeader extends ConsumerWidget {
               },
             ),
             const SizedBox(width: 8),
-            _QuickAction(label: 'FBOs', onTap: () {}),
+            _QuickAction(
+              label: 'Approaches',
+              onTap: () {
+                context.push('/airports/$airportId/approaches');
+              },
+            ),
             const SizedBox(width: 8),
-            _QuickAction(label: 'Comments', onTap: () {}),
+            _QuickAction(label: 'FBOs', onTap: () {}),
           ],
         ),
       ],

@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, ILike } from 'typeorm';
 import { PerformanceProfile } from '../aircraft/entities/performance-profile.entity';
 import { Airport } from '../airports/entities/airport.entity';
 import { NavaidsService } from '../navaids/navaids.service';
+import { WindyService } from '../windy/windy.service';
 
 export interface CalculateInput {
   departure_identifier?: string;
@@ -51,12 +52,17 @@ export interface AltitudeResult {
   ete_minutes: number | null;
   flight_fuel_gallons: number | null;
   calculation_method: string;
+  avg_wind_component: number | null; // negative = headwind, positive = tailwind
+  avg_groundspeed: number | null;
 }
 
 @Injectable()
 export class CalculateService {
+  private readonly logger = new Logger(CalculateService.name);
+
   constructor(
     private navaidsService: NavaidsService,
+    private windyService: WindyService,
     @InjectRepository(Airport)
     private airportRepo: Repository<Airport>,
     @InjectRepository(PerformanceProfile)
@@ -91,15 +97,19 @@ export class CalculateService {
     if (input.destination_identifier)
       identifiers.push(input.destination_identifier);
 
+    const nullResult = (a: number): AltitudeResult => ({
+      altitude: a,
+      ete_minutes: null,
+      flight_fuel_gallons: null,
+      calculation_method: 'none',
+      avg_wind_component: null,
+      avg_groundspeed: null,
+    });
+
     if (identifiers.length < 2) {
       return {
         distance_nm: null,
-        results: altitudes.map((a) => ({
-          altitude: a,
-          ete_minutes: null,
-          flight_fuel_gallons: null,
-          calculation_method: 'none',
-        })),
+        results: altitudes.map(nullResult),
       };
     }
 
@@ -107,12 +117,7 @@ export class CalculateService {
     if (waypoints.length < 2) {
       return {
         distance_nm: null,
-        results: altitudes.map((a) => ({
-          altitude: a,
-          ete_minutes: null,
-          flight_fuel_gallons: null,
-          calculation_method: 'none',
-        })),
+        results: altitudes.map(nullResult),
       };
     }
 
@@ -149,62 +154,97 @@ export class CalculateService {
       profile.descent_speed &&
       profile.descent_fuel_flow;
 
-    const results = altitudes.map((alt) => {
-      // Try 3-phase
-      if (hasFullProfile && profile) {
-        const climbAlt = Math.max(0, alt - depElev);
-        const climbTimeMin = climbAlt > 0 ? climbAlt / profile.climb_rate : 0;
-        const climbDist = profile.climb_speed * (climbTimeMin / 60);
-        const climbFuel = profile.climb_fuel_flow * (climbTimeMin / 60);
+    // Fetch wind data for each altitude using Windy API
+    const waypointCoords = waypoints.map((wp) => ({
+      lat: wp.latitude,
+      lng: wp.longitude,
+    }));
 
-        const descentAlt = Math.max(0, alt - destElev);
-        const descentTimeMin =
-          descentAlt > 0 ? descentAlt / profile.descent_rate : 0;
-        const descentDist = profile.descent_speed * (descentTimeMin / 60);
-        const descentFuel = profile.descent_fuel_flow * (descentTimeMin / 60);
+    const results = await Promise.all(
+      altitudes.map(async (alt) => {
+        const tas = input.true_airspeed || (profile?.cruise_tas ?? 0);
+        const burnRate =
+          input.fuel_burn_rate || (profile?.cruise_fuel_burn ?? 0);
 
-        if (climbDist + descentDist <= totalNm) {
-          const cruiseDist = totalNm - climbDist - descentDist;
-          const cruiseTimeMin =
-            profile.cruise_tas > 0 ? (cruiseDist / profile.cruise_tas) * 60 : 0;
-          const cruiseFuel = profile.cruise_fuel_burn
-            ? profile.cruise_fuel_burn * (cruiseTimeMin / 60)
-            : 0;
+        // Fetch wind data for this altitude (best-effort, don't block on failure)
+        let windResult: {
+          avgWindComponent: number;
+          avgGroundspeed: number;
+        } | null = null;
+        try {
+          if (tas > 0 && waypointCoords.length >= 2) {
+            windResult = await this.windyService.getRouteWinds(
+              waypointCoords,
+              alt,
+              tas,
+            );
+          }
+        } catch {
+          // Wind data is optional — continue without it
+        }
 
-          const totalTime = climbTimeMin + cruiseTimeMin + descentTimeMin;
-          const totalFuel = climbFuel + cruiseFuel + descentFuel;
+        const avgWindComponent = windResult?.avgWindComponent ?? null;
+        const avgGroundspeed = windResult?.avgGroundspeed ?? null;
 
+        // Try 3-phase
+        if (hasFullProfile && profile) {
+          const climbAlt = Math.max(0, alt - depElev);
+          const climbTimeMin =
+            climbAlt > 0 ? climbAlt / profile.climb_rate : 0;
+          const climbDist = profile.climb_speed * (climbTimeMin / 60);
+          const climbFuel = profile.climb_fuel_flow * (climbTimeMin / 60);
+
+          const descentAlt = Math.max(0, alt - destElev);
+          const descentTimeMin =
+            descentAlt > 0 ? descentAlt / profile.descent_rate : 0;
+          const descentDist = profile.descent_speed * (descentTimeMin / 60);
+          const descentFuel = profile.descent_fuel_flow * (descentTimeMin / 60);
+
+          if (climbDist + descentDist <= totalNm) {
+            const cruiseDist = totalNm - climbDist - descentDist;
+            // Use wind-corrected groundspeed for cruise phase if available
+            const cruiseSpeed = avgGroundspeed || profile.cruise_tas;
+            const cruiseTimeMin =
+              cruiseSpeed > 0 ? (cruiseDist / cruiseSpeed) * 60 : 0;
+            const cruiseFuel = profile.cruise_fuel_burn
+              ? profile.cruise_fuel_burn * (cruiseTimeMin / 60)
+              : 0;
+
+            const totalTime = climbTimeMin + cruiseTimeMin + descentTimeMin;
+            const totalFuel = climbFuel + cruiseFuel + descentFuel;
+
+            return {
+              altitude: alt,
+              ete_minutes: Math.round(totalTime),
+              flight_fuel_gallons: Math.round(totalFuel * 10) / 10,
+              calculation_method: 'three_phase',
+              avg_wind_component: avgWindComponent,
+              avg_groundspeed: avgGroundspeed,
+            } as AltitudeResult;
+          }
+        }
+
+        // Fallback: single-phase (use wind-corrected GS if available)
+        const effectiveSpeed = avgGroundspeed || tas;
+
+        if (effectiveSpeed > 0) {
+          const eteHours = totalNm / effectiveSpeed;
           return {
             altitude: alt,
-            ete_minutes: Math.round(totalTime),
-            flight_fuel_gallons: Math.round(totalFuel * 10) / 10,
-            calculation_method: 'three_phase',
+            ete_minutes: Math.round(eteHours * 60),
+            flight_fuel_gallons:
+              burnRate > 0
+                ? Math.round(eteHours * burnRate * 10) / 10
+                : null,
+            calculation_method: 'single_phase',
+            avg_wind_component: avgWindComponent,
+            avg_groundspeed: avgGroundspeed,
           } as AltitudeResult;
         }
-      }
 
-      // Fallback: single-phase
-      const tas = input.true_airspeed || (profile?.cruise_tas ?? 0);
-      const burnRate = input.fuel_burn_rate || (profile?.cruise_fuel_burn ?? 0);
-
-      if (tas > 0) {
-        const eteHours = totalNm / tas;
-        return {
-          altitude: alt,
-          ete_minutes: Math.round(eteHours * 60),
-          flight_fuel_gallons:
-            burnRate > 0 ? Math.round(eteHours * burnRate * 10) / 10 : null,
-          calculation_method: 'single_phase',
-        } as AltitudeResult;
-      }
-
-      return {
-        altitude: alt,
-        ete_minutes: null,
-        flight_fuel_gallons: null,
-        calculation_method: 'none',
-      } as AltitudeResult;
-    });
+        return nullResult(alt);
+      }),
+    );
 
     return { distance_nm: distanceNm, results };
   }

@@ -98,6 +98,15 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>?> getNearestMetar(String icao) async {
+    try {
+      final response = await _dio.get('/weather/metar/$icao/nearest');
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>?> getTaf(String icao) async {
     try {
       final response = await _dio.get('/weather/taf/$icao');
@@ -161,6 +170,69 @@ class ApiClient {
       return [];
     }
   }
+  // --- Windy (Winds Aloft) ---
+
+  Future<Map<String, dynamic>?> getWindGrid({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    required int altitude,
+    double? spacing,
+  }) async {
+    try {
+      final response = await _dio.get('/windy/grid', queryParameters: {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+        'altitude': altitude,
+        if (spacing != null) 'spacing': spacing,
+      });
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getWindStreamlines({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    required int altitude,
+  }) async {
+    try {
+      final response = await _dio.get('/windy/streamlines', queryParameters: {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+        'altitude': altitude,
+      });
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getWindyPoint({
+    required double lat,
+    required double lng,
+    String? model,
+  }) async {
+    try {
+      final response = await _dio.get('/windy/point', queryParameters: {
+        'lat': lat,
+        'lng': lng,
+        if (model != null) 'model': model,
+      });
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --- Procedures ---
 
   Future<Map<String, dynamic>> getProcedures(String airportId) async {
@@ -560,6 +632,127 @@ class ApiClient {
     return response.data;
   }
 
+  // --- Flight W&B ---
+
+  Future<Map<String, dynamic>> getFlightWBScenario(int flightId) async {
+    final response = await _dio.get('/flights/$flightId/wb-scenario');
+    return response.data;
+  }
+
+  // --- Weight & Balance ---
+
+  Future<List<dynamic>> getWBProfiles(int aircraftId) async {
+    final response = await _dio.get('/aircraft/$aircraftId/wb/profiles');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getWBProfile(
+      int aircraftId, int profileId) async {
+    final response =
+        await _dio.get('/aircraft/$aircraftId/wb/profiles/$profileId');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createWBProfile(
+      int aircraftId, Map<String, dynamic> data) async {
+    final response =
+        await _dio.post('/aircraft/$aircraftId/wb/profiles', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateWBProfile(
+      int aircraftId, int profileId, Map<String, dynamic> data) async {
+    final response = await _dio
+        .put('/aircraft/$aircraftId/wb/profiles/$profileId', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteWBProfile(int aircraftId, int profileId) async {
+    await _dio.delete('/aircraft/$aircraftId/wb/profiles/$profileId');
+  }
+
+  Future<Map<String, dynamic>> createWBStation(
+      int aircraftId, int profileId, Map<String, dynamic> data) async {
+    final response = await _dio.post(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/stations',
+        data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateWBStation(int aircraftId, int profileId,
+      int stationId, Map<String, dynamic> data) async {
+    final response = await _dio.put(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/stations/$stationId',
+        data: data);
+    return response.data;
+  }
+
+  Future<void> deleteWBStation(
+      int aircraftId, int profileId, int stationId) async {
+    await _dio.delete(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/stations/$stationId');
+  }
+
+  Future<List<dynamic>> reorderWBStations(
+      int aircraftId, int profileId, List<int> stationIds) async {
+    final response = await _dio.put(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/stations/reorder',
+        data: {'station_ids': stationIds});
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> upsertWBEnvelope(
+      int aircraftId, int profileId, Map<String, dynamic> data) async {
+    final response = await _dio.put(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/envelopes',
+        data: data);
+    return response.data;
+  }
+
+  Future<List<dynamic>> getWBScenarios(
+      int aircraftId, int profileId) async {
+    final response = await _dio
+        .get('/aircraft/$aircraftId/wb/profiles/$profileId/scenarios');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getWBScenario(
+      int aircraftId, int profileId, int scenarioId) async {
+    final response = await _dio.get(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/scenarios/$scenarioId');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createWBScenario(
+      int aircraftId, int profileId, Map<String, dynamic> data) async {
+    final response = await _dio.post(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/scenarios',
+        data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateWBScenario(int aircraftId, int profileId,
+      int scenarioId, Map<String, dynamic> data) async {
+    final response = await _dio.put(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/scenarios/$scenarioId',
+        data: data);
+    return response.data;
+  }
+
+  Future<void> deleteWBScenario(
+      int aircraftId, int profileId, int scenarioId) async {
+    await _dio.delete(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/scenarios/$scenarioId');
+  }
+
+  Future<Map<String, dynamic>> calculateWB(
+      int aircraftId, int profileId, Map<String, dynamic> data) async {
+    final response = await _dio.post(
+        '/aircraft/$aircraftId/wb/profiles/$profileId/calculate',
+        data: data);
+    return response.data;
+  }
+
   // --- Aircraft Equipment ---
 
   // --- Imagery ---
@@ -680,6 +873,20 @@ class ApiClient {
     } catch (_) {
       return null;
     }
+  }
+
+  // --- CIFP ---
+
+  Future<List<dynamic>> getApproaches(String airportId) async {
+    final response = await _dio.get('/cifp/$airportId/approaches');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getChartData(
+      String airportId, int approachId) async {
+    final response =
+        await _dio.get('/cifp/$airportId/chart-data/$approachId');
+    return response.data;
   }
 
   // --- Logbook ---

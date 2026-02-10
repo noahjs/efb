@@ -19,7 +19,7 @@ The Weight & Balance module ensures aircraft are loaded within approved limits b
 | Envelope Visualization | Graphical CG envelope chart(s) — longitudinal (Weight vs. CG) for all aircraft, plus lateral (Weight vs. Lateral CG) when enabled. Shows current loading point plotted against approved limits. Displays takeoff, zero-fuel, and landing conditions simultaneously. | High |
 | Weight Summary Bar | Persistent summary showing BEW, ZFW, TOW, and LDW with actual values and limits. Color-coded status (green = within limits, red = exceeded). | Low |
 | Limit Alerts | Visual alerts (red banner, red weight values) when weight or CG exceeds approved envelope at any condition (zero-fuel, takeoff, landing). | Low |
-| Pre-loaded Envelopes | Pre-built W&B templates for 50+ common GA aircraft models with type certificate envelope data and standard station configurations. | High |
+| Pre-loaded Templates | Pre-built W&B templates for common GA aircraft models with type certificate envelope data and standard station configurations. Future enhancement — initial release requires manual profile setup from POH/RFM. | High |
 | Lateral CG (Helicopters) | Optional lateral (left-right) CG computation with separate lateral envelope chart. Enabled by default for helicopter category aircraft. Accounts for asymmetric seating, side-mounted cargo, and lateral fuel tank positions. | Medium |
 | Fuel Burn CG Shift | Calculate CG position at landing weight by subtracting trip fuel from takeoff condition. Shows CG travel path on envelope chart as fuel burns. | Medium |
 | Scenario Comparison | Save and compare multiple loading scenarios for the same aircraft. Duplicate and modify scenarios. | Medium |
@@ -394,53 +394,139 @@ A clean, formatted summary for pilot records:
 
 ---
 
-## 6. Pre-loaded Aircraft Templates
+## 6. Example Profiles
 
-### 6.1 Template Data
+The two examples below show what a fully configured W&B profile looks like for each aircraft category — a fixed-wing turboprop (longitudinal CG only) and a helicopter (longitudinal + lateral CG). These illustrate the data a user enters when setting up a new profile from their aircraft's POH and weighing report.
 
-Pre-built W&B profiles for common GA aircraft types. Applied when a user creates a new W&B profile and selects an aircraft type template.
+### 6.1 Fixed-Wing Example: TBM 960 (TBM9)
 
-Each template provides:
-- Standard station definitions (names, longitudinal arms, lateral arms where applicable, max weights, categories)
-- Longitudinal CG envelope polygon coordinates (from TCDS/POH)
-- Lateral CG envelope polygon coordinates (for helicopters)
-- Default BEW (typical for type — user should update from actual weighing report)
-- Max weight limits (MTOW, MLW, MZFW)
-- `lateral_cg_enabled` flag (true for helicopters)
+Single-engine turboprop, 6-seat pressurized cabin. Longitudinal CG only. Complex envelope with MZFW limit.
 
-### 6.2 Priority Aircraft Types
+**Profile:**
 
-| Type | ICAO Code | Notes |
-|------|-----------|-------|
-| Cessna 172S Skyhawk SP | C172 | Most popular trainer. Normal + Utility envelopes. |
-| Cessna 182T Skylane | C182 | Popular high-performance 4-seat single. |
-| Piper PA-28-181 Archer | P28A | Common training/touring aircraft. |
-| Piper PA-28R-201 Arrow | P28R | Complex trainer. |
-| Cirrus SR22 | SR22 | Popular high-performance single. |
-| Cirrus SR22T | S22T | Turbocharged variant. |
-| Beechcraft A36 Bonanza | BE36 | High-performance 6-seat. |
-| Cessna 206H Stationair | C206 | 6-seat utility. |
-| Diamond DA40 | DA40 | Modern composite trainer. |
-| Diamond DA62 | DA62 | Twin-engine composite. |
-| Piper PA-44 Seminole | PA44 | Common multi-engine trainer. |
-| Beechcraft 58 Baron | BE58 | Twin-engine 6-seat. |
-| TBM 960 | TBM9 | Turboprop single. Complex envelope with MZFW. |
-| Pilatus PC-12 | PC12 | Single-engine turboprop. |
-| Cessna 208 Caravan | C208 | Utility turboprop. |
-| **Helicopters** | | **Lateral CG enabled by default** |
-| Airbus AS350 B3e AStar | AS50 | Single-engine turbine helicopter. Lateral CG limits ±3.1 in. Common tour/utility helicopter. |
-| Bell 505 Jet Ranger X | B505 | Single-engine turbine helicopter. 4+1 seating. Lateral CG limits apply. |
-| Robinson R44 Raven II | R44 | Piston helicopter. Very popular for training/private use. Narrow lateral CG limits (±2.4 in). |
-| Robinson R66 Turbine | R66 | Light turbine helicopter. Similar lateral sensitivity to R44. |
-| Bell 206B JetRanger | B06 | Classic light turbine helicopter. |
+| Field | Value |
+|-------|-------|
+| Name | 6-Seat Standard |
+| Datum | Forward face of firewall |
+| Lateral CG Enabled | No |
+| BEW | 4,745 lbs *(from aircraft weighing report)* |
+| BEW Arm | *(from weighing report — typically ~188 in)* |
+| Max Ramp Weight | 7,430 lbs |
+| MTOW | 7,394 lbs |
+| MLW | 7,110 lbs |
+| MZFW | 6,252 lbs |
+| Taxi Fuel | 2 gal |
 
-### 6.3 Template Data Source
+**Stations:**
 
-Envelope coordinates and station data are transcribed from:
-1. **Type Certificate Data Sheets (TCDS)** — Published by FAA, freely available at [rgl.faa.gov](https://rgl.faa.gov). Contains approved weight limits and CG range.
-2. **POH/AFM Loading Diagrams** — Standard station arms and baggage limits. These are type-specific (not serial-specific), so generally applicable across aircraft of the same model.
+| # | Name | Category | Group | Arm (in) | Max Weight (lbs) | Default Weight |
+|---|------|----------|-------|----------|-----------------|----------------|
+| 0 | Pilot | seat | Flight Deck | 178.5 | — | 170 |
+| 1 | Copilot | seat | Flight Deck | 178.5 | — | — |
+| 2 | Left Seat | seat | Intermediate Row | 224.8 | — | — |
+| 3 | Right Seat | seat | Intermediate Row | 224.8 | — | — |
+| 4 | Left Seat | seat | Aft Row | *(from POH — ~258 in)* | — | — |
+| 5 | Right Seat | seat | Aft Row | *(from POH — ~258 in)* | — | — |
+| 6 | Forward Baggage | baggage | Baggage | *(from POH)* | *(from POH)* | — |
+| 7 | Aft Baggage | baggage | Baggage | *(from POH)* | 220 | — |
+| 8 | Main Fuel | fuel | Fuel | *(from POH — ~195 in)* | — | — |
 
-Templates are embedded in the application as seed data. Users must still verify BEW and BEW CG against their specific aircraft's weighing report.
+*Fuel station links to the aircraft's FuelTank entity. Max weight derived from tank capacity (291 gal) × 6.75 lbs/gal.*
+
+**Longitudinal Envelope (normal category):**
+
+Points define the polygon boundary from the POH CG envelope chart. Example structure:
+
+```json
+[
+  { "weight": 4000, "cg": 182.0 },
+  { "weight": 4000, "cg": 194.0 },
+  { "weight": 7394, "cg": 194.0 },
+  { "weight": 7394, "cg": 187.0 },
+  ...
+]
+```
+
+*Exact coordinates transcribed from the POH Appendix — the envelope is not a simple rectangle; it typically narrows at higher weights with a more restrictive forward CG limit.*
+
+---
+
+### 6.2 Helicopter Example: Airbus AS350 B3e / H125 (AS50)
+
+Single-engine turbine helicopter, 1+5 seating. Both longitudinal and lateral CG required.
+
+**Profile:**
+
+| Field | Value |
+|-------|-------|
+| Name | Standard 5-Pax |
+| Datum | *(from RFM — reference plane forward of aircraft nose)* |
+| Lateral CG Enabled | **Yes** *(auto-set, aircraft category = helicopter)* |
+| BEW | *(from weighing report — typically ~2,976 lbs)* |
+| BEW Longitudinal Arm | *(from weighing report)* |
+| BEW Lateral Arm | *(from weighing report — ideally near 0)* |
+| Max Ramp Weight | 5,512 lbs |
+| MTOW | 5,512 lbs |
+| MLW | 5,512 lbs |
+| MZFW | — |
+| Taxi Fuel | 1 gal |
+
+**Stations:**
+
+| # | Name | Category | Group | Arm (in) | Lateral Arm (in) | Max Wt (lbs) | Default Wt |
+|---|------|----------|-------|----------|-------------------|-------------|------------|
+| 0 | Pilot | seat | Front Row | *(RFM)* | *(RFM, R +X in)* | — | 170 |
+| 1 | Front Passenger | seat | Front Row | *(RFM)* | *(RFM, L -X in)* | — | — |
+| 2 | Rear Left | seat | Rear Bench | *(RFM)* | *(RFM, L -X in)* | — | — |
+| 3 | Rear Center | seat | Rear Bench | *(RFM)* | 0 | — | — |
+| 4 | Rear Right | seat | Rear Bench | *(RFM)* | *(RFM, R +X in)* | — | — |
+| 5 | Baggage Compartment | baggage | Baggage | *(RFM)* | 0 | 265 | — |
+| 6 | Main Fuel | fuel | Fuel | *(RFM)* | *(RFM)* | — | — |
+
+*Note: Pilot sits in the right seat (standard for helicopters). Lateral arms are measured from aircraft centerline — positive = right, negative = left. "RFM" = Rotorcraft Flight Manual, the helicopter equivalent of a POH.*
+
+**Longitudinal Envelope (normal category):**
+
+```json
+[
+  { "weight": 2600, "cg": ... },
+  { "weight": 5512, "cg": ... },
+  ...
+]
+```
+
+*Transcribed from the RFM longitudinal CG envelope chart.*
+
+**Lateral Envelope (normal category):**
+
+Lateral envelope is typically symmetric about centerline. Example structure:
+
+```json
+[
+  { "weight": 2600, "cg": -3.1 },
+  { "weight": 5512, "cg": -3.1 },
+  { "weight": 5512, "cg": 3.1 },
+  { "weight": 2600, "cg": 3.1 }
+]
+```
+
+*Lateral CG limits for the AS350 B3e are approximately ±3.1 in (±80mm) across the full weight range. This forms a narrow vertical band on the lateral envelope chart. Exceeding lateral CG limits reduces lateral cyclic authority — especially critical in hover and low-speed flight.*
+
+---
+
+### 6.3 Adding a New Profile
+
+The user flow for creating a W&B profile:
+
+1. **Navigate** to Aircraft → select aircraft → W&B Profiles → New Profile
+2. **Enter profile info** — name, datum description
+3. **Enter aircraft weights** from the weighing report — BEW, BEW arm (and lateral arm if helicopter). Enter max weight limits from POH/RFM.
+4. **Define stations** — add each loading position from the POH loading arrangement diagram. Enter name, category, longitudinal arm (and lateral arm for helicopters). Set max weights where applicable (baggage compartments).
+5. **Link fuel stations** to aircraft fuel tanks — max weight auto-calculates from tank capacity × fuel weight per gallon.
+6. **Enter envelope points** — transcribe the CG envelope polygon coordinates from the POH/RFM appendix. For helicopters, enter both longitudinal and lateral envelopes.
+7. **Verify** — load a known scenario (e.g., solo pilot + full fuel) and confirm the computed CG matches a hand calculation.
+
+Future enhancement: pre-loaded templates for common aircraft types can seed steps 3–6 from TCDS/POH data, with the user only needing to update BEW and BEW arm from their specific weighing report.
 
 ---
 
@@ -519,6 +605,6 @@ The `wbCalculationProvider` performs all CG math client-side for instant feedbac
 |-------|----------|--------------|
 | **Phase 1 — Core** | W&B Profile entity + CRUD, Station definitions, CG envelope entity, basic calculation engine, envelope chart visualization, weight summary bar | Aircraft module (existing) |
 | **Phase 2 — Loading UI** | Station loading interface, real-time CG updates, limit alerts, fuel station ↔ fuel tank linking | Phase 1 |
-| **Phase 3 — Templates** | Pre-loaded templates for priority aircraft types (15 fixed-wing + 5 helicopters), template application flow | Phase 1 |
+| **Phase 3 — Templates** | Pre-loaded templates for common aircraft types (future — seeded from TCDS/POH data), template application flow | Phase 1 |
 | **Phase 4 — Scenarios** | Save/load scenarios, link to flights, trip fuel auto-population | Phase 2, Flight Planning module |
 | **Phase 5 — Polish** | PDF export, scenario comparison, side-by-side view, enhanced envelope chart interactions | Phase 3, Phase 4 |

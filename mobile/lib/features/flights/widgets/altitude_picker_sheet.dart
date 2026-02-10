@@ -14,6 +14,7 @@ Future<int?> showAltitudePickerSheet(
   int? trueAirspeed,
   double? fuelBurnRate,
   int? performanceProfileId,
+  String? flightRules,
 }) {
   return showModalBottomSheet<int>(
     context: context,
@@ -37,6 +38,7 @@ Future<int?> showAltitudePickerSheet(
         trueAirspeed: trueAirspeed,
         fuelBurnRate: fuelBurnRate,
         performanceProfileId: performanceProfileId,
+        flightRules: flightRules,
       ),
     ),
   );
@@ -57,6 +59,8 @@ class _AltitudePickerBody extends StatefulWidget {
   final double? fuelBurnRate;
   final int? performanceProfileId;
 
+  final String? flightRules;
+
   const _AltitudePickerBody({
     required this.scrollController,
     required this.apiClient,
@@ -67,6 +71,7 @@ class _AltitudePickerBody extends StatefulWidget {
     this.trueAirspeed,
     this.fuelBurnRate,
     this.performanceProfileId,
+    this.flightRules,
   });
 
   @override
@@ -74,7 +79,7 @@ class _AltitudePickerBody extends StatefulWidget {
 }
 
 class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
-  _RuleFilter _rule = _RuleFilter.ifr;
+  late _RuleFilter _rule;
   _DirectionFilter _direction = _DirectionFilter.west;
   Map<int, _AltitudeData> _data = {};
   bool _loading = false;
@@ -82,6 +87,9 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
   @override
   void initState() {
     super.initState();
+    _rule = widget.flightRules?.toUpperCase() == 'VFR'
+        ? _RuleFilter.vfr
+        : _RuleFilter.ifr;
     _fetchData();
   }
 
@@ -152,6 +160,8 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
         dataMap[alt] = _AltitudeData(
           eteMinutes: r['ete_minutes'] as int?,
           fuelGallons: (r['flight_fuel_gallons'] as num?)?.toDouble(),
+          avgWindComponent: r['avg_wind_component'] as int?,
+          avgGroundspeed: r['avg_groundspeed'] as int?,
         );
       }
       if (mounted) setState(() => _data = dataMap);
@@ -185,6 +195,21 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
   String _formatFuel(double? gallons) {
     if (gallons == null) return '--';
     return '${gallons.round()}g';
+  }
+
+  String _formatWind(int? component) {
+    if (component == null) return '--';
+    if (component == 0) return '0kt';
+    // Positive = tailwind, negative = headwind
+    final prefix = component > 0 ? '+' : '';
+    return '$prefix${component}kt';
+  }
+
+  Color _windColor(int? component) {
+    if (component == null) return AppColors.textMuted;
+    if (component > 0) return AppColors.success; // tailwind = green
+    if (component < 0) return AppColors.error; // headwind = red
+    return AppColors.textSecondary;
   }
 
   @override
@@ -282,9 +307,17 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
                                 ),
                               ),
                             ),
-                            // Wind placeholder
-                            const Expanded(
-                              child: SizedBox.shrink(),
+                            // Wind component (headwind/tailwind)
+                            Expanded(
+                              child: Text(
+                                _formatWind(data?.avgWindComponent),
+                                style: TextStyle(
+                                  color: _windColor(data?.avgWindComponent),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                             // ETE
                             SizedBox(
@@ -387,8 +420,15 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
 class _AltitudeData {
   final int? eteMinutes;
   final double? fuelGallons;
+  final int? avgWindComponent; // negative = headwind, positive = tailwind
+  final int? avgGroundspeed;
 
-  const _AltitudeData({this.eteMinutes, this.fuelGallons});
+  const _AltitudeData({
+    this.eteMinutes,
+    this.fuelGallons,
+    this.avgWindComponent,
+    this.avgGroundspeed,
+  });
 }
 
 class _RadioDot extends StatelessWidget {

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/aircraft.dart';
 import '../../../services/aircraft_providers.dart';
+import '../../../services/wb_providers.dart';
 import '../../flights/widgets/flight_section_header.dart';
 import '../../flights/widgets/flight_field_row.dart';
 import '../../flights/widgets/flight_edit_dialogs.dart';
@@ -189,6 +190,53 @@ class _AircraftDetailScreenState extends ConsumerState<AircraftDetailScreen> {
             },
           ),
           FlightFieldRow(
+            label: 'Engine Type',
+            value: _engineTypeDisplay(a.engineType),
+            onTap: () async {
+              final result = await showPickerSheet(context,
+                  title: 'Engine Type',
+                  options: ['piston', 'turboprop', 'turbojet', 'turboshaft'],
+                  currentValue: a.engineType ?? '');
+              if (result != null) {
+                _saveField({'engine_type': result});
+              }
+            },
+          ),
+          FlightFieldRow(
+            label: 'Number of Engines',
+            value: '${a.numEngines ?? 1}',
+            onTap: () async {
+              final result = await showPickerSheet(context,
+                  title: 'Number of Engines',
+                  options: ['1', '2', '3', '4'],
+                  currentValue: '${a.numEngines ?? 1}');
+              if (result != null) {
+                _saveField({'num_engines': int.parse(result)});
+              }
+            },
+          ),
+          FlightFieldRow(
+            label: 'Pressurized',
+            value: a.pressurized ? 'Yes' : 'No',
+            onTap: () => _saveField({'pressurized': !a.pressurized}),
+          ),
+          FlightFieldRow(
+            label: 'Service Ceiling',
+            value: a.serviceCeiling != null
+                ? '${_formatAltitude(a.serviceCeiling!)} ft'
+                : '--',
+            onTap: () async {
+              final result = await showNumberEditSheet(context,
+                  title: 'Service Ceiling',
+                  currentValue: a.serviceCeiling?.toDouble(),
+                  hintText: 'Feet MSL',
+                  suffix: 'ft');
+              if (result != null) {
+                _saveField({'service_ceiling': result.round()});
+              }
+            },
+          ),
+          FlightFieldRow(
             label: 'Call Sign',
             value: a.callSign ?? '--',
             onTap: () async {
@@ -236,6 +284,13 @@ class _AircraftDetailScreenState extends ConsumerState<AircraftDetailScreen> {
             showChevron: true,
             onTap: () =>
                 context.go('/aircraft/${a.id}/profiles'),
+          ),
+
+          FlightFieldRow(
+            label: 'Weight & Balance',
+            value: '',
+            showChevron: true,
+            onTap: () => _navigateToWBProfile(a.id!),
           ),
 
           // Fuel section
@@ -365,6 +420,48 @@ class _AircraftDetailScreenState extends ConsumerState<AircraftDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _navigateToWBProfile(int aircraftId) async {
+    try {
+      final profiles = await ref.read(wbProfilesProvider(aircraftId).future);
+      if (!mounted) return;
+      if (profiles.isEmpty) {
+        // No profiles yet — go to the W&B screen to create one
+        context.push('/aircraft/$aircraftId/wb');
+        return;
+      }
+      final profile =
+          profiles.where((p) => p.isDefault).firstOrNull ?? profiles.first;
+      context.push('/aircraft/$aircraftId/wb/profiles/${profile.id}/edit');
+    } catch (e) {
+      if (mounted) {
+        // Fallback to W&B screen on error
+        context.push('/aircraft/$aircraftId/wb');
+      }
+    }
+  }
+
+  String _engineTypeDisplay(String? engineType) {
+    switch (engineType) {
+      case 'piston':
+        return 'Piston';
+      case 'turboprop':
+        return 'Turboprop';
+      case 'turbojet':
+        return 'Turbojet';
+      case 'turboshaft':
+        return 'Turboshaft';
+      default:
+        return '--';
+    }
+  }
+
+  String _formatAltitude(int feet) {
+    if (feet >= 1000) {
+      return '${(feet / 1000).toStringAsFixed(feet % 1000 == 0 ? 0 : 1)}k';
+    }
+    return '$feet';
   }
 
   String _fuelTypeDisplay(String fuelType) {

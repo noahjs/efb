@@ -45,10 +45,11 @@ class AirportRunwayTab extends ConsumerWidget {
         }
 
         // Get wind from METAR if available
-        final metar = metarAsync.whenData((d) => d).value;
-        final windDir = metar?['wdir'] as num?;
-        final windSpd = metar?['wspd'] as num?;
-        final windGust = metar?['wgst'] as num?;
+        final metarEnvelope = metarAsync.whenData((d) => d).value;
+        final metarData = metarEnvelope?['metar'] as Map<String, dynamic>?;
+        final windDir = metarData?['wdir'] as num?;
+        final windSpd = metarData?['wspd'] as num?;
+        final windGust = metarData?['wgst'] as num?;
 
         // Compute wind components for each runway end
         final endWinds = <String, _WindComponents>{};
@@ -469,10 +470,11 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
               final displaced = end['displaced_threshold'];
 
               // Compute wind components for selected runway end
-              final metar = metarAsync.whenData((d) => d).value;
-              final windDir = metar?['wdir'] as num?;
-              final windSpd = metar?['wspd'] as num?;
-              final windGust = metar?['wgst'] as num?;
+              final detailEnvelope = metarAsync.whenData((d) => d).value;
+              final detailMetar = detailEnvelope?['metar'] as Map<String, dynamic>?;
+              final windDir = detailMetar?['wdir'] as num?;
+              final windSpd = detailMetar?['wspd'] as num?;
+              final windGust = detailMetar?['wgst'] as num?;
 
               int? headwindComp, crosswindComp, gustHead, gustCross;
               bool isHeadwind = true;

@@ -21,8 +21,14 @@ import 'widgets/airport_bottom_sheet.dart';
 import 'widgets/navaid_bottom_sheet.dart';
 import 'widgets/fix_bottom_sheet.dart';
 import 'widgets/map_long_press_sheet.dart';
+import 'widgets/pirep_bottom_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
 import 'widgets/approach_overlay.dart';
+import 'widgets/wind_altitude_slider.dart';
+import '../../services/windy_providers.dart';
+import '../adsb/providers/adsb_providers.dart';
+import '../adsb/widgets/adsb_status_bar.dart';
+import '../adsb/models/traffic_target.dart';
 
 class MapsScreen extends ConsumerStatefulWidget {
   const MapsScreen({super.key});
@@ -38,6 +44,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   Set<String> _activeOverlays = {'flight_category'};
   AeroSettings _aero = const AeroSettings();
   bool _showAeroSettings = false;
+  int _windsAloftAltitude = 9000; // default winds aloft display altitude
   final _mapController = EfbMapController();
   final _approachController = ApproachOverlayController();
 
@@ -150,7 +157,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     if (lat != null && lng != null) {
       _mapController.flyTo(lat.toDouble(), lng.toDouble(), zoom: 12);
     }
-    final identifier = airport['identifier'] ?? '';
+    final identifier = airport['icao_identifier'] ?? airport['identifier'] ?? '';
     _clearSearch();
     _onAirportTapped(identifier);
   }
@@ -250,6 +257,15 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => AirportBottomSheet(airportId: id),
+    );
+  }
+
+  void _onPirepTapped(Map<String, dynamic> properties) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => PirepBottomSheet(properties: properties),
     );
   }
 
@@ -643,29 +659,48 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       }).toList();
     }
 
-    // When flight category overlay is active, fetch METARs and merge
+    // When flight category overlay is active, fetch METARs and merge/create dots
     if (showFlightCategory && _currentBounds != null) {
       final metarsAsync = ref.watch(mapMetarsProvider(_currentBounds!));
       final metars = metarsAsync.value;
       if (metars != null) {
-        final metarMap = <String, String>{};
+        final metarMap = <String, Map<dynamic, dynamic>>{};
         for (final m in metars) {
           if (m is Map) {
             final icao = m['icaoId'] as String?;
-            final cat = m['fltCat'] as String?;
-            if (icao != null && cat != null) {
-              metarMap[icao] = cat;
-            }
+            if (icao != null) metarMap[icao] = m;
           }
         }
+
+        // Tag existing airports with their flight category
+        final matched = <String>{};
         airports = airports.map((a) {
           final icao = a['icao_identifier'] ?? a['identifier'] ?? '';
-          final category = metarMap[icao];
-          if (category != null) {
-            return {...a, 'category': category};
+          final metar = metarMap[icao.toString()];
+          if (metar != null) {
+            matched.add(icao.toString());
+            final cat = metar['fltCat'] as String?;
+            if (cat != null) return {...a, 'category': cat};
           }
           return a;
         }).toList();
+
+        // Add METAR stations that aren't already in the airports list
+        for (final entry in metarMap.entries) {
+          if (matched.contains(entry.key)) continue;
+          final m = entry.value;
+          final lat = m['lat'] as num?;
+          final lon = m['lon'] as num?;
+          final cat = m['fltCat'] as String?;
+          if (lat == null || lon == null || cat == null) continue;
+          airports.add({
+            'identifier': entry.key,
+            'icao_identifier': entry.key,
+            'latitude': lat.toDouble(),
+            'longitude': lon.toDouble(),
+            'category': cat,
+          });
+        }
       }
     }
 
@@ -737,6 +772,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         ...?_extractFeatures(sigmets),
         ...?_extractFeatures(cwas),
       ];
+      debugPrint('[EFB] air_sigmet: gairmets=${gairmets != null}, sigmets=${sigmets != null}, cwas=${cwas != null}, total features=${allFeatures.length}');
       if (allFeatures.isNotEmpty) {
         advisoryGeoJson = _enrichAdvisoryGeoJson({
           'type': 'FeatureCollection',
@@ -749,8 +785,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     final showPireps = _activeOverlays.contains('pireps');
     Map<String, dynamic>? pirepGeoJson;
     if (showPireps && _currentBounds != null) {
-      final bbox = '${_currentBounds!.minLng},${_currentBounds!.minLat},'
-          '${_currentBounds!.maxLng},${_currentBounds!.maxLat}';
+      // AWC PIREP API expects bbox as minLat,minLon,maxLat,maxLon
+      final bbox = '${_currentBounds!.minLat},${_currentBounds!.minLng},'
+          '${_currentBounds!.maxLat},${_currentBounds!.maxLng}';
       final pirepsData = ref.watch(mapPirepsProvider(bbox)).value;
       if (pirepsData != null) {
         pirepGeoJson = _enrichPirepGeoJson(pirepsData);
@@ -769,6 +806,32 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           metars,
           activeMetarOverlay.first,
         );
+      }
+    }
+
+    // When Winds Aloft overlay is active, fetch wind grid and streamlines
+    final showWindsAloft = _activeOverlays.contains('winds_aloft');
+    Map<String, dynamic>? windsAloftGeoJson;
+    Map<String, dynamic>? windStreamlinesGeoJson;
+    if (showWindsAloft && _currentBounds != null) {
+      final windParams = WindGridParams(
+        bounds: _currentBounds!,
+        altitude: _windsAloftAltitude,
+      );
+      final windsAsync = ref.watch(windGridProvider(windParams));
+      windsAloftGeoJson = windsAsync.value;
+
+      final streamAsync = ref.watch(windStreamlineProvider(windParams));
+      windStreamlinesGeoJson = streamAsync.value;
+    }
+
+    // When traffic overlay is active, build traffic GeoJSON from ADS-B targets
+    final showTraffic = _activeOverlays.contains('traffic');
+    Map<String, dynamic>? trafficGeoJson;
+    if (showTraffic) {
+      final targets = ref.watch(trafficTargetsProvider);
+      if (targets.isNotEmpty) {
+        trafficGeoJson = _buildTrafficGeoJson(targets);
       }
     }
 
@@ -808,6 +871,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               showFlightCategory: showFlightCategory,
               interactive: !showOverlay,
               onAirportTapped: _onAirportTapped,
+              onPirepTapped: _onPirepTapped,
               onBoundsChanged: _onBoundsChanged,
               onMapLongPressed: _onMapLongPressed,
               airports: airports,
@@ -816,10 +880,15 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               airspaceGeoJson: airspaceGeoJson,
               airwayGeoJson: airwayGeoJson,
               artccGeoJson: artccGeoJson,
-              tfrGeoJson: tfrGeoJson,
-              advisoryGeoJson: advisoryGeoJson,
-              pirepGeoJson: pirepGeoJson,
-              metarOverlayGeoJson: metarOverlayGeoJson,
+              overlays: <String, Map<String, dynamic>?>{
+                if (tfrGeoJson != null) 'tfrs': tfrGeoJson,
+                if (advisoryGeoJson != null) 'advisories': advisoryGeoJson,
+                if (pirepGeoJson != null) 'pireps': pirepGeoJson,
+                if (metarOverlayGeoJson != null) 'metar-overlay': metarOverlayGeoJson,
+                if (trafficGeoJson != null) 'traffic': trafficGeoJson,
+                if (windsAloftGeoJson != null) 'winds-aloft': windsAloftGeoJson,
+                if (windStreamlinesGeoJson != null) 'wind-streamlines': windStreamlinesGeoJson,
+              },
             ),
           ),
 
@@ -834,6 +903,29 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               onApproachTap: _onApproachTapped,
               isApproachActive: _approachController.isActive,
             ),
+          ),
+
+          // Wind altitude slider (right edge, only when winds aloft active)
+          if (showWindsAloft)
+            Positioned(
+              right: 8,
+              top: MediaQuery.of(context).padding.top + 100,
+              child: WindAltitudeSlider(
+                altitude: _windsAloftAltitude,
+                onChanged: (alt) {
+                  setState(() {
+                    _windsAloftAltitude = alt;
+                  });
+                },
+              ),
+            ),
+
+          // ADS-B status bar
+          Positioned(
+            bottom: 36,
+            left: 0,
+            right: 0,
+            child: Center(child: AdsbStatusBar()),
           ),
 
           // Bottom info bar
@@ -1078,6 +1170,30 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         'properties': {
           'color': color,
           'label': label ?? '',
+        },
+      });
+    }
+    return {'type': 'FeatureCollection', 'features': features};
+  }
+
+  Map<String, dynamic> _buildTrafficGeoJson(Map<int, TrafficTarget> targets) {
+    final features = <Map<String, dynamic>>[];
+    for (final target in targets.values) {
+      final threatStr = target.threatLevel.name;
+      features.add({
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [target.longitude, target.latitude],
+        },
+        'properties': {
+          'callsign': target.callsign.isNotEmpty
+              ? target.callsign
+              : target.icaoAddress.toRadixString(16).toUpperCase(),
+          'threat': threatStr,
+          'alt_tag': target.altitudeTag ?? '${(target.altitude / 100).round()}',
+          'groundspeed': target.groundspeed,
+          'track': target.track,
         },
       });
     }

@@ -24,7 +24,8 @@
     "seed:routes": "ts-node -r tsconfig-paths/register src/seed/seed-routes.ts",
     "seed:aircraft": "ts-node -r tsconfig-paths/register src/seed/seed-aircraft.ts",
     "seed:airspaces": "ts-node -r tsconfig-paths/register src/seed/seed-airspaces.ts",
-    "seed:registry": "ts-node -r tsconfig-paths/register src/seed/seed-registry.ts"
+    "seed:registry": "ts-node -r tsconfig-paths/register src/seed/seed-registry.ts",
+    "seed:cifp": "ts-node -r tsconfig-paths/register src/seed/seed-cifp.ts"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

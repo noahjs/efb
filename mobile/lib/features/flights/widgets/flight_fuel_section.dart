@@ -47,15 +47,22 @@ class FlightFuelSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Fetch aircraft details for capacity and fuel type
+    // Fetch aircraft details for capacity, fuel type, and presets
     double? capacityGal;
     String? fuelType;
+    double? topOffGallons;
+    double? tabsGallons;
     if (flight.aircraftId != null) {
       final aircraftAsync = ref.watch(aircraftDetailProvider(flight.aircraftId!));
       aircraftAsync.whenData((aircraft) {
         if (aircraft != null) {
           capacityGal = aircraft.totalUsableFuel;
           fuelType = aircraft.fuelType;
+          topOffGallons = aircraft.totalUsableFuel;
+          final tabsTotal = aircraft.fuelTanks
+              .where((t) => t.tabFuelGallons != null)
+              .fold<double>(0, (sum, t) => sum + t.tabFuelGallons!);
+          tabsGallons = tabsTotal > 0 ? tabsTotal : null;
         }
       });
     }
@@ -66,6 +73,10 @@ class FlightFuelSection extends ConsumerWidget {
     final startGal = flight.startFuelGallons;
     final flightFuelGal = flight.flightFuelGallons;
     final reserveGal = flight.reserveFuelGallons;
+
+    // Min required fuel = flight fuel + reserve
+    final minReqTotal = (flightFuelGal ?? 0) + (reserveGal ?? 0);
+    final double? minReqGallons = minReqTotal > 0 ? minReqTotal : null;
 
     double? fuelAtLandingGal;
     if (startGal != null && flightFuelGal != null) {
@@ -94,24 +105,6 @@ class FlightFuelSection extends ConsumerWidget {
         // Section header with column labels
         _FuelSectionHeader(),
 
-        // Fuel Policy — full width, no dual column
-        FlightFieldRow(
-          label: 'Fuel Policy',
-          value: flight.fuelPolicy ?? 'None',
-          showChevron: true,
-          onTap: () async {
-            final result = await showPickerSheet(
-              context,
-              title: 'Fuel Policy',
-              options: ['Fill Tabs', 'Fill Up', 'Min Fuel', 'Manual'],
-              currentValue: flight.fuelPolicy,
-            );
-            if (result != null) {
-              onChanged(flight.copyWith(fuelPolicy: result));
-            }
-          },
-        ),
-
         // Start Fuel
         _FuelRow(
           label: 'Start',
@@ -121,12 +114,12 @@ class FlightFuelSection extends ConsumerWidget {
           capacityLbs: capacityLbs,
           isEditable: true,
           onTap: () async {
-            final result = await showNumberEditSheet(
+            final result = await _showStartFuelSheet(
               context,
-              title: 'Start Fuel',
               currentValue: flight.startFuelGallons,
-              hintText: 'e.g. 48.0',
-              suffix: 'gal',
+              topOffGallons: topOffGallons,
+              tabsGallons: tabsGallons,
+              minReqGallons: minReqGallons,
             );
             if (result != null) {
               onChanged(flight.copyWith(startFuelGallons: result));
@@ -372,6 +365,213 @@ class _FuelRow extends StatelessWidget {
                   ],
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Custom modal for editing start fuel with preset buttons (Top Off, Tabs, Min Req).
+Future<double?> _showStartFuelSheet(
+  BuildContext context, {
+  required double? currentValue,
+  double? topOffGallons,
+  double? tabsGallons,
+  double? minReqGallons,
+}) async {
+  final controller = TextEditingController(
+    text: currentValue != null && currentValue > 0
+        ? currentValue.toStringAsFixed(1)
+        : '',
+  );
+
+  // Determine active preset
+  String? active;
+  if (currentValue != null && currentValue > 0) {
+    if (topOffGallons != null && (currentValue - topOffGallons).abs() < 0.05) {
+      active = 'topoff';
+    } else if (tabsGallons != null &&
+        (currentValue - tabsGallons).abs() < 0.05) {
+      active = 'tabs';
+    } else if (minReqGallons != null &&
+        (currentValue - minReqGallons).abs() < 0.05) {
+      active = 'minreq';
+    }
+  }
+
+  double? result;
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+    ),
+    builder: (ctx) => PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        result ??= double.tryParse(controller.text);
+      },
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text('Start Fuel',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      )),
+                ),
+                TextButton(
+                  onPressed: () {
+                    result = 0;
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Clear',
+                      style: TextStyle(color: AppColors.textMuted)),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Done',
+                      style: TextStyle(color: AppColors.accent)),
+                ),
+              ],
+            ),
+            // Preset buttons
+            if (topOffGallons != null ||
+                tabsGallons != null ||
+                minReqGallons != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (topOffGallons != null)
+                    Expanded(
+                      child: _FuelPresetChip(
+                        label: 'Top Off',
+                        subtitle: '${topOffGallons.toStringAsFixed(1)} gal',
+                        isActive: active == 'topoff',
+                        onTap: () {
+                          result = topOffGallons;
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    ),
+                  if (topOffGallons != null &&
+                      (tabsGallons != null || minReqGallons != null))
+                    const SizedBox(width: 8),
+                  if (tabsGallons != null)
+                    Expanded(
+                      child: _FuelPresetChip(
+                        label: 'Tabs',
+                        subtitle: '${tabsGallons.toStringAsFixed(1)} gal',
+                        isActive: active == 'tabs',
+                        onTap: () {
+                          result = tabsGallons;
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    ),
+                  if (tabsGallons != null && minReqGallons != null)
+                    const SizedBox(width: 8),
+                  if (minReqGallons != null)
+                    Expanded(
+                      child: _FuelPresetChip(
+                        label: 'Min Req',
+                        subtitle: '${minReqGallons.toStringAsFixed(1)} gal',
+                        isActive: active == 'minreq',
+                        onTap: () {
+                          result = minReqGallons;
+                          Navigator.pop(ctx);
+                        },
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ] else
+              const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: AppColors.textPrimary),
+              decoration: const InputDecoration(
+                hintText: 'Fuel at departure',
+                suffixText: 'gal',
+              ),
+              onSubmitted: (_) => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  return result;
+}
+
+class _FuelPresetChip extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _FuelPresetChip({
+    required this.label,
+    required this.subtitle,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.accent.withValues(alpha: 0.15)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isActive
+                ? AppColors.accent.withValues(alpha: 0.5)
+                : AppColors.divider,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isActive ? AppColors.accent : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 11,
+                color: isActive ? AppColors.accent : AppColors.textMuted,
+              ),
+            ),
           ],
         ),
       ),

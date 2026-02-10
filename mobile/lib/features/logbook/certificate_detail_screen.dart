@@ -199,10 +199,9 @@ class _CertificateDetailScreenState
 
     return Scaffold(
       appBar: AppBar(
-        leading: TextButton(
+        leading: IconButton(
+          icon: const Icon(Icons.chevron_left),
           onPressed: () => _goBackToList(),
-          child: const Text('Back',
-              style: TextStyle(color: AppColors.accent, fontSize: 14)),
         ),
         title: Text(title, style: const TextStyle(fontSize: 16)),
         centerTitle: true,

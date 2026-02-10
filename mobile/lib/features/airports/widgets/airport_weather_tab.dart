@@ -65,14 +65,25 @@ class _MetarView extends ConsumerWidget {
           style: const TextStyle(color: AppColors.textMuted),
         ),
       ),
-      data: (metar) {
-        if (metar == null) {
+      data: (envelope) {
+        if (envelope == null) {
           return const Center(
             child: Text(
               'No METAR available',
               style: TextStyle(color: AppColors.textMuted),
             ),
           );
+        }
+
+        final metar = envelope['metar'] as Map<String, dynamic>?;
+        final isNearby = envelope['isNearby'] as bool? ?? false;
+        final station = envelope['station'] as String? ?? '';
+        final distanceNm = envelope['distanceNm'];
+        final awos = envelope['awos'] as Map<String, dynamic>?;
+
+        // No METAR at all (not even nearby) — show AWOS info if available
+        if (metar == null) {
+          return _NoMetarView(awos: awos);
         }
 
         final rawOb = metar['rawOb'] as String? ?? '';
@@ -83,6 +94,42 @@ class _MetarView extends ConsumerWidget {
 
         return ListView(
           children: [
+            // AWOS info banner (shown even when nearby METAR is available)
+            if (isNearby && awos != null) _AwosInfoBanner(awos: awos),
+
+            // Nearby station warning — prominent and unmissable
+            if (isNearby)
+              Container(
+                margin: EdgeInsets.fromLTRB(16, awos != null ? 0 : 16, 16, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.warning.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 20, color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'NOT THIS AIRPORT — Showing nearest METAR from $station (${distanceNm} nm away)',
+                        style: TextStyle(
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Flight category banner
             Container(
               margin: const EdgeInsets.all(16),
@@ -585,6 +632,147 @@ class _TafView extends ConsumerWidget {
   }
 }
 
+class _NoMetarView extends StatelessWidget {
+  final Map<String, dynamic>? awos;
+  const _NoMetarView({this.awos});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off, size: 48, color: AppColors.textMuted),
+            const SizedBox(height: 16),
+            const Text(
+              'No METAR Available',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'This airport does not report METARs and no nearby station was found.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
+            ),
+            if (awos != null) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.info.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.info.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cell_tower,
+                            size: 18, color: AppColors.info),
+                        const SizedBox(width: 8),
+                        Text(
+                          awos!['name'] as String? ?? 'AWOS',
+                          style: TextStyle(
+                            color: AppColors.info,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (awos!['frequency'] != null &&
+                        (awos!['frequency'] as String).isNotEmpty) ...[
+                      Text(
+                        'Tune ${awos!['frequency']} MHz',
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                    if (awos!['phone'] != null &&
+                        (awos!['phone'] as String).isNotEmpty)
+                      Text(
+                        'Call ${awos!['phone']}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AwosInfoBanner extends StatelessWidget {
+  final Map<String, dynamic> awos;
+  const _AwosInfoBanner({required this.awos});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = awos['name'] as String? ?? 'AWOS';
+    final frequency = awos['frequency'] as String?;
+    final phone = awos['phone'] as String?;
+
+    final parts = <String>[name];
+    if (frequency != null && frequency.isNotEmpty) {
+      parts.add('$frequency MHz');
+    }
+    if (phone != null && phone.isNotEmpty) {
+      parts.add(phone);
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.info.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.info.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cell_tower, size: 16, color: AppColors.info),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'This airport has ${parts.join(' — ')}',
+              style: TextStyle(
+                color: AppColors.info,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WeatherField extends StatelessWidget {
   final String label;
   final String value;
@@ -807,13 +995,13 @@ class _WindsAloftView extends ConsumerStatefulWidget {
 }
 
 class _WindsAloftViewState extends ConsumerState<_WindsAloftView> {
-  int _selectedPeriod = 0;
+  int _selectedTimestampIndex = 0;
 
   @override
   Widget build(BuildContext context) {
-    final windsAsync = ref.watch(windsAloftProvider(widget.airportId));
+    final windyAsync = ref.watch(windyWindsAloftProvider(widget.airportId));
 
-    return windsAsync.when(
+    return windyAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => Center(
         child: Text(
@@ -822,9 +1010,7 @@ class _WindsAloftViewState extends ConsumerState<_WindsAloftView> {
         ),
       ),
       data: (data) {
-        if (data == null ||
-            data['forecasts'] == null ||
-            (data['forecasts'] as List).isEmpty) {
+        if (data == null) {
           return const Center(
             child: Text(
               'No winds aloft available',
@@ -833,120 +1019,91 @@ class _WindsAloftViewState extends ConsumerState<_WindsAloftView> {
           );
         }
 
-        final isNearby = data['isNearby'] as bool? ?? false;
-        final station = data['station'] as String? ?? '';
-        final distanceNm = data['distanceNm'];
-        final forecasts = data['forecasts'] as List<dynamic>;
+        final levels = data['levels'] as List<dynamic>? ?? [];
+        if (levels.isEmpty) {
+          return const Center(
+            child: Text(
+              'No winds aloft data',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          );
+        }
 
-        final selected = forecasts[_selectedPeriod] as Map<String, dynamic>;
-        final altitudes = selected['altitudes'] as List<dynamic>? ?? [];
+        // Extract timestamps from first level's winds array
+        final firstLevelWinds =
+            (levels[0] as Map<String, dynamic>)['winds'] as List<dynamic>? ??
+                [];
+        final timestamps = firstLevelWinds
+            .map((w) => (w as Map<String, dynamic>)['timestamp'] as int)
+            .toList();
+
+        if (timestamps.isEmpty) {
+          return const Center(
+            child: Text(
+              'No forecast timestamps available',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
+          );
+        }
+
+        // Clamp selected index
+        if (_selectedTimestampIndex >= timestamps.length) {
+          _selectedTimestampIndex = 0;
+        }
+
+        // Find closest timestamp to now for default
+        final now = DateTime.now().millisecondsSinceEpoch;
+
+        // Filter levels: skip 'surface' and '1000h'
+        final filteredLevels = levels.where((l) {
+          final level = (l as Map<String, dynamic>)['level'] as String? ?? '';
+          return level != 'surface' && level != '1000h';
+        }).toList();
 
         return ListView(
           children: [
-            // Nearby station banner
-            if (isNearby)
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.info.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppColors.info.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.location_on, size: 16, color: AppColors.info),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Showing winds from $station ($distanceNm nm)',
-                      style: TextStyle(
-                        color: AppColors.info,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Forecast period selector
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: List.generate(forecasts.length, (i) {
-                  final fcst = forecasts[i] as Map<String, dynamic>;
-                  final label = fcst['label'] as String? ?? '';
-                  final isSelected = i == _selectedPeriod;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected: isSelected,
-                      onSelected: (_) => setState(() => _selectedPeriod = i),
-                      selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                      backgroundColor: AppColors.surface,
-                      labelStyle: TextStyle(
-                        color: isSelected
-                            ? AppColors.primary
-                            : AppColors.textSecondary,
-                        fontWeight:
-                            isSelected ? FontWeight.w600 : FontWeight.normal,
-                        fontSize: 13,
-                      ),
-                      side: BorderSide(
-                        color: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.5)
-                            : AppColors.divider,
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
+            // Forecast time pills
+            _buildTimePills(timestamps, now),
 
             // Table header
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               color: AppColors.surface,
               child: const Row(
                 children: [
                   SizedBox(
-                      width: 70,
-                      child: Text('ALT',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary))),
-                  SizedBox(
-                      width: 70,
-                      child: Text('DIR',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary))),
-                  SizedBox(
-                      width: 70,
-                      child: Text('SPD',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary))),
+                    width: 70,
+                    child: Text('ALT',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary)),
+                  ),
                   Expanded(
-                      child: Text('TEMP',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textSecondary))),
+                    child: Text('TEMP',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary)),
+                  ),
+                  Expanded(
+                    child: Text('WIND',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textSecondary)),
+                  ),
                 ],
               ),
             ),
 
             // Altitude rows
-            for (int i = 0; i < altitudes.length; i++)
-              _buildAltitudeRow(altitudes[i] as Map<String, dynamic>, i),
+            for (int i = 0; i < filteredLevels.length; i++)
+              _buildLevelRow(
+                filteredLevels[i] as Map<String, dynamic>,
+                i,
+              ),
 
             const SizedBox(height: 32),
           ],
@@ -955,32 +1112,120 @@ class _WindsAloftViewState extends ConsumerState<_WindsAloftView> {
     );
   }
 
-  Widget _buildAltitudeRow(Map<String, dynamic> alt, int index) {
-    final altitude = alt['altitude'];
-    final direction = alt['direction'];
-    final speed = alt['speed'];
-    final temperature = alt['temperature'];
-    final lv = alt['lightAndVariable'] as bool? ?? false;
+  Widget _buildTimePills(List<int> timestamps, int nowMs) {
+    return SizedBox(
+      height: 52,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: timestamps.length,
+        itemBuilder: (context, i) {
+          final ts = timestamps[i];
+          final diffHours = ((ts - nowMs) / 3600000).round();
+          String label;
+          if (diffHours <= 0 && diffHours > -1) {
+            label = 'Now';
+          } else if (diffHours > 0) {
+            label = '+${diffHours}h';
+          } else {
+            label = '${diffHours}h';
+          }
 
-    final bgColor =
-        index.isEven ? AppColors.surface : AppColors.surfaceLight;
+          final isSelected = i == _selectedTimestampIndex;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedTimestampIndex = i),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary.withValues(alpha: 0.2)
+                      : AppColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primary.withValues(alpha: 0.5)
+                        : AppColors.divider,
+                  ),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
-    String dirText;
-    String spdText;
-    if (lv) {
-      dirText = 'L&V';
-      spdText = '--';
-    } else if (direction == null && speed == null) {
-      dirText = '--';
-      spdText = '--';
-    } else {
-      dirText = direction != null ? '$direction°' : '--';
-      spdText = speed != null ? '$speed kt' : '--';
+  Widget _buildLevelRow(Map<String, dynamic> levelData, int index) {
+    final rawAltFt = (levelData['altitudeFt'] as num?)?.toInt() ?? 0;
+    // Round to nearest 500 ft for display
+    final altitudeFt = ((rawAltFt + 250) ~/ 500) * 500;
+    final winds = levelData['winds'] as List<dynamic>? ?? [];
+
+    // Get data for selected timestamp
+    Map<String, dynamic>? windEntry;
+    if (_selectedTimestampIndex < winds.length) {
+      windEntry = winds[_selectedTimestampIndex] as Map<String, dynamic>;
     }
 
-    final tempText = temperature != null
-        ? '${temperature > 0 ? '+' : ''}$temperature°C'
-        : '--';
+    final direction = (windEntry?['direction'] as num?)?.toInt() ?? 0;
+    final speed = (windEntry?['speed'] as num?)?.toInt() ?? 0;
+    final temperature = (windEntry?['temperature'] as num?)?.toDouble() ?? 0.0;
+    final isaDeviation = (windEntry?['isaDeviation'] as num?)?.toInt() ?? 0;
+
+    final bgColor = index.isEven ? AppColors.surface : AppColors.surfaceLight;
+
+    // Format altitude
+    String altText;
+    if (altitudeFt >= 18000) {
+      altText = 'FL${(altitudeFt / 100).round()}';
+    } else {
+      altText = _formatNumber(altitudeFt);
+    }
+
+    // Format temperature + ISA deviation
+    final tempSign = temperature >= 0 ? '+' : '';
+    final isaDev = isaDeviation >= 0 ? '+$isaDeviation' : '$isaDeviation';
+    final tempText = '$tempSign${temperature.round()}°C (ISA$isaDev)';
+
+    // ISA deviation color
+    Color isaColor;
+    final absIsa = isaDeviation.abs();
+    if (absIsa <= 5) {
+      isaColor = AppColors.success;
+    } else if (absIsa <= 10) {
+      isaColor = AppColors.warning;
+    } else {
+      isaColor = AppColors.error;
+    }
+
+    // Wind text
+    final windText = '$direction° at $speed kts';
+
+    // Wind speed color
+    Color windColor;
+    if (speed < 15) {
+      windColor = AppColors.success;
+    } else if (speed < 30) {
+      windColor = AppColors.warning;
+    } else if (speed < 50) {
+      windColor = const Color(0xFFFF9800); // orange
+    } else {
+      windColor = AppColors.error;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -990,42 +1235,30 @@ class _WindsAloftViewState extends ConsumerState<_WindsAloftView> {
           SizedBox(
             width: 70,
             child: Text(
-              _formatAltitude(altitude),
+              altText,
               style: const TextStyle(
                 fontSize: 14,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 70,
-            child: Text(
-              dirText,
-              style: TextStyle(
-                fontSize: 14,
-                color: lv ? AppColors.info : AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 70,
-            child: Text(
-              spdText,
-              style: TextStyle(
-                fontSize: 14,
-                color: lv ? AppColors.info : AppColors.textPrimary,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ),
           Expanded(
             child: Text(
               tempText,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: isaColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              windText,
+              style: TextStyle(
+                fontSize: 14,
+                color: windColor,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1035,15 +1268,11 @@ class _WindsAloftViewState extends ConsumerState<_WindsAloftView> {
     );
   }
 
-  static String _formatAltitude(dynamic alt) {
-    if (alt is num) {
-      final ft = alt.toInt();
-      if (ft >= 1000) {
-        return '${(ft / 1000).toStringAsFixed(0)},000';
-      }
-      return '$ft';
-    }
-    return '$alt';
+  static String _formatNumber(int n) {
+    return n.toString().replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+$)'),
+          (m) => '${m[1]},',
+        );
   }
 }
 

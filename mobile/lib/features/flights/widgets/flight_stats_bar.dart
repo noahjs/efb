@@ -7,12 +7,14 @@ class FlightStatsBar extends StatelessWidget {
   final Flight flight;
   final VoidCallback? onRecalculate;
   final ApiClient? apiClient;
+  final bool? wbWithinLimits;
 
   const FlightStatsBar({
     super.key,
     required this.flight,
     this.onRecalculate,
     this.apiClient,
+    this.wbWithinLimits,
   });
 
   String _formatDistance(double? nm) {
@@ -102,6 +104,23 @@ class FlightStatsBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              if (wbWithinLimits != null) ...[
+                Icon(
+                  wbWithinLimits! ? Icons.check_circle : Icons.warning,
+                  size: 12,
+                  color: wbWithinLimits! ? AppColors.success : AppColors.error,
+                ),
+                const SizedBox(width: 3),
+                Text(
+                  'W&B',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: wbWithinLimits! ? AppColors.success : AppColors.error,
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
               Text(
                 'Calculated ${_formatCalculatedAt(flight.calculatedAt)}',
                 style:

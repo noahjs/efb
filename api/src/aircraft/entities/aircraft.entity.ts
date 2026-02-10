@@ -45,6 +45,21 @@ export class Aircraft {
   category: string;
 
   @Column({ type: 'varchar', nullable: true })
+  engine_type: string; // 'piston' | 'turboprop' | 'turbojet' | 'turboshaft'
+
+  @Column({ type: 'integer', nullable: true, default: 1 })
+  num_engines: number;
+
+  @Column({ type: 'boolean', nullable: true, default: false })
+  pressurized: boolean;
+
+  @Column({ type: 'integer', nullable: true })
+  service_ceiling: number; // feet MSL
+
+  @Column({ type: 'integer', nullable: true })
+  max_cabin_altitude: number; // feet
+
+  @Column({ type: 'varchar', nullable: true })
   color: string;
 
   @Column({ type: 'varchar', nullable: true })
@@ -59,7 +74,7 @@ export class Aircraft {
   @Column({ type: 'varchar', nullable: true })
   ownership_status: string;
 
-  @Column({ type: 'varchar', default: 'jet_a' })
+  @Column({ type: 'varchar', default: '100ll' })
   fuel_type: string;
 
   @Column({ type: 'float', nullable: true })

@@ -1,0 +1,20 @@
+{
+  "name": "plates",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "generate": "ts-node src/generate.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@types/node": "^25.2.2",
+    "pdf-lib": "^1.17.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}

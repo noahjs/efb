@@ -250,6 +250,11 @@ class Aircraft {
   final String aircraftType;
   final String? icaoTypeCode;
   final String category;
+  final String? engineType;
+  final int? numEngines;
+  final bool pressurized;
+  final int? serviceCeiling;
+  final int? maxCabinAltitude;
   final String? color;
   final String? homeAirport;
   final String airspeedUnits;
@@ -278,12 +283,17 @@ class Aircraft {
     this.aircraftType = '',
     this.icaoTypeCode,
     this.category = 'landplane',
+    this.engineType,
+    this.numEngines,
+    this.pressurized = false,
+    this.serviceCeiling,
+    this.maxCabinAltitude,
     this.color,
     this.homeAirport,
     this.airspeedUnits = 'knots',
     this.lengthUnits = 'inches',
     this.ownershipStatus,
-    this.fuelType = 'jet_a',
+    this.fuelType = '100ll',
     this.totalUsableFuel,
     this.bestGlideSpeed,
     this.glideRatio,
@@ -320,12 +330,17 @@ class Aircraft {
       aircraftType: (json['aircraft_type'] as String?) ?? '',
       icaoTypeCode: json['icao_type_code'] as String?,
       category: (json['category'] as String?) ?? 'landplane',
+      engineType: json['engine_type'] as String?,
+      numEngines: json['num_engines'] as int?,
+      pressurized: (json['pressurized'] as bool?) ?? false,
+      serviceCeiling: json['service_ceiling'] as int?,
+      maxCabinAltitude: json['max_cabin_altitude'] as int?,
       color: json['color'] as String?,
       homeAirport: json['home_airport'] as String?,
       airspeedUnits: (json['airspeed_units'] as String?) ?? 'knots',
       lengthUnits: (json['length_units'] as String?) ?? 'inches',
       ownershipStatus: json['ownership_status'] as String?,
-      fuelType: (json['fuel_type'] as String?) ?? 'jet_a',
+      fuelType: (json['fuel_type'] as String?) ?? '100ll',
       totalUsableFuel: (json['total_usable_fuel'] as num?)?.toDouble(),
       bestGlideSpeed: (json['best_glide_speed'] as num?)?.toDouble(),
       glideRatio: (json['glide_ratio'] as num?)?.toDouble(),
@@ -360,6 +375,11 @@ class Aircraft {
       'aircraft_type': aircraftType,
       'icao_type_code': icaoTypeCode,
       'category': category,
+      'engine_type': engineType,
+      'num_engines': numEngines,
+      'pressurized': pressurized,
+      'service_ceiling': serviceCeiling,
+      'max_cabin_altitude': maxCabinAltitude,
       'color': color,
       'home_airport': homeAirport,
       'airspeed_units': airspeedUnits,
@@ -385,6 +405,11 @@ class Aircraft {
     String? aircraftType,
     String? icaoTypeCode,
     String? category,
+    String? engineType,
+    int? numEngines,
+    bool? pressurized,
+    int? serviceCeiling,
+    int? maxCabinAltitude,
     String? color,
     String? homeAirport,
     String? airspeedUnits,
@@ -411,6 +436,11 @@ class Aircraft {
       aircraftType: aircraftType ?? this.aircraftType,
       icaoTypeCode: icaoTypeCode ?? this.icaoTypeCode,
       category: category ?? this.category,
+      engineType: engineType ?? this.engineType,
+      numEngines: numEngines ?? this.numEngines,
+      pressurized: pressurized ?? this.pressurized,
+      serviceCeiling: serviceCeiling ?? this.serviceCeiling,
+      maxCabinAltitude: maxCabinAltitude ?? this.maxCabinAltitude,
       color: color ?? this.color,
       homeAirport: homeAirport ?? this.homeAirport,
       airspeedUnits: airspeedUnits ?? this.airspeedUnits,

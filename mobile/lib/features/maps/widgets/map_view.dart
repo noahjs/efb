@@ -39,6 +39,7 @@ class EfbMapView extends StatelessWidget {
   final bool showFlightCategory;
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
+  final ValueChanged<Map<String, dynamic>>? onPirepTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final List<Map<String, dynamic>> airports;
@@ -52,17 +53,11 @@ class EfbMapView extends StatelessWidget {
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
 
-  /// TFR GeoJSON FeatureCollection overlay.
-  final Map<String, dynamic>? tfrGeoJson;
-
-  /// Advisory (AIR/SIGMET/CWA) GeoJSON FeatureCollection overlay.
-  final Map<String, dynamic>? advisoryGeoJson;
-
-  /// PIREP GeoJSON FeatureCollection overlay.
-  final Map<String, dynamic>? pirepGeoJson;
-
-  /// METAR-derived overlay GeoJSON (surface wind, temperature, visibility, ceiling).
-  final Map<String, dynamic>? metarOverlayGeoJson;
+  /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'advisories', 'pireps').
+  /// Each value is a GeoJSON FeatureCollection or null to clear.
+  /// New overlays only need to be added here and in the layer registry
+  /// in map_view_native.dart — no new named parameters required.
+  final Map<String, Map<String, dynamic>?> overlays;
 
   const EfbMapView({
     super.key,
@@ -70,6 +65,7 @@ class EfbMapView extends StatelessWidget {
     this.showFlightCategory = false,
     this.interactive = true,
     this.onAirportTapped,
+    this.onPirepTapped,
     this.onBoundsChanged,
     this.onMapLongPressed,
     this.airports = const [],
@@ -78,10 +74,7 @@ class EfbMapView extends StatelessWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
-    this.tfrGeoJson,
-    this.advisoryGeoJson,
-    this.pirepGeoJson,
-    this.metarOverlayGeoJson,
+    this.overlays = const {},
   });
 
   @override
@@ -91,6 +84,7 @@ class EfbMapView extends StatelessWidget {
       showFlightCategory: showFlightCategory,
       interactive: interactive,
       onAirportTapped: onAirportTapped,
+      onPirepTapped: onPirepTapped,
       onBoundsChanged: onBoundsChanged,
       onMapLongPressed: onMapLongPressed,
       airports: airports,
@@ -99,10 +93,7 @@ class EfbMapView extends StatelessWidget {
       airspaceGeoJson: airspaceGeoJson,
       airwayGeoJson: airwayGeoJson,
       artccGeoJson: artccGeoJson,
-      tfrGeoJson: tfrGeoJson,
-      advisoryGeoJson: advisoryGeoJson,
-      pirepGeoJson: pirepGeoJson,
-      metarOverlayGeoJson: metarOverlayGeoJson,
+      overlays: overlays,
     );
   }
 }

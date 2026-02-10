@@ -44,6 +44,10 @@ class MapLongPressSheet extends ConsumerWidget {
         aeroFeatures.where((f) => f['_layerType'] == 'artcc').toList();
     final airways =
         aeroFeatures.where((f) => f['_layerType'] == 'airway').toList();
+    final tfrs =
+        aeroFeatures.where((f) => f['_layerType'] == 'tfr').toList();
+    final advisories =
+        aeroFeatures.where((f) => f['_layerType'] == 'advisory').toList();
 
     // Look up airport names for Class D airspaces by identifier
     final airportNames = <String, String>{};
@@ -125,6 +129,22 @@ class MapLongPressSheet extends ConsumerWidget {
                   ...artccs.map(_buildArtccRow),
                   ...airspaces.map((f) => _buildAirspaceRow(f, airportNames)),
                   ...airways.map(_buildAirwayRow),
+                  const SizedBox(height: 16),
+                ],
+
+                // TFRs
+                if (tfrs.isNotEmpty) ...[
+                  _SectionHeader(title: 'TFRs'),
+                  const SizedBox(height: 6),
+                  ...tfrs.map(_buildTfrRow),
+                  const SizedBox(height: 16),
+                ],
+
+                // ADVISORIES
+                if (advisories.isNotEmpty) ...[
+                  _SectionHeader(title: 'ADVISORIES'),
+                  const SizedBox(height: 6),
+                  ...advisories.map(_buildAdvisoryRow),
                   const SizedBox(height: 16),
                 ],
 
@@ -295,6 +315,64 @@ class MapLongPressSheet extends ConsumerWidget {
     );
   }
 
+  Widget _buildTfrRow(Map<String, dynamic> feature) {
+    final title = (feature['TITLE'] ?? 'TFR').toString();
+    final state = (feature['STATE'] ?? '').toString();
+    final notamKey = (feature['NOTAM_KEY'] ?? '').toString();
+    final subtitle = [state, notamKey]
+        .where((s) => s.isNotEmpty)
+        .join(' — ');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.warning_amber, size: 16, color: AppColors.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvisoryRow(Map<String, dynamic> feature) {
+    return _ExpandableAdvisoryRow(feature: feature);
+  }
+
+  static Color _parseHexColor(String hex) {
+    final clean = hex.replaceFirst('#', '');
+    if (clean.length == 6) {
+      return Color(int.parse('FF$clean', radix: 16));
+    }
+    if (clean.length == 8) {
+      return Color(int.parse(clean, radix: 16));
+    }
+    return AppColors.textMuted;
+  }
+
   Widget _buildNearbyRow(Map<dynamic, dynamic> airport) {
     final id = airport['identifier'] ?? airport['icao_identifier'] ?? '';
     final name = airport['name'] ?? '';
@@ -416,6 +494,154 @@ class MapLongPressSheet extends ConsumerWidget {
     const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
     final index = ((bearing + 22.5) % 360 / 45).floor();
     return directions[index];
+  }
+}
+
+class _ExpandableAdvisoryRow extends StatefulWidget {
+  final Map<String, dynamic> feature;
+  const _ExpandableAdvisoryRow({required this.feature});
+
+  @override
+  State<_ExpandableAdvisoryRow> createState() => _ExpandableAdvisoryRowState();
+}
+
+class _ExpandableAdvisoryRowState extends State<_ExpandableAdvisoryRow> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final feature = widget.feature;
+    final colorHex = feature['color']?.toString();
+    final iconColor = colorHex != null
+        ? MapLongPressSheet._parseHexColor(colorHex)
+        : AppColors.textMuted;
+
+    // Determine title and subtitle based on advisory type
+    String title;
+    String subtitle = '';
+
+    final hazard = (feature['hazard'] ?? '').toString();
+    final seriesId = (feature['seriesId'] ?? '').toString();
+
+    if (feature.containsKey('product')) {
+      // G-AIRMET
+      title = 'G-AIRMET: $hazard';
+      final dueTo = (feature['dueTo'] ?? '').toString();
+      if (dueTo.isNotEmpty) subtitle = dueTo;
+    } else if (feature.containsKey('airSigmetType')) {
+      // SIGMET
+      title = seriesId.isNotEmpty
+          ? 'SIGMET $seriesId: $hazard'
+          : 'SIGMET: $hazard';
+    } else if (feature.containsKey('cwsu')) {
+      // CWA
+      final cwsu = (feature['cwsu'] ?? '').toString();
+      title = 'CWA $cwsu $seriesId: $hazard'.trim();
+      final qualifier = (feature['qualifier'] ?? '').toString();
+      if (qualifier.isNotEmpty) subtitle = qualifier;
+    } else {
+      title = hazard.isNotEmpty ? hazard : 'Advisory';
+    }
+
+    // Add valid time if available
+    final validFrom = (feature['validTimeFrom'] ?? '').toString();
+    final validTo = (feature['validTimeTo'] ?? '').toString();
+    if (validFrom.isNotEmpty || validTo.isNotEmpty) {
+      final timeStr = [validFrom, validTo]
+          .where((s) => s.isNotEmpty)
+          .join(' - ');
+      subtitle = subtitle.isEmpty ? timeStr : '$subtitle\n$timeStr';
+    }
+
+    // Add altitude range if available
+    final altLow = feature['altLow'];
+    final altHi = feature['altHi'];
+    if (altLow != null || altHi != null) {
+      final altStr = [
+        if (altLow != null) '${altLow}00\'',
+        if (altHi != null) '${altHi}00\'',
+      ].join(' - ');
+      subtitle = subtitle.isEmpty ? altStr : '$subtitle\n$altStr';
+    }
+
+    // Raw text for expandable section
+    final rawText = (feature['rawAirSigmet'] ?? feature['cwaText'] ?? '')
+        .toString()
+        .trim();
+    final hasRawText = rawText.isNotEmpty;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: hasRawText ? () => setState(() => _expanded = !_expanded) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.cloud, size: 16, color: iconColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (hasRawText)
+                        Icon(
+                          _expanded
+                              ? Icons.expand_less
+                              : Icons.expand_more,
+                          size: 18,
+                          color: AppColors.textMuted,
+                        ),
+                    ],
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (_expanded && hasRawText) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Text(
+                        rawText,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

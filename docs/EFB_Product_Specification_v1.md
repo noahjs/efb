@@ -1,6 +1,6 @@
 # PRODUCT SPECIFICATION
 ## Electronic Flight Bag Application
-### US General Aviation — Non-Commercial Pilots
+### US Part 91 Operations — All Aircraft Categories
 
 **HIGH-LEVEL SPECIFICATION**
 Version 1.0 — February 2026
@@ -27,13 +27,15 @@ Version 1.0 — February 2026
 - [Imagery Module](./modules/imagery.md) (detailed spec — weather imagery + plates)
 - [ScratchPads Module](./modules/scratchpads.md)
 - [US Data Sources](./modules/us-data-sources.md)
+- [Garmin Avionics Data Integration](./modules/avionics-integration.md)
+- [ADS-B & TIS-B Integration](./modules/adsb-integration.md)
 - [Cross-Cutting Concerns](./modules/cross-cutting-concerns.md)
 
 ---
 
 ## 1. Executive Summary
 
-This document defines the high-level product specification for an Electronic Flight Bag (EFB) mobile application targeting US-based general aviation pilots operating under Part 91 (non-commercial). The application will provide comprehensive preflight planning, in-flight situational awareness, and post-flight logging capabilities comparable to ForeFlight, the current market leader.
+This document defines the high-level product specification for an Electronic Flight Bag (EFB) mobile application targeting US-based pilots operating under Part 91 (non-commercial) across all aircraft categories — single- and multi-engine piston, turboprop, turbojet, and rotorcraft. The application will provide comprehensive preflight planning, in-flight situational awareness, and post-flight logging capabilities comparable to ForeFlight, the current market leader. The scope includes high-altitude operations (FL180–FL450) for turbine aircraft and pressurized cabin awareness, while excluding Part 121 ATP carrier operations.
 
 The product scope is limited to the United States, leveraging freely available FAA data products to minimize recurring data licensing costs. The application will be developed as a native iOS and Android application with a companion web experience for desktop flight planning.
 
@@ -47,6 +49,10 @@ This specification covers seven core modules: Maps, Airport Details, Flight Plan
 
 - US airspace only (including territories)
 - VFR and IFR operations under 14 CFR Part 91
+- All aircraft categories: single-engine piston, multi-engine piston, turboprop, turbojet, turboshaft (helicopter)
+- High-altitude operations (FL180–FL450) for turbine aircraft
+- Pressurized aircraft support (cabin altitude tracking, oxygen requirements)
+- Part 91K fractional ownership operations
 - FAA-published charts, procedures, and data
 - Native iOS (iPad and iPhone) and Android (tablet and phone) applications
 - Companion web application for preflight planning
@@ -56,7 +62,7 @@ This specification covers seven core modules: Maps, Airport Details, Flight Plan
 ### 2.2 Out of Scope
 
 - International charts and procedures (no Jeppesen license)
-- Commercial operations (Part 121/135 dispatch, EFB compliance documentation)
+- Part 121 ATP carrier operations and associated EFB compliance documentation
 - Military-specific features (CAP Grid, GARS Grid, MIL flight bag)
 - Synthetic vision (deferred to Phase 2)
 - Jeppesen chart integration
@@ -71,6 +77,10 @@ This specification covers seven core modules: Maps, Airport Details, Flight Plan
 - Instrument-rated pilots filing and flying IFR
 - Sport pilots and recreational flyers
 - Aircraft owners managing single or small fleet aircraft
+- Turbine pilots (turboprop and jet, Part 91)
+- Corporate flight departments operating Part 91/91K
+- Part 135 on-demand charter operators (single-pilot operations)
+- Helicopter pilots (Part 91 operations)
 
 ### 2.4 Platform Requirements
 
@@ -94,7 +104,7 @@ The application is organized into seven core modules. Each module will have a de
 | **[Logbook](./modules/logbook.md)** | Digital flight logging, currency tracking, endorsements, certificates, and experience reports | **P1 — Important** | **Partial** — Entry CRUD (all time fields, landings, approaches, holds, remarks), experience reports. Missing: currency tracking, endorsements, certificates, import/export, cloud sync. |
 | **[Aircraft Profiles](./modules/aircraft-profiles.md)** | Aircraft configuration, performance profiles, tail number management, and type certificate data | **P1 — Important** | **Mostly Built** — Full CRUD, fuel config, glide performance, equipment, FAA registry N-number auto-fill. Missing: pre-loaded aircraft type database, performance profiles by altitude/power setting. |
 | **[Weight & Balance](./modules/weight-and-balance.md)** | Longitudinal and lateral CG computation, pre-loaded W&B envelopes (fixed-wing + helicopters), station-based loading, envelope visualization, scenario management, and limit checks | **P1 — Important** | **Not Started** |
-| **[Weather Imagery](./modules/weather-imagery.md)** | Forecast products, radar animation, satellite, winds aloft, icing/turbulence, PIREPs, and graphical briefing | **P0 — Core** | **Partial** — GFA viewer (cloud/surface, all regions, time steps), advisory map (G-AIRMETs, SIGMETs, CWAs with interactive map), PIREP viewer, backend imagery module with proxy/caching. Missing: radar animation, satellite, prog charts, icing/turbulence products, Skew-T, plates. |
+| **[Weather Imagery](./modules/weather-imagery.md)** | Forecast products, radar animation, satellite, winds aloft (all flight levels via Windy API), icing/turbulence, PIREPs, wind-corrected route calculations, and graphical briefing | **P0 — Core** | **Partial** — GFA viewer (cloud/surface, all regions, time steps), advisory map (G-AIRMETs, SIGMETs, CWAs with interactive map), PIREP viewer, backend imagery module with proxy/caching. Missing: radar animation, satellite, prog charts, icing/turbulence products, Skew-T, plates, Windy winds aloft integration. |
 | **[ScratchPads](./modules/scratchpads.md)** | Digital notepad for clearances, ATIS, briefing templates with drawing/typing support | **P1 — Important** | **Not Started** |
 
 ---
