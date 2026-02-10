@@ -8,9 +8,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { WBProfile } from './wb-profile.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('wb_scenarios')
+@Entity('u_wb_scenarios')
 export class WBScenario {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

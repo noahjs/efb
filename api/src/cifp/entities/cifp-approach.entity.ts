@@ -6,9 +6,11 @@ import {
   OneToMany,
 } from 'typeorm';
 import { CifpLeg } from './cifp-leg.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('cifp_approaches')
+@Entity('a_cifp_approaches')
 export class CifpApproach {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

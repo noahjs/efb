@@ -6,9 +6,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { PreferredRoute } from './preferred-route.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('preferred_route_segments')
+@Entity('a_preferred_route_segments')
 export class PreferredRouteSegment {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

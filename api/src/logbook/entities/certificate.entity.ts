@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('certificates')
+@Entity('u_certificates')
 export class Certificate {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

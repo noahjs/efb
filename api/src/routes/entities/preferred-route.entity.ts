@@ -6,10 +6,13 @@ import {
   OneToMany,
 } from 'typeorm';
 import { PreferredRouteSegment } from './preferred-route-segment.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('preferred_routes')
+@Entity('a_preferred_routes')
 @Index(['origin_id', 'destination_id'])
 export class PreferredRoute {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
+
   @PrimaryGeneratedColumn()
   id: number;
 

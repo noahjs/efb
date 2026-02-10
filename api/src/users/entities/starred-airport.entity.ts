@@ -8,10 +8,13 @@ import {
   Unique,
 } from 'typeorm';
 import { User } from './user.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('starred_airports')
+@Entity('u_starred_airports')
 @Unique(['user_id', 'airport_identifier'])
 export class StarredAirport {
+  static readonly DATA_GROUP = DataGroup.USER;
+
   @PrimaryGeneratedColumn()
   id: number;
 

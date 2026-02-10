@@ -7,10 +7,13 @@ import {
   Unique,
 } from 'typeorm';
 import { WBProfile } from './wb-profile.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('wb_envelopes')
+@Entity('u_wb_envelopes')
 @Unique(['wb_profile_id', 'envelope_type', 'axis'])
 export class WBEnvelope {
+  static readonly DATA_GROUP = DataGroup.USER;
+
   @PrimaryGeneratedColumn()
   id: number;
 

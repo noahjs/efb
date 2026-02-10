@@ -6,9 +6,11 @@ import {
   OneToMany,
 } from 'typeorm';
 import { StarredAirport } from './starred-airport.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('users')
+@Entity('s_users')
 export class User {
+  static readonly DATA_GROUP = DataGroup.SYSTEM;
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

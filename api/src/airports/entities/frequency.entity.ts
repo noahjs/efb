@@ -6,9 +6,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Airport } from './airport.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('frequencies')
+@Entity('a_frequencies')
 export class Frequency {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

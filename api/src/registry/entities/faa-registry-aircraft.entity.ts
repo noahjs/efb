@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryColumn } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('faa_registry_aircraft')
+@Entity('a_faa_registry')
 export class FaaRegistryAircraft {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryColumn({ type: 'varchar', length: 5 })
   n_number: string;
 

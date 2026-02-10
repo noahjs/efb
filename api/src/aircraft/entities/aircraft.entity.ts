@@ -13,9 +13,11 @@ import { PerformanceProfile } from './performance-profile.entity';
 import { FuelTank } from './fuel-tank.entity';
 import { Equipment } from './equipment.entity';
 import { User } from '../../users/entities/user.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('aircraft')
+@Entity('u_aircraft')
 export class Aircraft {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

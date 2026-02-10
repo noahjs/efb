@@ -506,9 +506,9 @@ async function main() {
 
   // Clear existing data
   console.log('Clearing existing airspace data...');
-  await ds.query('DELETE FROM airspaces');
-  await ds.query('DELETE FROM airway_segments');
-  await ds.query('DELETE FROM artcc_boundaries');
+  await ds.query('DELETE FROM a_airspaces');
+  await ds.query('DELETE FROM a_airway_segments');
+  await ds.query('DELETE FROM a_artcc_boundaries');
   console.log('  Done.\n');
 
   // Seed airspaces

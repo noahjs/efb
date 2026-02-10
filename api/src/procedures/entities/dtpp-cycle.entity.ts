@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryColumn } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('dtpp_cycles')
+@Entity('a_dtpp_cycles')
 export class DtppCycle {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryColumn({ type: 'varchar' })
   cycle: string;
 

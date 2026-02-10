@@ -355,7 +355,7 @@ async function main() {
 
   // Clear existing data
   console.log('Clearing existing navigation data...');
-  await ds.query('TRUNCATE TABLE navaids, fixes CASCADE');
+  await ds.query('TRUNCATE TABLE a_navaids, a_fixes CASCADE');
   console.log('  Done.\n');
 
   // Seed navaids

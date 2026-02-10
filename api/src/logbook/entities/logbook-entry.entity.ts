@@ -8,9 +8,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Aircraft } from '../../aircraft/entities/aircraft.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('logbook_entries')
+@Entity('u_logbook_entries')
 export class LogbookEntry {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

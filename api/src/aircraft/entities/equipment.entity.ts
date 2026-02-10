@@ -6,9 +6,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Aircraft } from './aircraft.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('equipment')
+@Entity('u_equipment')
 export class Equipment {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

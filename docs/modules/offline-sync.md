@@ -258,7 +258,7 @@ A download region includes:
 
 **Download tracking table (Drift):**
 ```sql
-CREATE TABLE download_jobs (
+CREATE TABLE a_download_jobs (
   id              TEXT PRIMARY KEY,
   region          TEXT NOT NULL,         -- e.g. 'sectional:new_york'
   data_type       TEXT NOT NULL,         -- 'airports' | 'tiles' | 'procedures' | 'all'
@@ -428,7 +428,7 @@ UI components receive `WeatherState` and render:
 Weather data is stored in Drift tables with insertion timestamps:
 
 ```sql
-CREATE TABLE cached_metars (
+CREATE TABLE a_cached_metars (
   station_id    TEXT PRIMARY KEY,
   raw_ob        TEXT NOT NULL,
   data_json     TEXT NOT NULL,   -- full METAR object as JSON
@@ -523,7 +523,7 @@ Total user data is typically <15 MB. Small enough to sync the entire dataset on 
 
 1. User creates/updates/deletes a record.
 2. Repository writes to Drift DB immediately (optimistic).
-3. Repository inserts a row into the `sync_queue` table: `{ id, entity_type, entity_id, operation (CREATE|UPDATE|DELETE), payload_json, created_at, retry_count }`.
+3. Repository inserts a row into the `u_sync_queue` table: `{ id, entity_type, entity_id, operation (CREATE|UPDATE|DELETE), payload_json, created_at, retry_count }`.
 4. Drift reactive query fires → StreamProvider emits new state → UI updates instantly.
 5. SyncService (background) picks up queued mutations and sends to backend API.
 6. On success: remove from queue, update `server_synced_at` on the entity.

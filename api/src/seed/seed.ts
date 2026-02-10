@@ -719,7 +719,7 @@ async function main() {
   // Clear existing data (CASCADE needed for Postgres foreign key constraints)
   console.log('Clearing existing data...');
   await ds.query(
-    'TRUNCATE TABLE runway_ends, runways, frequencies, airports CASCADE',
+    'TRUNCATE TABLE a_runway_ends, a_runways, a_frequencies, a_airports CASCADE',
   );
   console.log('  Done.\n');
 

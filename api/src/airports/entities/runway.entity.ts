@@ -8,9 +8,11 @@ import {
 } from 'typeorm';
 import { Airport } from './airport.entity';
 import { RunwayEnd } from './runway-end.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('runways')
+@Entity('a_runways')
 export class Runway {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

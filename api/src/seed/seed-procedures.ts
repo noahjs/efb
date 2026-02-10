@@ -217,7 +217,7 @@ async function main() {
 
   // Clear existing procedures
   console.log('Clearing existing procedure data...');
-  await ds.query('TRUNCATE TABLE procedures, dtpp_cycles CASCADE');
+  await ds.query('TRUNCATE TABLE a_procedures, a_dtpp_cycles CASCADE');
   console.log('  Done.\n');
 
   // Batch insert procedures

@@ -9,9 +9,11 @@ import {
 } from 'typeorm';
 import { Aircraft } from '../../aircraft/entities/aircraft.entity';
 import { PerformanceProfile } from '../../aircraft/entities/performance-profile.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('flights')
+@Entity('u_flights')
 export class Flight {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

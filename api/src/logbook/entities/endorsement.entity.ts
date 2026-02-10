@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('endorsements')
+@Entity('u_endorsements')
 export class Endorsement {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

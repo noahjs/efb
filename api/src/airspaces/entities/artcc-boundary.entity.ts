@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('artcc_boundaries')
+@Entity('a_artcc_boundaries')
 export class ArtccBoundary {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

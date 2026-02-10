@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryColumn } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('fixes')
+@Entity('a_fixes')
 export class Fix {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryColumn({ length: 10 })
   identifier: string;
 

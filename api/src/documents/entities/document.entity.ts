@@ -10,9 +10,11 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Aircraft } from '../../aircraft/entities/aircraft.entity';
 import { DocumentFolder } from './document-folder.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('documents')
+@Entity('u_documents')
 export class Document {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

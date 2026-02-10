@@ -9,9 +9,11 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Aircraft } from '../../aircraft/entities/aircraft.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('document_folders')
+@Entity('u_document_folders')
 export class DocumentFolder {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

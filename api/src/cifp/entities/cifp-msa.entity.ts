@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('cifp_msa')
+@Entity('a_cifp_msa')
 export class CifpMsa {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

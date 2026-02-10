@@ -6,9 +6,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Runway } from './runway.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('runway_ends')
+@Entity('a_runway_ends')
 export class RunwayEnd {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

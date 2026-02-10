@@ -12,9 +12,11 @@ import { Aircraft } from '../../aircraft/entities/aircraft.entity';
 import { WBStation } from './wb-station.entity';
 import { WBEnvelope } from './wb-envelope.entity';
 import { WBScenario } from './wb-scenario.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('wb_profiles')
+@Entity('u_wb_profiles')
 export class WBProfile {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

@@ -2,6 +2,17 @@
 // Env-var overrides belong in their respective config files (db.config.ts, filing.config.ts).
 // This file holds tuning parameters, API URLs, search defaults, and magic numbers.
 
+// --- Data Groups ---
+// Every entity belongs to one data group, which determines its sync strategy.
+//   AVIATION: Read-only on client. Bulk-downloaded or cached with TTL.
+//   USER:     Bidirectional sync. Local-first CRUD with mutation queue.
+//   SYSTEM:   Server-managed. Fetched on login, refreshed on foreground.
+export enum DataGroup {
+  AVIATION = 'aviation',
+  USER = 'user',
+  SYSTEM = 'system',
+}
+
 // --- Weather ---
 export const WEATHER = {
   AWC_BASE_URL: 'https://aviationweather.gov/api/data',

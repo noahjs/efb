@@ -1,7 +1,9 @@
 import { Entity, Column, PrimaryGeneratedColumn, Index } from 'typeorm';
+import { DataGroup } from '../../config/constants';
 
-@Entity('airway_segments')
+@Entity('a_airway_segments')
 export class AirwaySegment {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

@@ -1,9 +1,11 @@
 import { Entity, Column, PrimaryColumn, OneToMany, Index } from 'typeorm';
 import { Runway } from './runway.entity';
 import { Frequency } from './frequency.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('airports')
+@Entity('a_airports')
 export class Airport {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryColumn({ length: 10 })
   identifier: string;
 

@@ -458,7 +458,7 @@ async function main() {
   // Clear existing CIFP data
   console.log('Clearing existing CIFP data...');
   await ds.query(
-    'TRUNCATE TABLE cifp_legs, cifp_approaches, cifp_ils, cifp_msa, cifp_runways CASCADE',
+    'TRUNCATE TABLE a_cifp_legs, a_cifp_approaches, a_cifp_ils, a_cifp_msa, a_cifp_runways CASCADE',
   );
   console.log('  Done.\n');
 

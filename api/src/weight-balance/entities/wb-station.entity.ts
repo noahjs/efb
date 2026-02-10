@@ -6,9 +6,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { WBProfile } from './wb-profile.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('wb_stations')
+@Entity('u_wb_stations')
 export class WBStation {
+  static readonly DATA_GROUP = DataGroup.USER;
   @PrimaryGeneratedColumn()
   id: number;
 

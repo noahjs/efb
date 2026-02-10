@@ -6,9 +6,11 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { CifpApproach } from './cifp-approach.entity';
+import { DataGroup } from '../../config/constants';
 
-@Entity('cifp_legs')
+@Entity('a_cifp_legs')
 export class CifpLeg {
+  static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
 

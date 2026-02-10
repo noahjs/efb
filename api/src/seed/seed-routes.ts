@@ -158,7 +158,7 @@ async function main() {
   // Clear existing data
   console.log('Clearing existing preferred route data...');
   await ds.query(
-    'TRUNCATE TABLE preferred_route_segments, preferred_routes CASCADE',
+    'TRUNCATE TABLE a_preferred_route_segments, a_preferred_routes CASCADE',
   );
   console.log('  Done.\n');
 
