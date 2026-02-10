@@ -50,10 +50,7 @@ export function parseForeFlight(content: string): ParseResult {
       const row = mapToObject(headers, values);
       const tailNumber = row['AircraftID'] || row['Tail Number'] || '';
       const type =
-        row['TypeCode'] ||
-        row['Aircraft Type'] ||
-        row['Make and Model'] ||
-        '';
+        row['TypeCode'] || row['Aircraft Type'] || row['Make and Model'] || '';
 
       if (tailNumber) {
         aircraftMap.set(tailNumber, type);
@@ -83,11 +80,7 @@ export function parseForeFlight(content: string): ParseResult {
     const line = lines[i].trim();
     if (!line) continue;
     // Skip data type declaration rows
-    if (
-      line.startsWith('Text') &&
-      line.includes(',') &&
-      !line.includes('/')
-    ) {
+    if (line.startsWith('Text') && line.includes(',') && !line.includes('/')) {
       continue;
     }
     if (headerLine < 0) {
@@ -133,9 +126,13 @@ function mapForeFlightEntry(
   }
 
   // Aircraft
-  dto.aircraft_identifier = row['AircraftID'] || row['Tail Number'] || undefined;
+  dto.aircraft_identifier =
+    row['AircraftID'] || row['Tail Number'] || undefined;
   dto.aircraft_type =
-    row['TypeCode'] || row['Aircraft Type'] || row['Make and Model'] || undefined;
+    row['TypeCode'] ||
+    row['Aircraft Type'] ||
+    row['Make and Model'] ||
+    undefined;
 
   // Route
   const from = normalizeAirportId(row['From'] || '');
@@ -150,9 +147,7 @@ function mapForeFlightEntry(
   dto.sic = parseFloat2(row['SIC']);
   dto.night = parseFloat2(row['Night']);
   dto.solo = parseFloat2(row['Solo']);
-  dto.cross_country = parseFloat2(
-    row['CrossCountry'] || row['Cross Country'],
-  );
+  dto.cross_country = parseFloat2(row['CrossCountry'] || row['Cross Country']);
   dto.actual_instrument = parseFloat2(
     row['ActualInstrument'] || row['Actual Instrument'],
   );
@@ -160,9 +155,7 @@ function mapForeFlightEntry(
     row['SimulatedInstrument'] || row['Simulated Instrument'],
   );
   dto.dual_given = parseFloat2(row['DualGiven'] || row['Dual Given']);
-  dto.dual_received = parseFloat2(
-    row['DualReceived'] || row['Dual Received'],
-  );
+  dto.dual_received = parseFloat2(row['DualReceived'] || row['Dual Received']);
   dto.simulated_flight = parseFloat2(
     row['SimulatedFlight'] || row['Simulated Flight'],
   );
@@ -178,13 +171,9 @@ function mapForeFlightEntry(
 
   // Takeoffs & Landings
   dto.day_takeoffs = parseInt2(row['DayTakeoffs'] || row['Day Takeoffs']);
-  dto.night_takeoffs = parseInt2(
-    row['NightTakeoffs'] || row['Night Takeoffs'],
-  );
+  dto.night_takeoffs = parseInt2(row['NightTakeoffs'] || row['Night Takeoffs']);
   dto.day_landings_full_stop = parseInt2(
-    row['DayLandingsFullStop'] ||
-      row['Day Landings'] ||
-      row['DayLandings'],
+    row['DayLandingsFullStop'] || row['Day Landings'] || row['DayLandings'],
   );
   dto.night_landings_full_stop = parseInt2(
     row['NightLandingsFullStop'] ||
@@ -209,9 +198,7 @@ function mapForeFlightEntry(
   // Also check combined "Approaches" field
   const combinedApproaches = row['Approaches'] || '';
   if (combinedApproaches.trim()) {
-    approaches.push(
-      ...combinedApproaches.split(';').filter((s) => s.trim()),
-    );
+    approaches.push(...combinedApproaches.split(';').filter((s) => s.trim()));
   }
   if (approaches.length > 0) {
     dto.approaches = approaches.join('; ');
@@ -233,7 +220,8 @@ function mapForeFlightEntry(
   dto.flight_review =
     (row['FlightReview'] || row['Flight Review'] || '') === 'TRUE' ||
     (row['FlightReview'] || row['Flight Review'] || '') === '1';
-  dto.checkride = (row['Checkride'] || '') === 'TRUE' || (row['Checkride'] || '') === '1';
+  dto.checkride =
+    (row['Checkride'] || '') === 'TRUE' || (row['Checkride'] || '') === '1';
   dto.ipc = (row['IPC'] || '') === 'TRUE' || (row['IPC'] || '') === '1';
 
   // Comments
@@ -265,8 +253,7 @@ function normalizeDate(dateStr: string): string {
     if (parts.length === 3) {
       const month = parts[0].padStart(2, '0');
       const day = parts[1].padStart(2, '0');
-      const year =
-        parts[2].length === 2 ? '20' + parts[2] : parts[2];
+      const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
       return `${year}-${month}-${day}`;
     }
   }

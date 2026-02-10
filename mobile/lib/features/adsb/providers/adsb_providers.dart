@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/connection_manager.dart';
@@ -72,6 +74,71 @@ final ownshipPositionProvider = StreamProvider<OwnshipPosition>((ref) {
       timestamp: DateTime.now(),
     );
   });
+});
+
+// ── Device GPS Position ──
+
+final devicePositionProvider = StreamProvider<OwnshipPosition>((ref) async* {
+  // Request permissions (try/catch for web where these can behave differently)
+  try {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      debugPrint('[EFB] Location services not enabled');
+    }
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint('[EFB] Location permission permanently denied');
+      return;
+    }
+  } catch (e) {
+    // On web, permission APIs may throw — proceed anyway since
+    // getPositionStream itself triggers the browser permission dialog
+    debugPrint('[EFB] Permission check failed (proceeding): $e');
+  }
+
+  yield* Geolocator.getPositionStream(
+    locationSettings: const LocationSettings(
+      accuracy: LocationAccuracy.best,
+      distanceFilter: 5,
+    ),
+  ).map((pos) => OwnshipPosition(
+        latitude: pos.latitude,
+        longitude: pos.longitude,
+        pressureAltitude: 0,
+        groundspeed: (pos.speed * 1.94384).round(), // m/s → knots
+        track: pos.heading.round() % 360,
+        verticalRate: 0,
+        nic: 0,
+        nacp: 0,
+        isAirborne: false,
+        icaoAddress: 0,
+        callsign: '',
+        timestamp: pos.timestamp,
+      ));
+});
+
+// ── Active Position (unified ADS-B / device GPS) ──
+
+final activePositionProvider = Provider<OwnshipPosition?>((ref) {
+  final source = ref.watch(gpsSourceProvider);
+  final devicePos = ref.watch(devicePositionProvider).value;
+  final externalPos = ref.watch(ownshipPositionProvider).value;
+
+  if (source == GpsSource.device) {
+    return devicePos;
+  }
+
+  // External preferred, fallback to device if no ADS-B data
+  if (externalPos != null) {
+    // Check staleness — if last ADS-B position > 5s old, prefer device
+    final age = DateTime.now().difference(externalPos.timestamp);
+    if (age.inSeconds < 5) return externalPos;
+  }
+  return devicePos;
 });
 
 // ── Traffic Targets ──

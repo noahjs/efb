@@ -40,6 +40,8 @@ import '../../features/weight_balance/screens/wb_profile_editor_screen.dart';
 import '../../features/weight_balance/screens/flight_wb_screen.dart';
 import '../../features/approach_charts/screens/approach_list_screen.dart';
 import '../../features/approach_charts/screens/approach_chart_screen.dart';
+import '../../features/documents/documents_screen.dart';
+import '../../features/documents/widgets/document_viewer_screen.dart';
 import '../../features/more/more_screen.dart';
 import '../../features/more/pilot_profile_screen.dart';
 import '../../features/adsb/screens/receiver_settings_screen.dart';
@@ -98,11 +100,8 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/documents',
-          pageBuilder: (context, state) => NoTransitionPage(
-            child: Scaffold(
-              appBar: AppBar(title: const Text('Documents')),
-              body: const Center(child: Text('Coming Soon')),
-            ),
+          pageBuilder: (context, state) => const NoTransitionPage(
+            child: DocumentsScreen(),
           ),
         ),
         GoRoute(
@@ -297,10 +296,26 @@ final appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/aircraft/:id/documents',
+      builder: (context, state) {
+        final id = int.parse(state.pathParameters['id']!);
+        return DocumentsScreen(aircraftId: id);
+      },
+    ),
+    GoRoute(
       path: '/aircraft/:id',
       builder: (context, state) {
         final id = int.parse(state.pathParameters['id']!);
         return AircraftDetailScreen(aircraftId: id);
+      },
+    ),
+
+    // Documents
+    GoRoute(
+      path: '/documents/:id/view',
+      builder: (context, state) {
+        final id = int.parse(state.pathParameters['id']!);
+        return DocumentViewerScreen(documentId: id);
       },
     ),
 

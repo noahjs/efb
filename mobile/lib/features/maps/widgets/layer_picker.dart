@@ -22,6 +22,18 @@ class LayerPicker extends StatefulWidget {
 }
 
 class _LayerPickerState extends State<LayerPicker> {
+  void _onOverlayTap(String id) {
+    // For exclusive weather overlays, turn off the others first
+    if (_exclusiveWeatherOverlays.contains(id) &&
+        !widget.activeOverlays.contains(id)) {
+      for (final other in _exclusiveWeatherOverlays) {
+        if (other != id && widget.activeOverlays.contains(other)) {
+          widget.onOverlayToggled(other);
+        }
+      }
+    }
+    widget.onOverlayToggled(id);
+  }
 
   static const baseLayers = [
     ('vfr', 'VFR Sectional'),
@@ -40,12 +52,22 @@ class _LayerPickerState extends State<LayerPicker> {
     ('tfrs', 'TFRs'),
     ('air_sigmet', 'AIR/SIGMET/CWAs'),
     ('pireps', 'PIREPs'),
+    ('_divider', ''),
     ('surface_wind', 'Surface Wind'),
     ('winds_aloft', 'Winds Aloft'),
     ('temperature', 'Temperature'),
     ('visibility', 'Visibility'),
     ('ceiling', 'Ceiling'),
   ];
+
+  /// Weather overlays that are mutually exclusive — only one at a time.
+  static const _exclusiveWeatherOverlays = {
+    'surface_wind',
+    'winds_aloft',
+    'temperature',
+    'visibility',
+    'ceiling',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +99,7 @@ class _LayerPickerState extends State<LayerPicker> {
                       onTap: () => widget.onOverlayToggled(id),
                     );
                   }),
-                  const Divider(color: AppColors.divider, height: 1),
+                  const Divider(color: AppColors.divider, height: 12),
                   ...baseLayers.map((entry) {
                     final (id, label) = entry;
                     final isSelected = widget.selectedBaseLayer == id;
@@ -102,11 +124,14 @@ class _LayerPickerState extends State<LayerPicker> {
                 itemCount: overlayLayers.length,
                 itemBuilder: (context, index) {
                   final (id, label) = overlayLayers[index];
+                  if (id == '_divider') {
+                    return const Divider(color: AppColors.divider, height: 12);
+                  }
                   final isActive = widget.activeOverlays.contains(id);
                   return _LayerRow(
                     label: label,
                     isActive: isActive,
-                    onTap: () => widget.onOverlayToggled(id),
+                    onTap: () => _onOverlayTap(id),
                   );
                 },
               ),

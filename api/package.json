@@ -28,6 +28,7 @@
     "seed:cifp": "ts-node -r tsconfig-paths/register src/seed/seed-cifp.ts"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",

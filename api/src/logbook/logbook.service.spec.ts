@@ -76,9 +76,7 @@ describe('LogbookService', () => {
       addOrderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
-      getManyAndCount: jest
-        .fn()
-        .mockResolvedValue([[{ ...mockEntry }], 1]),
+      getManyAndCount: jest.fn().mockResolvedValue([[{ ...mockEntry }], 1]),
     };
 
     mockEntryRepo = {
@@ -90,9 +88,7 @@ describe('LogbookService', () => {
         .mockImplementation((entry) =>
           Promise.resolve({ ...entry, id: entry.id ?? 3 }),
         ),
-      remove: jest
-        .fn()
-        .mockImplementation((entry) => Promise.resolve(entry)),
+      remove: jest.fn().mockImplementation((entry) => Promise.resolve(entry)),
       createQueryBuilder: jest.fn().mockReturnValue(mockQb),
     };
 
@@ -272,12 +268,8 @@ describe('LogbookService', () => {
       const result = await service.getExperienceReport();
 
       expect(result.rows.length).toBe(2);
-      const c172Row = result.rows.find(
-        (r) => r.aircraftType === 'Cessna 172',
-      );
-      const pa28Row = result.rows.find(
-        (r) => r.aircraftType === 'Piper PA-28',
-      );
+      const c172Row = result.rows.find((r) => r.aircraftType === 'Cessna 172');
+      const pa28Row = result.rows.find((r) => r.aircraftType === 'Piper PA-28');
       expect(c172Row).toBeDefined();
       expect(pa28Row).toBeDefined();
       expect(c172Row!.totalTime).toBe(1.5);

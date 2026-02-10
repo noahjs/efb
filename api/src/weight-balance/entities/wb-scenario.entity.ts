@@ -28,7 +28,12 @@ export class WBScenario {
   name: string;
 
   @Column({ type: 'jsonb' })
-  station_loads: { station_id: number; weight: number; occupant_name?: string; is_person?: boolean }[];
+  station_loads: {
+    station_id: number;
+    weight: number;
+    occupant_name?: string;
+    is_person?: boolean;
+  }[];
 
   @Column({ type: 'float', nullable: true })
   starting_fuel_gallons: number;

@@ -60,9 +60,7 @@ export function parseGarmin(content: string): ParseResult {
   return { entries, aircraft, warnings, errors };
 }
 
-function mapGarminEntry(
-  row: Record<string, string>,
-): CreateLogbookEntryDto {
+function mapGarminEntry(row: Record<string, string>): CreateLogbookEntryDto {
   const dto: CreateLogbookEntryDto = {};
 
   // Date — Garmin uses M/D/YYYY
@@ -78,12 +76,17 @@ function mapGarminEntry(
     row['Aircraft Type'] || row['Type'] || row['Model'] || undefined;
 
   // Route — Garmin uses FAA 3-letter identifiers (no normalization needed)
-  dto.from_airport = (row['From'] || row['Departure'] || '').trim() || undefined;
-  dto.to_airport = (row['To'] || row['Arrival'] || row['Destination'] || '').trim() || undefined;
+  dto.from_airport =
+    (row['From'] || row['Departure'] || '').trim() || undefined;
+  dto.to_airport =
+    (row['To'] || row['Arrival'] || row['Destination'] || '').trim() ||
+    undefined;
   dto.route = row['Route'] || undefined;
 
   // Times
-  dto.total_time = parseFloat2(row['Total Time'] || row['TotalTime'] || row['Total Duration']);
+  dto.total_time = parseFloat2(
+    row['Total Time'] || row['TotalTime'] || row['Total Duration'],
+  );
   dto.pic = parseFloat2(row['PIC']);
   dto.sic = parseFloat2(row['SIC']);
   dto.night = parseFloat2(row['Night']);
@@ -96,16 +99,12 @@ function mapGarminEntry(
     row['Simulated Instrument'] || row['Sim Inst'] || row['Hood'],
   );
   dto.dual_given = parseFloat2(row['Dual Given'] || row['CFI']);
-  dto.dual_received = parseFloat2(
-    row['Dual Received'] || row['Dual Rcvd'],
-  );
+  dto.dual_received = parseFloat2(row['Dual Received'] || row['Dual Rcvd']);
   dto.ground_training = parseFloat2(row['Ground Training'] || row['Ground']);
 
   // Takeoffs & Landings
   dto.day_takeoffs = parseInt2(row['Day Takeoffs'] || row['Day T/O']);
-  dto.night_takeoffs = parseInt2(
-    row['Night Takeoffs'] || row['Night T/O'],
-  );
+  dto.night_takeoffs = parseInt2(row['Night Takeoffs'] || row['Night T/O']);
   dto.day_landings_full_stop = parseInt2(
     row['Day Landings'] || row['Day Ldg'] || row['Day Full Stop'],
   );
@@ -122,7 +121,8 @@ function mapGarminEntry(
   }
 
   // People
-  dto.instructor_name = row['Instructor'] || row['Instructor Name'] || undefined;
+  dto.instructor_name =
+    row['Instructor'] || row['Instructor Name'] || undefined;
   dto.comments = row['Comments'] || row['Remarks'] || row['Notes'] || undefined;
 
   // Flags
@@ -145,8 +145,7 @@ function normalizeDate(dateStr: string): string {
     if (parts.length === 3) {
       const month = parts[0].padStart(2, '0');
       const day = parts[1].padStart(2, '0');
-      const year =
-        parts[2].length === 2 ? '20' + parts[2] : parts[2];
+      const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
       return `${year}-${month}-${day}`;
     }
   }

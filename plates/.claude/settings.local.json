@@ -17,7 +17,12 @@
       "Bash(flutter analyze:*)",
       "Bash(find:*)",
       "Bash(PGPASSWORD=efb psql:*)",
-      "Bash(docker compose exec:*)"
+      "Bash(docker compose exec:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(flutter pub deps:*)"
     ]
   }
 }

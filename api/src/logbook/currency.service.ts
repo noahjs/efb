@@ -135,9 +135,7 @@ export class CurrencyService {
 
     const qualifying = entries.filter(
       (e) =>
-        e.date &&
-        e.date >= cutoffStr &&
-        (e.night_landings_full_stop || 0) > 0,
+        e.date && e.date >= cutoffStr && (e.night_landings_full_stop || 0) > 0,
     );
 
     let totalNightLandings = 0;
@@ -195,24 +193,13 @@ export class CurrencyService {
   }
 
   // 61.57(c) — 6 approaches + holding in 6 calendar months
-  private calcIfrCurrency(
-    entries: LogbookEntry[],
-    now: Date,
-  ): CurrencyItem {
+  private calcIfrCurrency(entries: LogbookEntry[], now: Date): CurrencyItem {
     // 6 calendar months back (end of that month)
-    const sixMonthsAgo = new Date(
-      now.getFullYear(),
-      now.getMonth() - 6,
-      1,
-    );
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
     const sixMonthCutoff = sixMonthsAgo.toISOString().slice(0, 10);
 
     // 12 calendar months for grace period
-    const twelveMonthsAgo = new Date(
-      now.getFullYear(),
-      now.getMonth() - 12,
-      1,
-    );
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 12, 1);
     const twelveMonthCutoff = twelveMonthsAgo.toISOString().slice(0, 10);
 
     // Count approaches and holds in 6-month window
@@ -317,10 +304,7 @@ export class CurrencyService {
   }
 
   // 61.56 — Flight review within 24 calendar months
-  private calcFlightReview(
-    entries: LogbookEntry[],
-    now: Date,
-  ): CurrencyItem {
+  private calcFlightReview(entries: LogbookEntry[], now: Date): CurrencyItem {
     // Find most recent flight_review or checkride entry
     const reviewEntry = entries.find(
       (e) => e.date && (e.flight_review || e.checkride),
@@ -372,10 +356,7 @@ export class CurrencyService {
   }
 
   // Medical certificate expiration
-  private calcMedical(
-    certificates: Certificate[],
-    now: Date,
-  ): CurrencyItem {
+  private calcMedical(certificates: Certificate[], now: Date): CurrencyItem {
     const medicals = certificates.filter(
       (c) => c.certificate_type === 'medical',
     );
@@ -437,9 +418,7 @@ export class CurrencyService {
       expiration_date: expirationDate,
       details: this.formatMedicalClass(latestMedical.certificate_class),
       action_required:
-        status === 'expired'
-          ? 'Renew your medical certificate'
-          : null,
+        status === 'expired' ? 'Renew your medical certificate' : null,
     };
   }
 

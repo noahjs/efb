@@ -68,9 +68,7 @@ export class LogbookController {
       throw new BadRequestException('No file uploaded');
     }
     if (!source || !['foreflight', 'garmin'].includes(source)) {
-      throw new BadRequestException(
-        'Source must be "foreflight" or "garmin"',
-      );
+      throw new BadRequestException('Source must be "foreflight" or "garmin"');
     }
     const isPreview = preview !== 'false';
     const fileContent = file.buffer.toString('utf-8');

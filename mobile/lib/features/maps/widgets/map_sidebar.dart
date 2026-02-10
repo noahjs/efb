@@ -7,6 +7,7 @@ class MapSidebar extends StatefulWidget {
   final VoidCallback? onAeroSettingsTap;
   final VoidCallback? onApproachTap;
   final bool isApproachActive;
+  final VoidCallback? onCenterOnMe;
 
   const MapSidebar({
     super.key,
@@ -15,6 +16,7 @@ class MapSidebar extends StatefulWidget {
     this.onAeroSettingsTap,
     this.onApproachTap,
     this.isApproachActive = false,
+    this.onCenterOnMe,
   });
 
   @override
@@ -84,6 +86,14 @@ class _MapSidebarState extends State<MapSidebar> {
           _SidebarButton(
             icon: Icons.remove,
             onTap: () => widget.onZoomOut?.call(),
+          ),
+          const SizedBox(height: 12),
+
+          // Center on me
+          _SidebarButton(
+            icon: Icons.my_location,
+            size: 18,
+            onTap: () => widget.onCenterOnMe?.call(),
           ),
         ],
       ),

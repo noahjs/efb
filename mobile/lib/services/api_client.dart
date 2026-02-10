@@ -203,13 +203,19 @@ class ApiClient {
     required int altitude,
   }) async {
     try {
-      final response = await _dio.get('/windy/streamlines', queryParameters: {
-        'minLat': minLat,
-        'maxLat': maxLat,
-        'minLng': minLng,
-        'maxLng': maxLng,
-        'altitude': altitude,
-      });
+      final response = await _dio.get(
+        '/windy/streamlines',
+        queryParameters: {
+          'minLat': minLat,
+          'maxLat': maxLat,
+          'minLng': minLng,
+          'maxLng': maxLng,
+          'altitude': altitude,
+        },
+        options: Options(
+          receiveTimeout: const Duration(seconds: 60),
+        ),
+      );
       return response.data;
     } catch (_) {
       return null;
@@ -1071,6 +1077,94 @@ class ApiClient {
     final response =
         await _dio.put('/aircraft/$aircraftId/equipment', data: data);
     return response.data;
+  }
+
+  // --- Documents ---
+
+  Future<List<dynamic>> getDocuments({int? folderId, int? aircraftId}) async {
+    final response = await _dio.get('/documents', queryParameters: {
+      if (folderId != null) 'folder_id': folderId,
+      if (aircraftId != null) 'aircraft_id': aircraftId,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getDocumentById(int id) async {
+    final response = await _dio.get('/documents/$id');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> getDocumentDownloadUrl(int id) async {
+    final response = await _dio.get('/documents/$id/download');
+    return response.data;
+  }
+
+  Future<Uint8List> downloadDocumentBytes(int id) async {
+    final response = await _dio.get<List<int>>(
+      '/documents/$id/download',
+      options: Options(
+        responseType: ResponseType.bytes,
+        receiveTimeout: const Duration(seconds: 60),
+      ),
+    );
+    return Uint8List.fromList(response.data!);
+  }
+
+  Future<Map<String, dynamic>> uploadDocument({
+    required Uint8List fileBytes,
+    required String fileName,
+    required String mimeType,
+    int? aircraftId,
+    int? folderId,
+  }) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(fileBytes, filename: fileName,
+          contentType: DioMediaType.parse(mimeType)),
+      if (aircraftId != null) 'aircraft_id': aircraftId.toString(),
+      if (folderId != null) 'folder_id': folderId.toString(),
+    });
+    final response = await _dio.post(
+      '/documents/upload',
+      data: formData,
+      options: Options(
+        sendTimeout: const Duration(seconds: 120),
+        receiveTimeout: const Duration(seconds: 120),
+      ),
+    );
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateDocument(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.patch('/documents/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteDocument(int id) async {
+    await _dio.delete('/documents/$id');
+  }
+
+  Future<List<dynamic>> getDocumentFolders({int? aircraftId}) async {
+    final response = await _dio.get('/documents/folders', queryParameters: {
+      if (aircraftId != null) 'aircraft_id': aircraftId,
+    });
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> createDocumentFolder(
+      Map<String, dynamic> data) async {
+    final response = await _dio.post('/documents/folders', data: data);
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateDocumentFolder(
+      int id, Map<String, dynamic> data) async {
+    final response = await _dio.patch('/documents/folders/$id', data: data);
+    return response.data;
+  }
+
+  Future<void> deleteDocumentFolder(int id) async {
+    await _dio.delete('/documents/folders/$id');
   }
 
   // --- Filing ---

@@ -1,10 +1,4 @@
-import {
-  IsString,
-  IsOptional,
-  IsNumber,
-  IsIn,
-  IsInt,
-} from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, IsInt } from 'class-validator';
 
 export class CreateWBStationDto {
   @IsString()

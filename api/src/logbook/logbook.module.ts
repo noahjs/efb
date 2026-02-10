@@ -14,7 +14,11 @@ import { ImportService } from './import.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([LogbookEntry, Endorsement, Certificate])],
-  controllers: [LogbookController, EndorsementsController, CertificatesController],
+  controllers: [
+    LogbookController,
+    EndorsementsController,
+    CertificatesController,
+  ],
   providers: [
     LogbookService,
     EndorsementsService,

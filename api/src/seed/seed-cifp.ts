@@ -57,7 +57,17 @@ const CIFP_DIR = path.join(DATA_DIR, 'cifp');
 async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
-    entities: [Airport, Runway, RunwayEnd, Frequency, CifpApproach, CifpLeg, CifpIls, CifpMsa, CifpRunway],
+    entities: [
+      Airport,
+      Runway,
+      RunwayEnd,
+      Frequency,
+      CifpApproach,
+      CifpLeg,
+      CifpIls,
+      CifpMsa,
+      CifpRunway,
+    ],
   });
   await ds.initialize();
   return ds;
@@ -135,9 +145,7 @@ async function findCifpUrl(): Promise<string> {
 // ICAO → FAA Airport Identifier Mapping
 // ---------------------------------------------------------------------------
 
-async function buildIcaoToFaaMap(
-  ds: DataSource,
-): Promise<Map<string, string>> {
+async function buildIcaoToFaaMap(ds: DataSource): Promise<Map<string, string>> {
   const airports = await ds
     .getRepository(Airport)
     .createQueryBuilder('a')
@@ -397,13 +405,14 @@ async function main() {
   // Check if FAACIFP18 already exists
   if (fs.existsSync(cifpPath)) {
     const stats = fs.statSync(cifpPath);
-    const ageHours =
-      (Date.now() - stats.mtimeMs) / 3600000;
+    const ageHours = (Date.now() - stats.mtimeMs) / 3600000;
     if (ageHours < 24 * 28) {
       console.log(
         `FAACIFP18 already present (${(stats.size / 1024 / 1024).toFixed(1)} MB, ${Math.floor(ageHours / 24)} days old)`,
       );
-      console.log('Skipping download. Delete data/cifp/ to force re-download.\n');
+      console.log(
+        'Skipping download. Delete data/cifp/ to force re-download.\n',
+      );
     }
   } else {
     // Find and download CIFP ZIP
@@ -493,7 +502,9 @@ async function main() {
         cifpLeg.sequence_number = leg.sequenceNumber;
         cifpLeg.fix_identifier = n(leg.fixIdentifier);
         cifpLeg.fix_section_code = n(leg.fixSectionCode);
-        cifpLeg.waypoint_description_code = n(leg.waypointDescCode.trim() || null);
+        cifpLeg.waypoint_description_code = n(
+          leg.waypointDescCode.trim() || null,
+        );
         cifpLeg.turn_direction = n(leg.turnDirection);
         cifpLeg.path_termination = leg.pathTermination;
         cifpLeg.recomm_navaid = n(leg.recommNavaid);

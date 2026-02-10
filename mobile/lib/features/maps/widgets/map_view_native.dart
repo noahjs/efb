@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -392,6 +393,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await _addAeronauticalLayers(_mapboxMap!);
     // Register wind barb images for the symbol layer
     await _registerWindBarbImages(_mapboxMap!);
+    // Register own-position cone image
+    await _registerConeImage(_mapboxMap!);
     // Register all overlay sources and layers
     for (final key in _overlayRegistry.keys) {
       await _addOverlaySource(_mapboxMap!, key);
@@ -729,6 +732,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     'traffic': _setupTrafficLayers,
     'winds-aloft': _setupWindsAloftLayers,
     'wind-streamlines': _setupStreamlineLayers,
+    'own-position': _setupOwnPositionLayers,
   };
 
   /// Creates a GeoJSON source and its layers for the given overlay key.
@@ -902,18 +906,18 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupWindsAloftLayers(MapboxMap map, String srcId) async {
-    // Wind barb symbols — icon-image set via expression for data-driven lookup
+    // Wind barb symbols — icon-image via template string matching registered images
     await map.style.addLayer(SymbolLayer(
       id: 'winds-aloft-barbs',
       sourceId: srcId,
+      iconImage: '{barbIcon}',
       iconSize: 0.5,
+      iconRotate: 0.0,
       iconRotationAlignment: IconRotationAlignment.MAP,
       iconAllowOverlap: true,
       iconIgnorePlacement: true,
     ));
-    // Data-driven icon-image and rotation from feature properties
-    await map.style.setStyleLayerProperty(
-        'winds-aloft-barbs', 'icon-image', ['get', 'barbIcon']);
+    // Data-driven rotation from feature properties
     await map.style.setStyleLayerProperty(
         'winds-aloft-barbs', 'icon-rotate', ['get', 'rotation']);
 
@@ -921,6 +925,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await map.style.addLayer(SymbolLayer(
       id: 'winds-aloft-speed-labels',
       sourceId: srcId,
+      textField: '{label}',
       textSize: 10.0,
       textColor: Colors.white.toARGB32(),
       textHaloColor: Colors.black.toARGB32(),
@@ -931,9 +936,48 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textIgnorePlacement: true,
     ));
     await map.style.setStyleLayerProperty(
-        'winds-aloft-speed-labels', 'text-field', ['get', 'label']);
-    await map.style.setStyleLayerProperty(
         'winds-aloft-speed-labels', 'text-color', ['get', 'color']);
+  }
+
+  static Future<void> _setupOwnPositionLayers(MapboxMap map, String srcId) async {
+    // Outer pulsing ring
+    await map.style.addLayer(CircleLayer(
+      id: 'own-position-outer',
+      sourceId: srcId,
+      circleRadius: 18.0,
+      circleColor: const Color(0x334A90D9).toARGB32(),
+      circleStrokeWidth: 2.0,
+      circleStrokeColor: const Color(0xFF4A90D9).toARGB32(),
+      circlePitchAlignment: CirclePitchAlignment.MAP,
+    ));
+
+    // Solid blue center dot
+    await map.style.addLayer(CircleLayer(
+      id: 'own-position-dot',
+      sourceId: srcId,
+      circleRadius: 7.0,
+      circleColor: const Color(0xFF4A90D9).toARGB32(),
+      circleStrokeWidth: 2.0,
+      circleStrokeColor: Colors.white.toARGB32(),
+      circlePitchAlignment: CirclePitchAlignment.MAP,
+    ));
+
+    // Heading cone (triangle) — only shown when groundspeed > 5kt
+    // Uses a symbol layer with a triangle icon rotated by track
+    await map.style.addLayer(SymbolLayer(
+      id: 'own-position-heading',
+      sourceId: srcId,
+      iconImage: 'own-position-cone',
+      iconSize: 0.5,
+      iconRotate: 0.0,
+      iconRotationAlignment: IconRotationAlignment.MAP,
+      iconAllowOverlap: true,
+      iconIgnorePlacement: true,
+      iconOffset: [0.0, -40.0],
+      filter: ['>', ['get', 'groundspeed'], 5],
+    ));
+    await map.style.setStyleLayerProperty(
+        'own-position-heading', 'icon-rotate', ['get', 'track']);
   }
 
   static Future<void> _setupStreamlineLayers(MapboxMap map, String srcId) async {
@@ -950,22 +994,66 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         'wind-streamlines-line', 'line-color', ['get', 'color']);
   }
 
+  /// Register the heading cone image for the own-position overlay.
+  Future<void> _registerConeImage(MapboxMap map) async {
+    try {
+      const w = 32;
+      const h = 48;
+      final pixels = Uint8List(w * h * 4);
+      // Draw a filled triangle pointing up (blue #4A90D9)
+      for (int y = 0; y < h; y++) {
+        final progress = y / h;
+        final halfWidth = (progress * w / 2).round();
+        final cx = w ~/ 2;
+        for (int x = cx - halfWidth; x <= cx + halfWidth; x++) {
+          if (x < 0 || x >= w) continue;
+          final idx = (y * w + x) * 4;
+          pixels[idx] = 0x4A;     // R
+          pixels[idx + 1] = 0x90; // G
+          pixels[idx + 2] = 0xD9; // B
+          pixels[idx + 3] = 0xDD; // A
+        }
+      }
+      final mbxImage = MbxImage(width: w, height: h, data: pixels);
+      await map.style.addStyleImage(
+        'own-position-cone', 2.0, mbxImage,
+        false, <ImageStretches>[], <ImageStretches>[], null,
+      );
+    } catch (e) {
+      debugPrint('[EFB] Failed to register cone image: $e');
+    }
+  }
+
   /// Register wind barb images into the Mapbox style for use by SymbolLayer.
   Future<void> _registerWindBarbImages(MapboxMap map) async {
     try {
       final barbs = await WindBarbRenderer.generateAllBarbs(scale: 2.0);
+      debugPrint('[EFB] Registering ${barbs.length} wind barb images...');
+      int registered = 0;
       for (final entry in barbs.entries) {
         final name = entry.key;
         final img = entry.value;
-        final mbxImage = MbxImage(
-          width: img.width,
-          height: img.height,
-          data: img.data,
-        );
-        await map.style.addStyleImage(name, 2.0, mbxImage, false, [], [], null);
+        final expectedSize = img.width * img.height * 4;
+        if (img.data.length != expectedSize) {
+          debugPrint('[EFB] SKIP $name: data size ${img.data.length} != expected $expectedSize');
+          continue;
+        }
+        try {
+          final mbxImage = MbxImage(
+            width: img.width,
+            height: img.height,
+            data: Uint8List.fromList(img.data),
+          );
+          await map.style.addStyleImage(
+              name, 2.0, mbxImage, false, <ImageStretches>[], <ImageStretches>[], null);
+          registered++;
+        } catch (e) {
+          debugPrint('[EFB] Failed to register barb image $name: $e');
+        }
       }
+      debugPrint('[EFB] Successfully registered $registered/${barbs.length} barb images');
     } catch (e) {
-      debugPrint('Failed to register wind barb images: $e');
+      debugPrint('[EFB] Failed to generate wind barb images: $e');
     }
   }
 
@@ -980,7 +1068,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       await map.style.addLayer(HillshadeLayer(
         id: 'hillshade-terrain',
         sourceId: 'mapbox-terrain-dem',
-        hillshadeExaggeration: 0.3,
+        hillshadeExaggeration: 0.5,
         hillshadeShadowColor: const Color(0xFF1A1A2E).toARGB32(),
         hillshadeIlluminationDirection: 315.0,
         visibility: Visibility.NONE,

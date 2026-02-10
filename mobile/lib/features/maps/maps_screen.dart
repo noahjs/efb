@@ -835,6 +835,28 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       }
     }
 
+    // Own-position overlay (always shown when GPS available)
+    Map<String, dynamic>? ownPositionGeoJson;
+    final activePos = ref.watch(activePositionProvider);
+    if (activePos != null) {
+      ownPositionGeoJson = {
+        'type': 'FeatureCollection',
+        'features': [
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [activePos.longitude, activePos.latitude],
+            },
+            'properties': {
+              'groundspeed': activePos.groundspeed,
+              'track': activePos.track,
+            },
+          },
+        ],
+      };
+    }
+
     // Build route line coordinates from active flight's routeString
     // Uses the waypoint resolver which handles airports, navaids, and fixes
     final activeFlight = ref.watch(activeFlightProvider);
@@ -888,6 +910,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                 if (trafficGeoJson != null) 'traffic': trafficGeoJson,
                 if (windsAloftGeoJson != null) 'winds-aloft': windsAloftGeoJson,
                 if (windStreamlinesGeoJson != null) 'wind-streamlines': windStreamlinesGeoJson,
+                if (ownPositionGeoJson != null) 'own-position': ownPositionGeoJson,
               },
             ),
           ),
@@ -902,6 +925,12 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               onAeroSettingsTap: _showAeroSettingsPanel,
               onApproachTap: _onApproachTapped,
               isApproachActive: _approachController.isActive,
+              onCenterOnMe: () {
+                final pos = ref.read(activePositionProvider);
+                if (pos != null) {
+                  _mapController.flyTo(pos.latitude, pos.longitude);
+                }
+              },
             ),
           ),
 
@@ -1109,16 +1138,29 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
 
       switch (overlayType) {
         case 'surface_wind':
-          final wspd = m['wspd'] as num?;
+          final rawWspd = m['wspd'];
+          final wspd = (rawWspd is num) ? rawWspd.toDouble()
+              : (rawWspd is String) ? double.tryParse(rawWspd) : null;
           if (wspd == null) continue;
-          label = '${wspd.toInt()}';
+          final wdir = m['wdir'];
+          final dirNum = (wdir is num) ? wdir.toDouble() : null;
+          // Unicode arrow showing downwind direction inside the pill
+          var arrow = '';
+          if (dirNum != null && wspd > 0) {
+            const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
+            final downwind = (dirNum + 180) % 360;
+            arrow = '${arrows[((downwind + 22.5) % 360 ~/ 45)]} ';
+          }
+          label = '$arrow${wspd.toInt()}';
           if (wspd <= 5) { color = '#4CAF50'; }
           else if (wspd <= 15) { color = '#FFC107'; }
           else if (wspd <= 25) { color = '#FF9800'; }
           else { color = '#FF5252'; }
           break;
         case 'temperature':
-          final temp = m['temp'] as num?;
+          final rawTemp = m['temp'];
+          final temp = (rawTemp is num) ? rawTemp.toDouble()
+              : (rawTemp is String) ? double.tryParse(rawTemp) : null;
           if (temp == null) continue;
           label = '${temp.toInt()}°';
           if (temp <= 0) { color = '#2196F3'; }
@@ -1128,7 +1170,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           else { color = '#FF5252'; }
           break;
         case 'visibility':
-          final visib = m['visib'] as num?;
+          final rawVisib = m['visib'];
+          final visib = (rawVisib is num) ? rawVisib.toDouble()
+              : (rawVisib is String) ? double.tryParse(rawVisib.replaceAll('+', '')) : null;
           if (visib == null) continue;
           label = visib >= 10 ? '10+' : visib.toStringAsFixed(visib < 3 ? 1 : 0);
           if (visib < 1) { color = '#E040FB'; }
@@ -1144,8 +1188,10 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
             if (c is Map) {
               final cover = (c['cover'] as String? ?? '').toUpperCase();
               if (cover == 'BKN' || cover == 'OVC') {
-                final base = c['base'] as num?;
-                if (base != null && (cig == null || base.toInt() < cig)) {
+                final rawBase = c['base'];
+                final base = (rawBase is num) ? rawBase.toInt()
+                    : (rawBase is String) ? int.tryParse(rawBase) : null;
+                if (base != null && (cig == null || base < cig)) {
                   cig = base.toInt();
                 }
               }

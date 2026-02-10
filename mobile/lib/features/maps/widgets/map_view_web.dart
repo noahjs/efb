@@ -240,6 +240,23 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         _updateOverlaySource(key, widget.overlays[key]);
       }
     }
+    // Toggle hillshade visibility with winds aloft overlay
+    final hadWinds = oldWidget.overlays.containsKey('winds-aloft');
+    final hasWinds = widget.overlays.containsKey('winds-aloft');
+    if (hadWinds != hasWinds) {
+      _setHillshadeVisibility(hasWinds);
+    }
+  }
+
+  void _setHillshadeVisibility(bool visible) {
+    final vis = visible ? 'visible' : 'none';
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map || !map.getLayer('hillshade-terrain')) return;
+        map.setLayoutProperty('hillshade-terrain', 'visibility', '$vis');
+      })();
+    ''');
   }
 
   void _setInteractive(bool enabled) {
@@ -751,53 +768,211 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             }
           });
 
+          // ── METAR pill background images (stretchable rounded rects) ──
+          (function() {
+            var pills = {
+              'pill-green': '#4CAF50',
+              'pill-yellow': '#FFC107',
+              'pill-orange': '#FF9800',
+              'pill-red': '#FF5252',
+              'pill-blue': '#2196F3',
+              'pill-ltblue': '#29B6F6',
+              'pill-purple': '#E040FB'
+            };
+            var w = 28, h = 20, r = 6;
+            Object.keys(pills).forEach(function(name) {
+              var canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              var ctx = canvas.getContext('2d');
+              ctx.fillStyle = pills[name];
+              ctx.beginPath();
+              ctx.moveTo(r, 0);
+              ctx.lineTo(w - r, 0);
+              ctx.arcTo(w, 0, w, r, r);
+              ctx.lineTo(w, h - r);
+              ctx.arcTo(w, h, w - r, h, r);
+              ctx.lineTo(r, h);
+              ctx.arcTo(0, h, 0, h - r, r);
+              ctx.lineTo(0, r);
+              ctx.arcTo(0, 0, r, 0, r);
+              ctx.closePath();
+              ctx.fill();
+              var imageData = ctx.getImageData(0, 0, w, h);
+              map.addImage(name, {width: w, height: h, data: imageData.data}, {
+                stretchX: [[r, w - r]],
+                stretchY: [[r, h - r]],
+                content: [r, 2, w - r, h - 2]
+              });
+            });
+          })();
+
           // ── METAR-derived overlay ──
           map.addSource('metar-overlay', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
           });
+          // Pill labels for all METAR overlay types (rendered first, below arrows)
           map.addLayer({
-            id: 'metar-overlay-dots',
-            type: 'circle',
-            source: 'metar-overlay',
-            paint: {
-              'circle-radius': 7,
-              'circle-color': ['coalesce', ['get', 'color'], '#888888'],
-              'circle-stroke-width': 1.5,
-              'circle-stroke-color': 'rgba(255,255,255,0.5)'
-            }
-          });
-          map.addLayer({
-            id: 'metar-overlay-labels',
+            id: 'metar-overlay-pills',
             type: 'symbol',
             source: 'metar-overlay',
             layout: {
+              'icon-image': ['match', ['get', 'color'],
+                '#4CAF50', 'pill-green',
+                '#FFC107', 'pill-yellow',
+                '#FF9800', 'pill-orange',
+                '#FF5252', 'pill-red',
+                '#2196F3', 'pill-blue',
+                '#29B6F6', 'pill-ltblue',
+                '#E040FB', 'pill-purple',
+                'pill-green'],
+              'icon-text-fit': 'both',
+              'icon-text-fit-padding': [1, 4, 1, 4],
               'text-field': ['get', 'label'],
-              'text-size': 10,
-              'text-offset': [0, -1.5],
-              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+              'text-size': 11,
+              'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+              'text-allow-overlap': true,
+              'text-ignore-placement': true,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true,
+              'text-offset': [0, 0]
             },
             paint: {
               'text-color': '#ffffff',
-              'text-halo-color': '#000000',
-              'text-halo-width': 1
+              'text-halo-color': 'rgba(0,0,0,0.15)',
+              'text-halo-width': 0.5
+            }
+          });
+          // ── Own Position overlay ──
+          map.addSource('own-position', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'own-position-outer',
+            type: 'circle',
+            source: 'own-position',
+            paint: {
+              'circle-radius': 18,
+              'circle-color': 'rgba(74, 144, 217, 0.2)',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#4A90D9',
+              'circle-pitch-alignment': 'map'
+            }
+          });
+          map.addLayer({
+            id: 'own-position-dot',
+            type: 'circle',
+            source: 'own-position',
+            paint: {
+              'circle-radius': 7,
+              'circle-color': '#4A90D9',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#FFFFFF',
+              'circle-pitch-alignment': 'map'
             }
           });
 
-          // ── Winds Aloft overlay ──
+          // ── Hillshade terrain ──
+          map.addSource('mapbox-terrain-dem', {
+            type: 'raster-dem',
+            url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+            tileSize: 512
+          });
+          map.addLayer({
+            id: 'hillshade-terrain',
+            type: 'hillshade',
+            source: 'mapbox-terrain-dem',
+            layout: { 'visibility': 'none' },
+            paint: {
+              'hillshade-exaggeration': 0.5,
+              'hillshade-shadow-color': '#1A1A2E',
+              'hillshade-illumination-direction': 315,
+              'hillshade-illumination-anchor': 'viewport'
+            }
+          });
+
+          // ── Wind barb image generation ──
+          (function() {
+            var speeds = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
+            speeds.forEach(function(kt) {
+              var name = kt < 3 ? 'barb-calm' : 'barb-' + kt;
+              var size = 64;
+              var canvas = document.createElement('canvas');
+              canvas.width = size;
+              canvas.height = size;
+              var ctx = canvas.getContext('2d');
+              var color;
+              if (kt < 15) color = '#4CAF50';
+              else if (kt < 30) color = '#FFC107';
+              else if (kt < 50) color = '#FF9800';
+              else color = '#F44336';
+              ctx.strokeStyle = color;
+              ctx.fillStyle = color;
+              ctx.lineWidth = 2;
+              ctx.lineCap = 'round';
+              var cx = size / 2, cy = size / 2;
+              if (kt < 3) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+                ctx.stroke();
+              } else {
+                var staffTop = cy - 20, staffBottom = cy + 8;
+                ctx.beginPath();
+                ctx.moveTo(cx, staffBottom);
+                ctx.lineTo(cx, staffTop);
+                ctx.stroke();
+                var remaining = kt;
+                var pennants = Math.floor(remaining / 50); remaining -= pennants * 50;
+                var fullBarbs = Math.floor(remaining / 10); remaining -= fullBarbs * 10;
+                var halfBarbs = Math.floor(remaining / 5);
+                var y = staffTop, barbLen = 12, spacing = 4;
+                for (var i = 0; i < pennants; i++) {
+                  ctx.beginPath();
+                  ctx.moveTo(cx, y);
+                  ctx.lineTo(cx + barbLen, y + 3);
+                  ctx.lineTo(cx, y + 6);
+                  ctx.fill();
+                  y += 7;
+                }
+                for (var i = 0; i < fullBarbs; i++) {
+                  ctx.beginPath();
+                  ctx.moveTo(cx, y);
+                  ctx.lineTo(cx + barbLen, y - 4);
+                  ctx.stroke();
+                  y += spacing;
+                }
+                for (var i = 0; i < halfBarbs; i++) {
+                  if (pennants === 0 && fullBarbs === 0 && i === 0) y += spacing;
+                  ctx.beginPath();
+                  ctx.moveTo(cx, y);
+                  ctx.lineTo(cx + barbLen * 0.55, y - 3);
+                  ctx.stroke();
+                  y += spacing;
+                }
+              }
+              var imageData = ctx.getImageData(0, 0, size, size);
+              map.addImage(name, {width: size, height: size, data: imageData.data});
+            });
+          })();
+
+          // ── Winds Aloft overlay (barbs + labels) ──
           map.addSource('winds-aloft', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
           });
           map.addLayer({
-            id: 'winds-aloft-dots',
-            type: 'circle',
+            id: 'winds-aloft-barbs',
+            type: 'symbol',
             source: 'winds-aloft',
-            paint: {
-              'circle-radius': 4,
-              'circle-color': ['coalesce', ['get', 'color'], '#4CAF50'],
-              'circle-stroke-width': 1,
-              'circle-stroke-color': 'rgba(255,255,255,0.4)'
+            layout: {
+              'icon-image': ['get', 'barbIcon'],
+              'icon-size': 0.8,
+              'icon-rotate': ['get', 'rotation'],
+              'icon-rotation-alignment': 'map',
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true
             }
           });
           map.addLayer({
@@ -806,13 +981,36 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             source: 'winds-aloft',
             layout: {
               'text-field': ['get', 'label'],
-              'text-size': 12,
-              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+              'text-size': 10,
+              'text-offset': [0, 2],
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+              'text-allow-overlap': true,
+              'text-ignore-placement': true
             },
             paint: {
               'text-color': ['coalesce', ['get', 'color'], '#4CAF50'],
               'text-halo-color': '#000000',
               'text-halo-width': 1
+            }
+          });
+
+          // ── Wind Streamlines overlay ──
+          map.addSource('wind-streamlines', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'wind-streamlines-line',
+            type: 'line',
+            source: 'wind-streamlines',
+            paint: {
+              'line-color': ['coalesce', ['get', 'color'], '#4CAF50'],
+              'line-width': 2,
+              'line-opacity': 0.7
+            },
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
             }
           });
     ''';

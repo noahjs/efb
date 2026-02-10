@@ -43,14 +43,16 @@ export const IMAGERY = {
 export const WINDS = {
   // Open-Meteo free API — serves GFS, HRRR, NAM, ECMWF, ICON model data
   API_BASE_URL: 'https://api.open-meteo.com/v1',
-  CACHE_TTL_POINT_MS: 30 * 60 * 1000, // 30 minutes
-  CACHE_TTL_GRID_MS: 15 * 60 * 1000, // 15 minutes
+  CACHE_TTL_POINT_MS: 60 * 60 * 1000, // 60 minutes (wind data changes slowly)
+  CACHE_TTL_GRID_MS: 30 * 60 * 1000, // 30 minutes
   ROUTE_SAMPLE_INTERVAL_NM: 50,
   // gfs_seamless auto-blends HRRR (3km short-range) with GFS (longer-range)
   DEFAULT_MODEL: 'gfs_seamless',
   FORECAST_DAYS: 2,
   // Pressure levels to request (hPa) — maps to the same altitudes as before
-  PRESSURE_LEVELS: [1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 200, 150],
+  PRESSURE_LEVELS: [
+    1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 200, 150,
+  ],
   // Approximate altitude (ft MSL) for each pressure level
   LEVEL_ALTITUDES: {
     surface: 0,
@@ -70,11 +72,11 @@ export const WINDS = {
   } as Record<string | number, number>,
   // Model-to-endpoint mapping
   MODEL_ENDPOINTS: {
-    gfs_seamless: '/gfs',      // HRRR+GFS blend (US, best default)
-    hrrr_conus: '/gfs',        // HRRR only (3km, 18h)
-    nam_conus: '/gfs',         // NAM (5km, 84h)
-    gfs_global: '/gfs',        // GFS only (22km, global)
-    ecmwf_ifs025: '/ecmwf',    // ECMWF IFS (9km, global)
+    gfs_seamless: '/gfs', // HRRR+GFS blend (US, best default)
+    hrrr_conus: '/gfs', // HRRR only (3km, 18h)
+    nam_conus: '/gfs', // NAM (5km, 84h)
+    gfs_global: '/gfs', // GFS only (22km, global)
+    ecmwf_ifs025: '/ecmwf', // ECMWF IFS (9km, global)
     icon_seamless: '/dwd-icon', // ICON (13km, global)
   } as Record<string, string>,
 };

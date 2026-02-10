@@ -42,10 +42,7 @@ export class WeightBalanceService {
     });
   }
 
-  async findProfile(
-    aircraftId: number,
-    profileId: number,
-  ): Promise<WBProfile> {
+  async findProfile(aircraftId: number, profileId: number): Promise<WBProfile> {
     await this.aircraftService.findOne(aircraftId);
     const profile = await this.profileRepo.findOne({
       where: { id: profileId, aircraft_id: aircraftId },
@@ -238,9 +235,14 @@ export class WeightBalanceService {
       dto.ending_fuel_gallons,
     );
     const scenario = this.scenarioRepo.create(
-      Object.assign({}, dto, {
-        wb_profile_id: profileId,
-      }, this.computedResultToEntity(result)) as Partial<WBScenario>,
+      Object.assign(
+        {},
+        dto,
+        {
+          wb_profile_id: profileId,
+        },
+        this.computedResultToEntity(result),
+      ) as Partial<WBScenario>,
     );
     return this.scenarioRepo.save(scenario);
   }
@@ -255,7 +257,11 @@ export class WeightBalanceService {
     const scenario = await this.findScenario(aircraftId, profileId, scenarioId);
     Object.assign(scenario, dto);
     // Recompute if loads changed
-    if (dto.station_loads || dto.starting_fuel_gallons !== undefined || dto.ending_fuel_gallons !== undefined) {
+    if (
+      dto.station_loads ||
+      dto.starting_fuel_gallons !== undefined ||
+      dto.ending_fuel_gallons !== undefined
+    ) {
       const aircraft = await this.aircraftService.findOne(aircraftId);
       const result = this.computeWB(
         profile,
@@ -274,21 +280,13 @@ export class WeightBalanceService {
     profileId: number,
     scenarioId: number,
   ): Promise<void> {
-    const scenario = await this.findScenario(
-      aircraftId,
-      profileId,
-      scenarioId,
-    );
+    const scenario = await this.findScenario(aircraftId, profileId, scenarioId);
     await this.scenarioRepo.remove(scenario);
   }
 
   // --- Calculate (stateless) ---
 
-  async calculate(
-    aircraftId: number,
-    profileId: number,
-    dto: CalculateWBDto,
-  ) {
+  async calculate(aircraftId: number, profileId: number, dto: CalculateWBDto) {
     const profile = await this.findProfile(aircraftId, profileId);
     const aircraft = await this.aircraftService.findOne(aircraftId);
     return this.computeWB(
@@ -410,9 +408,7 @@ export class WeightBalanceService {
     endingFuelGallons?: number,
   ) {
     const stations = profile.stations || [];
-    const loadMap = new Map(
-      stationLoads.map((l) => [l.station_id, l.weight]),
-    );
+    const loadMap = new Map(stationLoads.map((l) => [l.station_id, l.weight]));
 
     // 1. Start with BEW
     const bewWeight = profile.empty_weight;
@@ -442,9 +438,7 @@ export class WeightBalanceService {
     const zfwLatMoment = bewLatMoment + payloadLatMoment;
     const zfwCg = zfw > 0 ? zfwLongMoment / zfw : 0;
     const zfwLatCg =
-      profile.lateral_cg_enabled && zfw > 0
-        ? zfwLatMoment / zfw
-        : null;
+      profile.lateral_cg_enabled && zfw > 0 ? zfwLatMoment / zfw : null;
 
     // 3. Fuel moment helper — uses fuel stations if they exist,
     //    otherwise falls back to profile-level fuel_arm.
@@ -508,9 +502,7 @@ export class WeightBalanceService {
     const towLatMoment = rampLatMoment - taxiFuel.latMoment;
     const towCg = tow > 0 ? towLongMoment / tow : 0;
     const towLatCg =
-      profile.lateral_cg_enabled && tow > 0
-        ? towLatMoment / tow
-        : null;
+      profile.lateral_cg_enabled && tow > 0 ? towLatMoment / tow : null;
 
     // 6. LDW = ZFW + ending fuel (from first principles, not subtraction)
     const endFuel = fuelMoment(endingFuelGallons ?? 0);
@@ -519,9 +511,7 @@ export class WeightBalanceService {
     const ldwLatMoment = zfwLatMoment + endFuel.latMoment;
     const ldwCg = ldw > 0 ? ldwLongMoment / ldw : 0;
     const ldwLatCg =
-      profile.lateral_cg_enabled && ldw > 0
-        ? ldwLatMoment / ldw
-        : null;
+      profile.lateral_cg_enabled && ldw > 0 ? ldwLatMoment / ldw : null;
 
     // Envelope checks
     const envelopes = profile.envelopes || [];
@@ -530,24 +520,18 @@ export class WeightBalanceService {
 
     const checkLong = (cg: number, weight: number) =>
       longEnvelopes.length === 0 ||
-      longEnvelopes.some((env) =>
-        this.pointInPolygon(cg, weight, env.points),
-      );
+      longEnvelopes.some((env) => this.pointInPolygon(cg, weight, env.points));
 
     const checkLat = (cg: number | null, weight: number) => {
       if (!profile.lateral_cg_enabled || cg === null) return true;
       return (
         latEnvelopes.length === 0 ||
-        latEnvelopes.some((env) =>
-          this.pointInPolygon(cg, weight, env.points),
-        )
+        latEnvelopes.some((env) => this.pointInPolygon(cg, weight, env.points))
       );
     };
 
-    const checkWeightLimit = (
-      weight: number,
-      limit: number | null,
-    ) => (limit === null ? true : weight <= limit);
+    const checkWeightLimit = (weight: number, limit: number | null) =>
+      limit === null ? true : weight <= limit;
 
     const zfwOk =
       checkLong(zfwCg, zfw) &&
@@ -590,10 +574,34 @@ export class WeightBalanceService {
         ldwLatCg !== null ? Math.round(ldwLatCg * 100) / 100 : null,
       is_within_envelope: isWithinEnvelope,
       conditions: {
-        zfw: { weight: Math.round(zfw * 10) / 10, cg: Math.round(zfwCg * 100) / 100, lateral_cg: zfwLatCg !== null ? Math.round(zfwLatCg * 100) / 100 : null, within_limits: zfwOk },
-        ramp: { weight: Math.round(rampWeight * 10) / 10, cg: Math.round(rampCg * 100) / 100, lateral_cg: rampLatCg !== null ? Math.round(rampLatCg * 100) / 100 : null, within_limits: rampOk },
-        tow: { weight: Math.round(tow * 10) / 10, cg: Math.round(towCg * 100) / 100, lateral_cg: towLatCg !== null ? Math.round(towLatCg * 100) / 100 : null, within_limits: towOk },
-        ldw: { weight: Math.round(ldw * 10) / 10, cg: Math.round(ldwCg * 100) / 100, lateral_cg: ldwLatCg !== null ? Math.round(ldwLatCg * 100) / 100 : null, within_limits: ldwOk },
+        zfw: {
+          weight: Math.round(zfw * 10) / 10,
+          cg: Math.round(zfwCg * 100) / 100,
+          lateral_cg:
+            zfwLatCg !== null ? Math.round(zfwLatCg * 100) / 100 : null,
+          within_limits: zfwOk,
+        },
+        ramp: {
+          weight: Math.round(rampWeight * 10) / 10,
+          cg: Math.round(rampCg * 100) / 100,
+          lateral_cg:
+            rampLatCg !== null ? Math.round(rampLatCg * 100) / 100 : null,
+          within_limits: rampOk,
+        },
+        tow: {
+          weight: Math.round(tow * 10) / 10,
+          cg: Math.round(towCg * 100) / 100,
+          lateral_cg:
+            towLatCg !== null ? Math.round(towLatCg * 100) / 100 : null,
+          within_limits: towOk,
+        },
+        ldw: {
+          weight: Math.round(ldw * 10) / 10,
+          cg: Math.round(ldwCg * 100) / 100,
+          lateral_cg:
+            ldwLatCg !== null ? Math.round(ldwLatCg * 100) / 100 : null,
+          within_limits: ldwOk,
+        },
       },
     };
   }
@@ -618,8 +626,7 @@ export class WeightBalanceService {
         yj = polygon[j].weight;
 
       const intersect =
-        yi > y !== yj > y &&
-        x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+        yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
       if (intersect) inside = !inside;
     }
     return inside;

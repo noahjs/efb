@@ -62,8 +62,7 @@ export class ImportService {
       .map((e) => e.date)
       .filter((d): d is string => !!d);
     const minDate = dates.length > 0 ? dates.sort()[0] : null;
-    const maxDate =
-      dates.length > 0 ? dates.sort()[dates.length - 1] : null;
+    const maxDate = dates.length > 0 ? dates.sort()[dates.length - 1] : null;
 
     let existingEntries: LogbookEntry[] = [];
     if (minDate && maxDate) {
@@ -119,9 +118,7 @@ export class ImportService {
 
     // Import mode: save non-duplicate entries
     const duplicateSet = new Set(duplicateIndices);
-    const toImport = parsed.entries.filter(
-      (_, i) => !duplicateSet.has(i),
-    );
+    const toImport = parsed.entries.filter((_, i) => !duplicateSet.has(i));
 
     if (toImport.length > 0) {
       const entities = toImport.map((dto) => this.entryRepo.create(dto));

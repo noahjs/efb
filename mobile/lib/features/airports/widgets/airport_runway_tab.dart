@@ -44,12 +44,15 @@ class AirportRunwayTab extends ConsumerWidget {
           );
         }
 
-        // Get wind from METAR if available
+        // Get wind from METAR if available (including nearby station data)
         final metarEnvelope = metarAsync.whenData((d) => d).value;
         final metarData = metarEnvelope?['metar'] as Map<String, dynamic>?;
         final windDir = metarData?['wdir'] as num?;
         final windSpd = metarData?['wspd'] as num?;
         final windGust = metarData?['wgst'] as num?;
+        final isNearby = metarEnvelope?['isNearby'] as bool? ?? false;
+        final nearbyStation = metarEnvelope?['station'] as String? ?? '';
+        final nearbyDistance = metarEnvelope?['distanceNm'];
 
         // Compute wind components for each runway end
         final endWinds = <String, _WindComponents>{};
@@ -62,7 +65,8 @@ class AirportRunwayTab extends ConsumerWidget {
                 .cast<Map<String, dynamic>>();
             for (final end in ends) {
               final id = end['id']?.toString() ?? '';
-              final heading = end['heading'] as num?;
+              final heading = end['heading'] as num? ??
+                  _headingFromIdentifier(end['identifier'] as String?);
               if (heading == null) continue;
 
               final angleDiff = (windDir - heading) * pi / 180;
@@ -90,6 +94,38 @@ class AirportRunwayTab extends ConsumerWidget {
 
         return ListView(
           children: [
+            // Nearby station wind warning
+            if (isNearby && windDir != null && windSpd != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.warning.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 20, color: AppColors.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Winds from $nearbyStation ($nearbyDistance nm away)',
+                        style: TextStyle(
+                          color: AppColors.warning,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             const Padding(
               padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
@@ -110,9 +146,14 @@ class AirportRunwayTab extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  windGust != null
-                      ? 'Wind: $windDir° at $windSpd G$windGust kts'
-                      : 'Wind: $windDir° at $windSpd kts',
+                  () {
+                    final windStr = windGust != null
+                        ? 'Wind: $windDir° at $windSpd G$windGust kts'
+                        : 'Wind: $windDir° at $windSpd kts';
+                    return isNearby
+                        ? '$windStr ($nearbyStation)'
+                        : windStr;
+                  }(),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 13,
@@ -246,6 +287,16 @@ class AirportRunwayTab extends ConsumerWidget {
   static String _capitalize(String s) {
     if (s.isEmpty) return s;
     return s[0].toUpperCase() + s.substring(1);
+  }
+
+  /// Derive magnetic heading from runway identifier (e.g. "02" → 20, "35R" → 350).
+  static num? _headingFromIdentifier(String? identifier) {
+    if (identifier == null || identifier.isEmpty) return null;
+    final digits = RegExp(r'^\d+').stringMatch(identifier);
+    if (digits == null) return null;
+    final num = int.tryParse(digits);
+    if (num == null || num < 1 || num > 36) return null;
+    return num * 10;
   }
 }
 
@@ -454,7 +505,9 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                   .where((s) => s.isNotEmpty)
                   .join(', ');
 
-              final heading = end['heading'];
+              final heading = end['heading'] ??
+                  AirportRunwayTab._headingFromIdentifier(
+                      end['identifier'] as String?);
               final elevation = end['elevation'];
               final glideslope = end['glideslope'] as String?;
               final trafficPattern = end['traffic_pattern'] as String?;
@@ -475,6 +528,9 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
               final windDir = detailMetar?['wdir'] as num?;
               final windSpd = detailMetar?['wspd'] as num?;
               final windGust = detailMetar?['wgst'] as num?;
+              final detailIsNearby = detailEnvelope?['isNearby'] as bool? ?? false;
+              final detailStation = detailEnvelope?['station'] as String? ?? '';
+              final detailDistance = detailEnvelope?['distanceNm'];
 
               int? headwindComp, crosswindComp, gustHead, gustCross;
               bool isHeadwind = true;
@@ -599,6 +655,38 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                             ),
                           );
                         }),
+                      ),
+                    ),
+                  // Nearby wind warning in detail sheet
+                  if (detailIsNearby && windDir != null && windSpd != null)
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.warning.withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 18, color: AppColors.warning),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Winds from $detailStation ($detailDistance nm away)',
+                              style: TextStyle(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   // Scrollable content

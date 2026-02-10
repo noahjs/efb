@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { CifpApproach, CifpLeg, CifpIls, CifpMsa, CifpRunway } from './entities';
+import {
+  CifpApproach,
+  CifpLeg,
+  CifpIls,
+  CifpMsa,
+  CifpRunway,
+} from './entities';
 import { CifpService } from './cifp.service';
 import { CifpController } from './cifp.controller';
 

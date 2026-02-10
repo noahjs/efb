@@ -375,6 +375,16 @@ class _AircraftDetailScreenState extends ConsumerState<AircraftDetailScreen> {
                 context.go('/aircraft/${a.id}/equipment'),
           ),
 
+          // Documents section
+          const FlightSectionHeader(title: 'Documents'),
+          FlightFieldRow(
+            label: 'Aircraft Documents',
+            value: '',
+            showChevron: true,
+            onTap: () =>
+                context.go('/aircraft/${a.id}/documents'),
+          ),
+
           // Actions section
           const FlightSectionHeader(title: 'Actions'),
           FlightFieldRow(

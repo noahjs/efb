@@ -165,7 +165,11 @@ export class WeatherService {
     }
 
     // Extract AWOS/ASOS frequency info if available
-    let awos: { name: string; frequency: string | null; phone: string | null } | null = null;
+    let awos: {
+      name: string;
+      frequency: string | null;
+      phone: string | null;
+    } | null = null;
     if (airport?.frequencies) {
       const awosFreq = airport.frequencies.find(
         (f) => f.type === 'AWOS' || f.type === 'ASOS',
@@ -240,12 +244,16 @@ export class WeatherService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
+    // Look up airport to resolve identifiers
+    const airport = await this.airportsService.findById(icao);
+    const resolvedIcao = airport?.icao_identifier || icao;
+
     // Try the station itself first
-    const directTaf = await this.getTaf(icao);
+    const directTaf = await this.getTaf(resolvedIcao);
     if (directTaf) {
       const result = {
         taf: directTaf,
-        station: icao,
+        station: resolvedIcao,
         isNearby: false,
         distanceNm: 0,
         requestedStation: icao,
@@ -254,8 +262,6 @@ export class WeatherService {
       return result;
     }
 
-    // Look up airport coordinates to search nearby
-    const airport = await this.airportsService.findById(icao);
     if (!airport || airport.latitude == null || airport.longitude == null) {
       const result = {
         taf: null,
@@ -269,6 +275,7 @@ export class WeatherService {
     }
 
     // Search nearby airports for one with a TAF
+    const faaId = airport.identifier;
     const nearby = await this.airportsService.findNearby(
       airport.latitude,
       airport.longitude,
@@ -278,7 +285,8 @@ export class WeatherService {
 
     for (const candidate of nearby) {
       const candidateIcao = candidate.icao_identifier;
-      if (!candidateIcao || candidateIcao === icao) continue;
+      if (!candidateIcao || candidateIcao === resolvedIcao) continue;
+      if (candidate.identifier === faaId) continue;
 
       const taf = await this.getTaf(candidateIcao);
       if (taf) {

@@ -91,19 +91,45 @@ export class WindyService {
 
   /**
    * Get wind forecast at a single point for all pressure levels.
-   * Uses Open-Meteo API (free, no key required).
+   * Uses the batch API internally (batch of 1).
    */
   async getPointForecast(
     lat: number,
     lng: number,
     model?: string,
   ): Promise<PointForecastResult> {
-    const useModel = model || WINDS.DEFAULT_MODEL;
-    const cacheKey = `wind-point:${lat.toFixed(2)}:${lng.toFixed(2)}:${useModel}`;
-    const cached = this.getFromCache(cacheKey);
-    if (cached) return cached;
+    const results = await this.getBatchForecasts([{ lat, lng }], model);
+    return results[0];
+  }
 
-    // Build the hourly variables list for all pressure levels
+  /**
+   * Batch-fetch wind forecasts for multiple coordinates in a single API call.
+   * Open-Meteo accepts comma-separated lat/lng arrays.
+   * Returns results in the same order as the input points.
+   */
+  async getBatchForecasts(
+    points: Array<{ lat: number; lng: number }>,
+    model?: string,
+  ): Promise<PointForecastResult[]> {
+    const useModel = model || WINDS.DEFAULT_MODEL;
+
+    // Check cache first — only fetch uncached points
+    const results: (PointForecastResult | null)[] = points.map((p) => {
+      const cacheKey = `wind-point:${p.lat.toFixed(2)}:${p.lng.toFixed(2)}:${useModel}`;
+      return this.getFromCache(cacheKey) || null;
+    });
+
+    const uncachedIndices = results
+      .map((r, i) => (r === null ? i : -1))
+      .filter((i) => i >= 0);
+
+    if (uncachedIndices.length === 0) {
+      return results as PointForecastResult[];
+    }
+
+    const uncachedPoints = uncachedIndices.map((i) => points[i]);
+
+    // Build hourly variables list
     const hourlyVars: string[] = [
       'wind_speed_10m',
       'wind_direction_10m',
@@ -124,88 +150,115 @@ export class WindyService {
       const { data } = await firstValueFrom(
         this.http.get(`${WINDS.API_BASE_URL}${endpoint}`, {
           params: {
-            latitude: lat,
-            longitude: lng,
+            latitude: uncachedPoints.map((p) => p.lat.toFixed(2)).join(','),
+            longitude: uncachedPoints.map((p) => p.lng.toFixed(2)).join(','),
             hourly: hourlyVars.join(','),
             wind_speed_unit: 'kn',
             forecast_days: WINDS.FORECAST_DAYS,
             models: useModel,
           },
-          timeout: 15000,
+          timeout: 30000,
         }),
       );
 
-      const times: string[] = data.hourly?.time || [];
-      const timestamps = times.map((t: string) => new Date(t + 'Z').getTime());
-      const levels: WindForecastLevel[] = [];
+      // Open-Meteo returns an array when multiple points, single object for one point
+      const hourlyResults: any[] = Array.isArray(data)
+        ? data
+        : [data];
 
-      // Surface level
-      {
-        const speeds: number[] = data.hourly?.wind_speed_10m || [];
-        const dirs: number[] = data.hourly?.wind_direction_10m || [];
-        const temps: number[] = data.hourly?.temperature_2m || [];
-        const winds = timestamps.map((ts, i) => {
-          const speed = Math.round(speeds[i] ?? 0);
-          const direction = Math.round(dirs[i] ?? 0);
-          const temperature =
-            Math.round((temps[i] ?? 15) * 10) / 10;
-          const isaDeviation = Math.round(temperature - this.isaTemperature(0));
-          return { timestamp: ts, direction, speed, temperature, isaDeviation };
-        });
-        levels.push({ level: 'surface', altitudeFt: 0, winds });
+      for (let idx = 0; idx < uncachedPoints.length; idx++) {
+        const p = uncachedPoints[idx];
+        const hourly = hourlyResults[idx]?.hourly || hourlyResults[0]?.hourly;
+        if (!hourly) continue;
+
+        const times: string[] = hourly.time || [];
+        const timestamps = times.map(
+          (t: string) => new Date(t + 'Z').getTime(),
+        );
+        const levels: WindForecastLevel[] = [];
+
+        // Surface level
+        {
+          const speeds: number[] = hourly.wind_speed_10m || [];
+          const dirs: number[] = hourly.wind_direction_10m || [];
+          const temps: number[] = hourly.temperature_2m || [];
+          const winds = timestamps.map((ts, i) => {
+            const speed = Math.round(speeds[i] ?? 0);
+            const direction = Math.round(dirs[i] ?? 0);
+            const temperature = Math.round((temps[i] ?? 15) * 10) / 10;
+            const isaDeviation = Math.round(
+              temperature - this.isaTemperature(0),
+            );
+            return {
+              timestamp: ts,
+              direction,
+              speed,
+              temperature,
+              isaDeviation,
+            };
+          });
+          levels.push({ level: 'surface', altitudeFt: 0, winds });
+        }
+
+        // Pressure levels
+        for (const hPa of WINDS.PRESSURE_LEVELS) {
+          const speeds: number[] = hourly[`wind_speed_${hPa}hPa`] || [];
+          const dirs: number[] = hourly[`wind_direction_${hPa}hPa`] || [];
+          const temps: number[] = hourly[`temperature_${hPa}hPa`] || [];
+          const altFt = WINDS.LEVEL_ALTITUDES[hPa] || 0;
+
+          const winds = timestamps.map((ts, i) => {
+            const speed = Math.round(speeds[i] ?? 0);
+            const direction = Math.round(dirs[i] ?? 0);
+            const temperature = Math.round((temps[i] ?? 0) * 10) / 10;
+            const isaDeviation = Math.round(
+              temperature - this.isaTemperature(altFt),
+            );
+            return {
+              timestamp: ts,
+              direction,
+              speed,
+              temperature,
+              isaDeviation,
+            };
+          });
+          levels.push({ level: `${hPa}hPa`, altitudeFt: altFt, winds });
+        }
+
+        const forecast: PointForecastResult = {
+          lat: p.lat,
+          lng: p.lng,
+          model: useModel,
+          levels,
+        };
+
+        const cacheKey = `wind-point:${p.lat.toFixed(2)}:${p.lng.toFixed(2)}:${useModel}`;
+        this.setCache(cacheKey, forecast, WINDS.CACHE_TTL_POINT_MS);
+        results[uncachedIndices[idx]] = forecast;
       }
-
-      // Pressure levels
-      for (const hPa of WINDS.PRESSURE_LEVELS) {
-        const speeds: number[] =
-          data.hourly?.[`wind_speed_${hPa}hPa`] || [];
-        const dirs: number[] =
-          data.hourly?.[`wind_direction_${hPa}hPa`] || [];
-        const temps: number[] =
-          data.hourly?.[`temperature_${hPa}hPa`] || [];
-        const altFt = WINDS.LEVEL_ALTITUDES[hPa] || 0;
-
-        const winds = timestamps.map((ts, i) => {
-          const speed = Math.round(speeds[i] ?? 0);
-          const direction = Math.round(dirs[i] ?? 0);
-          const temperature =
-            Math.round((temps[i] ?? 0) * 10) / 10;
-          const isaDeviation = Math.round(
-            temperature - this.isaTemperature(altFt),
-          );
-          return { timestamp: ts, direction, speed, temperature, isaDeviation };
-        });
-
-        levels.push({ level: `${hPa}hPa`, altitudeFt: altFt, winds });
-      }
-
-      const result: PointForecastResult = {
-        lat,
-        lng,
-        model: useModel,
-        levels,
-      };
-      this.setCache(cacheKey, result, WINDS.CACHE_TTL_POINT_MS);
-      return result;
     } catch (error) {
       this.logger.error(
-        `Open-Meteo API error for ${lat},${lng}: ${error.message}`,
+        `Open-Meteo batch API error for ${uncachedPoints.length} points: ${error.message}`,
       );
-      // Return empty result on failure
-      return {
-        lat,
-        lng,
-        model: useModel,
-        levels: [
-          { level: 'surface', altitudeFt: 0, winds: [] },
-          ...WINDS.PRESSURE_LEVELS.map((hPa) => ({
-            level: `${hPa}hPa`,
-            altitudeFt: WINDS.LEVEL_ALTITUDES[hPa] || 0,
-            winds: [],
-          })),
-        ],
-      };
     }
+
+    // Fill any remaining nulls with empty forecasts
+    return results.map(
+      (r, i) =>
+        r || {
+          lat: points[i].lat,
+          lng: points[i].lng,
+          model: useModel,
+          levels: [
+            { level: 'surface', altitudeFt: 0, winds: [] },
+            ...WINDS.PRESSURE_LEVELS.map((hPa) => ({
+              level: `${hPa}hPa`,
+              altitudeFt: WINDS.LEVEL_ALTITUDES[hPa] || 0,
+              winds: [],
+            })),
+          ],
+        },
+    );
   }
 
   /**
@@ -233,10 +286,8 @@ export class WindyService {
       WINDS.ROUTE_SAMPLE_INTERVAL_NM,
     );
 
-    // Fetch wind data for each sample point (with dedup)
-    const forecasts = await Promise.all(
-      samplePoints.map((p) => this.getPointForecast(p.lat, p.lng)),
-    );
+    // Single batch API call for all sample points
+    const forecasts = await this.getBatchForecasts(samplePoints);
 
     // Build legs with wind data
     const legs: RouteWindLeg[] = [];
@@ -290,9 +341,7 @@ export class WindyService {
         ? Math.round(totalWeightedComponent / totalDistanceNm)
         : 0;
     const avgGroundspeed =
-      totalDistanceNm > 0
-        ? Math.round(totalWeightedGs / totalDistanceNm)
-        : tas;
+      totalDistanceNm > 0 ? Math.round(totalWeightedGs / totalDistanceNm) : tas;
 
     return {
       altitudeFt,
@@ -342,9 +391,8 @@ export class WindyService {
         ? this.uniformSample(points, maxPoints)
         : points;
 
-    const forecasts = await Promise.all(
-      selectedPoints.map((p) => this.getPointForecast(p.lat, p.lng)),
-    );
+    // Single batch API call for all grid points
+    const forecasts = await this.getBatchForecasts(selectedPoints);
 
     const features = forecasts.map((forecast, i) => {
       const wind = this.getWindAtAltitude(forecast, altitudeFt);
@@ -548,7 +596,7 @@ export class WindyService {
     const x =
       Math.cos(lat1 * toRad) * Math.sin(lat2 * toRad) -
       Math.sin(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.cos(dLng);
-    let brg = (Math.atan2(y, x) * 180) / Math.PI;
+    const brg = (Math.atan2(y, x) * 180) / Math.PI;
     return (brg + 360) % 360;
   }
 
@@ -566,9 +614,7 @@ export class WindyService {
     const dLng = (lng2 - lng1) * toRad;
     const a =
       Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1 * toRad) *
-        Math.cos(lat2 * toRad) *
-        Math.sin(dLng / 2) ** 2;
+      Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) ** 2;
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return 3440.065 * c; // Earth radius in NM
   }
@@ -599,46 +645,70 @@ export class WindyService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
-    // Create seed points at 0.5° spacing
+    // Create seed points at 1° spacing (fewer seeds, faster response)
     const seedPoints: Array<{ lat: number; lng: number }> = [];
-    for (
-      let lat = Math.ceil(bounds.minLat * 2) / 2;
-      lat <= bounds.maxLat;
-      lat += 0.5
-    ) {
+    for (let lat = Math.ceil(bounds.minLat); lat <= bounds.maxLat; lat += 1.0) {
       for (
-        let lng = Math.ceil(bounds.minLng * 2) / 2;
+        let lng = Math.ceil(bounds.minLng);
         lng <= bounds.maxLng;
-        lng += 0.5
+        lng += 1.0
       ) {
         seedPoints.push({ lat, lng });
       }
     }
 
     // Limit seed points
-    const maxSeeds = 80;
+    const maxSeeds = 30;
     const selectedSeeds =
       seedPoints.length > maxSeeds
         ? this.uniformSample(seedPoints, maxSeeds)
         : seedPoints;
 
-    // Fetch forecasts for all seed points (will use cache for repeated points)
-    const forecastMap = new Map<string, PointForecastResult>();
+    // Fetch forecasts for all unique seed points in parallel (reuses point cache)
+    const forecastList: Array<{
+      lat: number;
+      lng: number;
+      forecast: PointForecastResult;
+    }> = [];
+    const seen = new Set<string>();
+    const fetchJobs: Array<{ lat: number; lng: number }> = [];
 
-    // Fetch forecasts for seed points
-    await Promise.all(
-      selectedSeeds.map(async (p) => {
-        const key = `${p.lat.toFixed(1)},${p.lng.toFixed(1)}`;
-        if (!forecastMap.has(key)) {
-          const forecast = await this.getPointForecast(p.lat, p.lng);
-          forecastMap.set(key, forecast);
-        }
-      }),
+    for (const p of selectedSeeds) {
+      const key = `${p.lat.toFixed(1)},${p.lng.toFixed(1)}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        fetchJobs.push({ lat: p.lat, lng: p.lng });
+      }
+    }
+
+    // Single batch API call for all seed points
+    const forecasts = await this.getBatchForecasts(fetchJobs);
+    fetchJobs.forEach((j, i) =>
+      forecastList.push({ lat: j.lat, lng: j.lng, forecast: forecasts[i] }),
     );
 
+    // Nearest-neighbor lookup: find the closest pre-fetched forecast point
+    const getNearestForecast = (
+      lat: number,
+      lng: number,
+    ): PointForecastResult => {
+      let best = forecastList[0];
+      let bestDist = (lat - best.lat) ** 2 + (lng - best.lng) ** 2;
+      for (let i = 1; i < forecastList.length; i++) {
+        const d =
+          (lat - forecastList[i].lat) ** 2 +
+          (lng - forecastList[i].lng) ** 2;
+        if (d < bestDist) {
+          bestDist = d;
+          best = forecastList[i];
+        }
+      }
+      return best.forecast;
+    };
+
     const features: WindStreamlineResult['features'] = [];
-    const stepSize = 0.1; // degrees per step
-    const numSteps = 12;
+    const stepSize = 0.12; // degrees per step
+    const numSteps = 10;
 
     for (const seed of selectedSeeds) {
       const coords: [number, number][] = [[seed.lng, seed.lat]];
@@ -647,15 +717,8 @@ export class WindyService {
       let currentLng = seed.lng;
 
       for (let step = 0; step < numSteps; step++) {
-        // Get wind at current position (use nearest cached forecast)
-        const forecastKey = `${currentLat.toFixed(1)},${currentLng.toFixed(1)}`;
-        let forecast = forecastMap.get(forecastKey);
-
-        if (!forecast) {
-          // Fetch and cache this point
-          forecast = await this.getPointForecast(currentLat, currentLng);
-          forecastMap.set(forecastKey, forecast);
-        }
+        // Get wind at current position using nearest pre-fetched forecast
+        const forecast = getNearestForecast(currentLat, currentLng);
 
         const wind = this.getWindAtAltitude(forecast, altitudeFt);
         if (wind.speed < 1) break; // calm — stop tracing

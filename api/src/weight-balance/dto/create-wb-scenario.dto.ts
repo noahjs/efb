@@ -15,7 +15,11 @@ export class CreateWBScenarioDto {
   flight_id?: number;
 
   @IsArray()
-  station_loads: { station_id: number; weight: number; occupant_name?: string }[];
+  station_loads: {
+    station_id: number;
+    weight: number;
+    occupant_name?: string;
+  }[];
 
   @IsOptional()
   @IsNumber()

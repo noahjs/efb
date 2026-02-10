@@ -53,6 +53,9 @@ import { CifpLeg } from './cifp/entities/cifp-leg.entity';
 import { CifpIls } from './cifp/entities/cifp-ils.entity';
 import { CifpMsa } from './cifp/entities/cifp-msa.entity';
 import { CifpRunway } from './cifp/entities/cifp-runway.entity';
+import { DocumentsModule } from './documents/documents.module';
+import { Document } from './documents/entities/document.entity';
+import { DocumentFolder } from './documents/entities/document-folder.entity';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -93,6 +96,8 @@ import { dbConfig } from './db.config';
         CifpIls,
         CifpMsa,
         CifpRunway,
+        Document,
+        DocumentFolder,
       ],
     }),
     AirportsModule,
@@ -115,6 +120,7 @@ import { dbConfig } from './db.config';
     WeightBalanceModule,
     CifpModule,
     WindyModule,
+    DocumentsModule,
   ],
 })
 export class AppModule {}

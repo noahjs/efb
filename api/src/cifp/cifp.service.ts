@@ -27,7 +27,10 @@ export class CifpService {
     if (upper.length === 4 && upper.startsWith('K')) {
       return { faa: upper.substring(1), icao: upper };
     }
-    if (upper.length === 4 && (upper.startsWith('PH') || upper.startsWith('PA'))) {
+    if (
+      upper.length === 4 &&
+      (upper.startsWith('PH') || upper.startsWith('PA'))
+    ) {
       return { faa: upper, icao: upper };
     }
     return { faa: upper, icao: `K${upper}` };
@@ -53,10 +56,10 @@ export class CifpService {
         'a.cycle',
       ])
       .loadRelationCountAndMap('a.leg_count', 'a.legs')
-      .where(
-        'a.airport_identifier = :faa OR a.icao_identifier = :icao',
-        { faa, icao },
-      )
+      .where('a.airport_identifier = :faa OR a.icao_identifier = :icao', {
+        faa,
+        icao,
+      })
       .orderBy('a.procedure_name', 'ASC')
       .addOrderBy('a.transition_identifier', 'ASC')
       .getMany();
@@ -79,10 +82,7 @@ export class CifpService {
   async getIls(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
     return this.ilsRepo.find({
-      where: [
-        { airport_identifier: faa },
-        { icao_identifier: icao },
-      ],
+      where: [{ airport_identifier: faa }, { icao_identifier: icao }],
     });
   }
 
@@ -92,10 +92,7 @@ export class CifpService {
   async getMsa(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
     return this.msaRepo.find({
-      where: [
-        { airport_identifier: faa },
-        { icao_identifier: icao },
-      ],
+      where: [{ airport_identifier: faa }, { icao_identifier: icao }],
     });
   }
 
@@ -105,10 +102,7 @@ export class CifpService {
   async getRunways(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
     return this.runwayRepo.find({
-      where: [
-        { airport_identifier: faa },
-        { icao_identifier: icao },
-      ],
+      where: [{ airport_identifier: faa }, { icao_identifier: icao }],
     });
   }
 
@@ -172,8 +166,10 @@ export class CifpService {
         const locMapIdx = locLegs.findIndex((l) => l.is_map);
 
         // Get approach-only legs (before MAP)
-        const ilsBefore = ilsMapIdx >= 0 ? ilsLegs.slice(0, ilsMapIdx) : ilsLegs;
-        const locBefore = locMapIdx >= 0 ? locLegs.slice(0, locMapIdx) : locLegs;
+        const ilsBefore =
+          ilsMapIdx >= 0 ? ilsLegs.slice(0, ilsMapIdx) : ilsLegs;
+        const locBefore =
+          locMapIdx >= 0 ? locLegs.slice(0, locMapIdx) : locLegs;
         const afterMap = ilsMapIdx >= 0 ? ilsLegs.slice(ilsMapIdx) : [];
 
         // Find LOC fixes not already in ILS
@@ -227,14 +223,30 @@ export class CifpService {
     const { faa, icao } = this.normalizeId(approach.airport_identifier);
 
     const [ils, msa, runways, relatedApproaches] = await Promise.all([
-      this.ilsRepo.find({ where: [{ airport_identifier: faa }, { icao_identifier: icao }] }),
-      this.msaRepo.find({ where: [{ airport_identifier: faa }, { icao_identifier: icao }] }),
-      this.runwayRepo.find({ where: [{ airport_identifier: faa }, { icao_identifier: icao }] }),
+      this.ilsRepo.find({
+        where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+      }),
+      this.msaRepo.find({
+        where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+      }),
+      this.runwayRepo.find({
+        where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+      }),
       this.approachRepo
         .createQueryBuilder('a')
-        .select(['a.id', 'a.procedure_identifier', 'a.route_type', 'a.transition_identifier', 'a.procedure_name', 'a.runway_identifier'])
+        .select([
+          'a.id',
+          'a.procedure_identifier',
+          'a.route_type',
+          'a.transition_identifier',
+          'a.procedure_name',
+          'a.runway_identifier',
+        ])
         .loadRelationCountAndMap('a.leg_count', 'a.legs')
-        .where('a.airport_identifier = :faa OR a.icao_identifier = :icao', { faa, icao })
+        .where('a.airport_identifier = :faa OR a.icao_identifier = :icao', {
+          faa,
+          icao,
+        })
         .orderBy('a.procedure_name', 'ASC')
         .getMany(),
     ]);
@@ -272,10 +284,13 @@ export class CifpService {
       where: { airport_identifier: airportId },
     });
     // Try to match MSA by runway, then fall back to first available
-    const matchingMsa = allMsa.find((msa) => {
-      const centerKey = `${runwayId}`;
-      return msa.msa_center === centerKey;
-    }) || allMsa[0] || null;
+    const matchingMsa =
+      allMsa.find((msa) => {
+        const centerKey = `${runwayId}`;
+        return msa.msa_center === centerKey;
+      }) ||
+      allMsa[0] ||
+      null;
 
     // Find matching runway
     const matchingRunway = runwayId

@@ -80,12 +80,7 @@ export class WeightBalanceController {
     @Param('stationId', ParseIntPipe) stationId: number,
     @Body() dto: UpdateWBStationDto,
   ) {
-    return this.wbService.updateStation(
-      aircraftId,
-      profileId,
-      stationId,
-      dto,
-    );
+    return this.wbService.updateStation(aircraftId, profileId, stationId, dto);
   }
 
   @Delete('profiles/:profileId/stations/:stationId')

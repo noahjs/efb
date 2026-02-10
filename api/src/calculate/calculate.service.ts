@@ -189,8 +189,7 @@ export class CalculateService {
         // Try 3-phase
         if (hasFullProfile && profile) {
           const climbAlt = Math.max(0, alt - depElev);
-          const climbTimeMin =
-            climbAlt > 0 ? climbAlt / profile.climb_rate : 0;
+          const climbTimeMin = climbAlt > 0 ? climbAlt / profile.climb_rate : 0;
           const climbDist = profile.climb_speed * (climbTimeMin / 60);
           const climbFuel = profile.climb_fuel_flow * (climbTimeMin / 60);
 
@@ -233,9 +232,7 @@ export class CalculateService {
             altitude: alt,
             ete_minutes: Math.round(eteHours * 60),
             flight_fuel_gallons:
-              burnRate > 0
-                ? Math.round(eteHours * burnRate * 10) / 10
-                : null,
+              burnRate > 0 ? Math.round(eteHours * burnRate * 10) / 10 : null,
             calculation_method: 'single_phase',
             avg_wind_component: avgWindComponent,
             avg_groundspeed: avgGroundspeed,

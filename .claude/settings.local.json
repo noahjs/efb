@@ -74,7 +74,8 @@
       "WebFetch(domain:community.windy.com)",
       "WebFetch(domain:www.cpc.ncep.noaa.gov)",
       "WebFetch(domain:api.open-meteo.com)",
-      "WebFetch(domain:openmeteo.substack.com)"
+      "WebFetch(domain:openmeteo.substack.com)",
+      "WebFetch(domain:api.flutter.dev)"
     ]
   }
 }

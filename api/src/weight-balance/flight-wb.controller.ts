@@ -6,9 +6,7 @@ export class FlightWBController {
   constructor(private readonly wbService: WeightBalanceService) {}
 
   @Get(':flightId/wb-scenario')
-  findOrCreateForFlight(
-    @Param('flightId', ParseIntPipe) flightId: number,
-  ) {
+  findOrCreateForFlight(@Param('flightId', ParseIntPipe) flightId: number) {
     return this.wbService.findOrCreateScenarioForFlight(flightId);
   }
 }

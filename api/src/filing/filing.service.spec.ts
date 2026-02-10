@@ -337,9 +337,7 @@ describe('FilingService', () => {
 
       const result = await service.validateForFiling(1);
       expect(result.ready).toBe(false);
-      const icaoCheck = result.checks.find(
-        (c) => c.field === 'icao_type_code',
-      );
+      const icaoCheck = result.checks.find((c) => c.field === 'icao_type_code');
       expect(icaoCheck?.passed).toBe(false);
     });
 
@@ -350,14 +348,10 @@ describe('FilingService', () => {
       );
       expect(depCheck?.value).toBe('APA');
 
-      const altCheck = result.checks.find(
-        (c) => c.field === 'cruise_altitude',
-      );
+      const altCheck = result.checks.find((c) => c.field === 'cruise_altitude');
       expect(altCheck?.value).toBe('10000 ft');
 
-      const tasCheck = result.checks.find(
-        (c) => c.field === 'true_airspeed',
-      );
+      const tasCheck = result.checks.find((c) => c.field === 'true_airspeed');
       expect(tasCheck?.value).toBe('120 kt');
     });
   });
