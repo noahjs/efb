@@ -64,6 +64,10 @@ flutter run
 
 The app connects to the backend at `http://localhost:3001/api` by default.
 
+### 4. Running on a device or simulator
+
+See [docs/deployment.md](docs/deployment.md) for detailed setup instructions for iOS Simulator, Android Emulator, and physical devices.
+
 ## Project Structure
 
 ```

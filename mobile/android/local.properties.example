@@ -1,0 +1,9 @@
+# Android local properties — do not commit
+# Copy to local.properties and fill in your keys:
+#   cp local.properties.example local.properties
+
+flutter.sdk=/path/to/flutter
+
+# API keys for native Android plugins
+GOOGLE_MAPS_KEY=your-google-maps-key-here
+MAPBOX_TOKEN=your-mapbox-token-here

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
-import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
+import '../../../core/config/app_config.dart';
 
 /// Native (iOS/Android) advisory map using mapbox_maps_flutter.
 class AdvisoryMap extends StatefulWidget {
@@ -26,7 +26,7 @@ class _AdvisoryMapState extends State<AdvisoryMap> {
   @override
   void initState() {
     super.initState();
-    MapboxOptions.setAccessToken(mapboxAccessToken);
+    MapboxOptions.setAccessToken(AppConfig.mapboxToken);
   }
 
   bool _sourceAdded = false;

@@ -3,7 +3,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 
-import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
+import '../../../core/config/app_config.dart';
 
 class PlatformRouteMapView extends StatefulWidget {
   /// List of route points, each with: identifier, latitude, longitude, isEndpoint.
@@ -96,7 +96,7 @@ class _PlatformRouteMapViewState extends State<PlatformRouteMapView> {
           console.error('Mapbox GL JS not loaded');
           return;
         }
-        mapboxgl.accessToken = '$mapboxAccessToken';
+        mapboxgl.accessToken = '${AppConfig.mapboxToken}';
 
         var map = new mapboxgl.Map({
           container: '$containerId',

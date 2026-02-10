@@ -3,8 +3,8 @@ import 'dart:math';
 import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
 
 class PlatformRouteMapView extends StatefulWidget {
   /// List of route points, each with: identifier, latitude, longitude, isEndpoint.
@@ -25,7 +25,7 @@ class _PlatformRouteMapViewState extends State<PlatformRouteMapView> {
   @override
   void initState() {
     super.initState();
-    MapboxOptions.setAccessToken(mapboxAccessToken);
+    MapboxOptions.setAccessToken(AppConfig.mapboxToken);
   }
 
   void _onMapCreated(MapboxMap map) {

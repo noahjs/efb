@@ -3,9 +3,6 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' show MapboxMap;
 import 'map_view_native.dart' if (dart.library.html) 'map_view_web.dart'
     as platform_map;
 
-const String mapboxAccessToken =
-    'pk.eyJ1Ijoibm9haGpzIiwiYSI6ImNtbGQzbzF5dTBmMWszZnB4aDgzbDZzczUifQ.yv1FBDKs9T1RllaF7h_WxA';
-
 /// Map bounds record used for airport fetching.
 typedef MapBounds = ({
   double minLat,

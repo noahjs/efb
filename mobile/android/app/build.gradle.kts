@@ -5,6 +5,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Read API keys from local.properties (gitignored)
+val localProperties = java.util.Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
 android {
     namespace = "com.efb.efb_mobile"
     compileSdk = flutter.compileSdkVersion
@@ -28,6 +35,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        manifestPlaceholders["googleMapsKey"] = localProperties.getProperty("GOOGLE_MAPS_KEY", "")
+        resValue("string", "mapbox_access_token", localProperties.getProperty("MAPBOX_TOKEN", ""))
     }
 
     buildTypes {

@@ -4,7 +4,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 import '../../../core/config/app_config.dart';
-import 'map_view.dart' show EfbMapController, MapBounds, mapboxAccessToken;
+import 'map_view.dart' show EfbMapController, MapBounds;
 
 /// Web implementation using Mapbox GL JS directly via HtmlElementView.
 class PlatformMapView extends StatefulWidget {
@@ -400,7 +400,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           console.error('Mapbox GL JS not loaded');
           return;
         }
-        mapboxgl.accessToken = '$mapboxAccessToken';
+        mapboxgl.accessToken = '${AppConfig.mapboxToken}';
 
         var map = new mapboxgl.Map({
           container: '$containerId',
@@ -844,6 +844,164 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'text-halo-width': 0.5
             }
           });
+          // ── Traffic overlay ──
+          map.addSource('traffic', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          // Leader lines (target → heads)
+          map.addLayer({
+            id: 'traffic-leader-lines',
+            type: 'line',
+            source: 'traffic',
+            filter: ['==', ['get', 'featureType'], 'leader'],
+            paint: {
+              'line-color': ['match', ['get', 'threat'],
+                'resolution', '#FF5252',
+                'alert', '#FF5252',
+                'proximate', '#FFC107',
+                '#AAAAAA'],
+              'line-width': 1.5,
+              'line-opacity': 0.5,
+              'line-dasharray': [4, 3]
+            }
+          });
+          // 5-min head markers
+          map.addLayer({
+            id: 'traffic-head-5min',
+            type: 'circle',
+            source: 'traffic',
+            filter: ['all',
+              ['==', ['get', 'featureType'], 'head'],
+              ['==', ['get', 'head_interval'], 300]
+            ],
+            paint: {
+              'circle-radius': 4,
+              'circle-color': ['match', ['get', 'threat'],
+                'resolution', '#FF5252',
+                'alert', '#FF5252',
+                'proximate', '#FFC107',
+                '#FFFFFF'],
+              'circle-opacity': 0.4,
+              'circle-stroke-width': 1,
+              'circle-stroke-color': 'rgba(255,255,255,0.3)'
+            }
+          });
+          // 2-min head markers
+          map.addLayer({
+            id: 'traffic-head-2min',
+            type: 'circle',
+            source: 'traffic',
+            filter: ['all',
+              ['==', ['get', 'featureType'], 'head'],
+              ['==', ['get', 'head_interval'], 120]
+            ],
+            paint: {
+              'circle-radius': 5,
+              'circle-color': ['match', ['get', 'threat'],
+                'resolution', '#FF5252',
+                'alert', '#FF5252',
+                'proximate', '#FFC107',
+                '#FFFFFF'],
+              'circle-opacity': 0.6,
+              'circle-stroke-width': 1,
+              'circle-stroke-color': 'rgba(255,255,255,0.4)'
+            }
+          });
+          // Head altitude labels
+          map.addLayer({
+            id: 'traffic-head-alt-labels',
+            type: 'symbol',
+            source: 'traffic',
+            filter: ['==', ['get', 'featureType'], 'head'],
+            layout: {
+              'text-field': ['get', 'alt_tag'],
+              'text-size': 8,
+              'text-offset': [0, 1.2],
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+            },
+            paint: {
+              'text-color': 'rgba(255,255,255,0.7)',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
+            }
+          });
+          // Traffic chevron image (SDF for dynamic coloring)
+          (function() {
+            var size = 24;
+            var canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(size / 2, 2);
+            ctx.lineTo(size - 2, size - 2);
+            ctx.lineTo(2, size - 2);
+            ctx.closePath();
+            ctx.fill();
+            var imageData = ctx.getImageData(0, 0, size, size);
+            map.addImage('traffic-chevron', {width: size, height: size, data: imageData.data}, {sdf: true});
+          })();
+          // Traffic target chevrons — directional markers
+          map.addLayer({
+            id: 'traffic-dots',
+            type: 'symbol',
+            source: 'traffic',
+            filter: ['==', ['get', 'featureType'], 'target'],
+            layout: {
+              'icon-image': 'traffic-chevron',
+              'icon-size': 0.6,
+              'icon-rotate': ['get', 'track'],
+              'icon-rotation-alignment': 'map',
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true
+            },
+            paint: {
+              'icon-color': ['match', ['get', 'threat'],
+                'resolution', '#FF5252',
+                'alert', '#FF5252',
+                'proximate', '#FFC107',
+                '#FFFFFF']
+            }
+          });
+          // Callsign labels
+          map.addLayer({
+            id: 'traffic-labels',
+            type: 'symbol',
+            source: 'traffic',
+            filter: ['==', ['get', 'featureType'], 'target'],
+            layout: {
+              'text-field': ['get', 'callsign'],
+              'text-size': 10,
+              'text-offset': [0, -1.8],
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
+            }
+          });
+          // Altitude tags
+          map.addLayer({
+            id: 'traffic-alt-labels',
+            type: 'symbol',
+            source: 'traffic',
+            filter: ['==', ['get', 'featureType'], 'target'],
+            layout: {
+              'text-field': ['get', 'alt_tag'],
+              'text-size': 9,
+              'text-offset': [0, 1.2],
+              'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular']
+            },
+            paint: {
+              'text-color': '#ffffff',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
+            }
+          });
+
           // ── Own Position overlay ──
           map.addSource('own-position', {
             type: 'geojson',

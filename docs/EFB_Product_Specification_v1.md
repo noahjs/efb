@@ -29,6 +29,7 @@ Version 1.0 — February 2026
 - [US Data Sources](./modules/us-data-sources.md)
 - [Garmin Avionics Data Integration](./modules/avionics-integration.md)
 - [ADS-B & TIS-B Integration](./modules/adsb-integration.md)
+- [Traffic Module](./modules/traffic.md)
 - [Cross-Cutting Concerns](./modules/cross-cutting-concerns.md)
 
 ---

@@ -92,6 +92,15 @@ export const WINDS = {
   } as Record<string, string>,
 };
 
+// --- Traffic ---
+export const TRAFFIC = {
+  AIRPLANES_LIVE_BASE_URL: 'https://api.airplanes.live/v2',
+  CACHE_TTL_MS: 8 * 1000, // 8s cache (slightly under 10s poll)
+  DEFAULT_RADIUS_NM: 30,
+  MAX_RADIUS_NM: 250,
+  TIMEOUT_MS: 10_000,
+};
+
 // --- Airports ---
 export const AIRPORTS = {
   SEARCH_DEFAULT_LIMIT: 50,

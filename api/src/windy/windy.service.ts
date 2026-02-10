@@ -162,9 +162,7 @@ export class WindyService {
       );
 
       // Open-Meteo returns an array when multiple points, single object for one point
-      const hourlyResults: any[] = Array.isArray(data)
-        ? data
-        : [data];
+      const hourlyResults: any[] = Array.isArray(data) ? data : [data];
 
       for (let idx = 0; idx < uncachedPoints.length; idx++) {
         const p = uncachedPoints[idx];
@@ -172,8 +170,8 @@ export class WindyService {
         if (!hourly) continue;
 
         const times: string[] = hourly.time || [];
-        const timestamps = times.map(
-          (t: string) => new Date(t + 'Z').getTime(),
+        const timestamps = times.map((t: string) =>
+          new Date(t + 'Z').getTime(),
         );
         const levels: WindForecastLevel[] = [];
 
@@ -696,8 +694,7 @@ export class WindyService {
       let bestDist = (lat - best.lat) ** 2 + (lng - best.lng) ** 2;
       for (let i = 1; i < forecastList.length; i++) {
         const d =
-          (lat - forecastList[i].lat) ** 2 +
-          (lng - forecastList[i].lng) ** 2;
+          (lat - forecastList[i].lat) ** 2 + (lng - forecastList[i].lng) ** 2;
         if (d < bestDist) {
           bestDist = d;
           best = forecastList[i];

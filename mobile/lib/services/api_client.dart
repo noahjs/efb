@@ -1167,6 +1167,29 @@ class ApiClient {
     await _dio.delete('/documents/folders/$id');
   }
 
+  // --- Traffic ---
+
+  Future<List<Map<String, dynamic>>?> getTrafficNearby({
+    required double lat,
+    required double lon,
+    double radius = 30,
+  }) async {
+    try {
+      final response = await _dio.get('/traffic/nearby', queryParameters: {
+        'lat': lat,
+        'lon': lon,
+        'radius': radius,
+      });
+      final data = response.data;
+      if (data is Map && data['targets'] is List) {
+        return (data['targets'] as List).cast<Map<String, dynamic>>();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --- Filing ---
 
   Future<Map<String, dynamic>> validateFiling(int flightId) async {

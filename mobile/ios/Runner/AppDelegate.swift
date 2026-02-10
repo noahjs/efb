@@ -9,8 +9,13 @@ import GoogleMaps
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    MapboxOptions.accessToken = "pk.eyJ1Ijoibm9haGpzIiwiYSI6ImNtbGQzbzF5dTBmMWszZnB4aDgzbDZzczUifQ.yv1FBDKs9T1RllaF7h_WxA"
-    GMSServices.provideAPIKey("AIzaSyBSU9AnFbDLJYWR_TOyM9t8VAsgsemH0s4")
+    let info = Bundle.main.infoDictionary ?? [:]
+    if let mapboxToken = info["MapboxToken"] as? String, !mapboxToken.isEmpty {
+      MapboxOptions.accessToken = mapboxToken
+    }
+    if let googleKey = info["GoogleMapsKey"] as? String, !googleKey.isEmpty {
+      GMSServices.provideAPIKey(googleKey)
+    }
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../maps/widgets/map_view.dart' show mapboxAccessToken;
+import '../../../core/config/app_config.dart';
 import 'pirep_symbols.dart';
 
 /// Native (iOS/Android) PIREP map using mapbox_maps_flutter.
@@ -28,7 +28,7 @@ class _PirepMapState extends State<PirepMap> {
   @override
   void initState() {
     super.initState();
-    MapboxOptions.setAccessToken(mapboxAccessToken);
+    MapboxOptions.setAccessToken(AppConfig.mapboxToken);
   }
 
   void _onMapCreated(MapboxMap map) {

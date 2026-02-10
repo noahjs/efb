@@ -28,7 +28,7 @@ import 'widgets/wind_altitude_slider.dart';
 import '../../services/windy_providers.dart';
 import '../adsb/providers/adsb_providers.dart';
 import '../adsb/widgets/adsb_status_bar.dart';
-import '../adsb/models/traffic_target.dart';
+import '../traffic/providers/traffic_providers.dart';
 
 class MapsScreen extends ConsumerStatefulWidget {
   const MapsScreen({super.key});
@@ -825,14 +825,11 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       windStreamlinesGeoJson = streamAsync.value;
     }
 
-    // When traffic overlay is active, build traffic GeoJSON from ADS-B targets
+    // When traffic overlay is active, build traffic GeoJSON from unified provider
     final showTraffic = _activeOverlays.contains('traffic');
     Map<String, dynamic>? trafficGeoJson;
     if (showTraffic) {
-      final targets = ref.watch(trafficTargetsProvider);
-      if (targets.isNotEmpty) {
-        trafficGeoJson = _buildTrafficGeoJson(targets);
-      }
+      trafficGeoJson = ref.watch(trafficGeoJsonProvider);
     }
 
     // Own-position overlay (always shown when GPS available)
@@ -1222,29 +1219,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     return {'type': 'FeatureCollection', 'features': features};
   }
 
-  Map<String, dynamic> _buildTrafficGeoJson(Map<int, TrafficTarget> targets) {
-    final features = <Map<String, dynamic>>[];
-    for (final target in targets.values) {
-      final threatStr = target.threatLevel.name;
-      features.add({
-        'type': 'Feature',
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [target.longitude, target.latitude],
-        },
-        'properties': {
-          'callsign': target.callsign.isNotEmpty
-              ? target.callsign
-              : target.icaoAddress.toRadixString(16).toUpperCase(),
-          'threat': threatStr,
-          'alt_tag': target.altitudeTag ?? '${(target.altitude / 100).round()}',
-          'groundspeed': target.groundspeed,
-          'track': target.track,
-        },
-      });
-    }
-    return {'type': 'FeatureCollection', 'features': features};
-  }
 }
 
 /// Stateful wrapper so the bottom sheet rebuilds on toggle changes

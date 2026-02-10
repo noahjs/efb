@@ -43,6 +43,10 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs your location to show your position on the map and provide navigation features.</string>
+	<key>GoogleMapsKey</key>
+	<string>$(GOOGLE_MAPS_KEY)</string>
+	<key>MapboxToken</key>
+	<string>$(MAPBOX_TOKEN)</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

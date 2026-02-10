@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/config/app_config.dart';
-import 'map_view.dart' show EfbMapController, MapBounds, mapboxAccessToken;
+import 'map_view.dart' show EfbMapController, MapBounds;
 import 'wind_barb_renderer.dart';
 
 /// Native (iOS/Android) implementation using mapbox_maps_flutter SDK.
@@ -71,7 +71,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   @override
   void initState() {
     super.initState();
-    MapboxOptions.setAccessToken(mapboxAccessToken);
+    MapboxOptions.setAccessToken(AppConfig.mapboxToken);
   }
 
   @override
@@ -393,8 +393,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await _addAeronauticalLayers(_mapboxMap!);
     // Register wind barb images for the symbol layer
     await _registerWindBarbImages(_mapboxMap!);
-    // Register own-position cone image
+    // Register own-position cone image and traffic chevron
     await _registerConeImage(_mapboxMap!);
+    await _registerTrafficChevron(_mapboxMap!);
     // Register all overlay sources and layers
     for (final key in _overlayRegistry.keys) {
       await _addOverlaySource(_mapboxMap!, key);
@@ -860,16 +861,100 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupTrafficLayers(MapboxMap map, String srcId) async {
-    // Traffic target dots — colored by threat level
+    // Leader lines (target → heads) — dashed, drawn below dots
+    await map.style.addLayer(LineLayer(
+      id: 'traffic-leader-lines',
+      sourceId: srcId,
+      lineWidth: 1.5,
+      lineOpacity: 0.5,
+      lineDasharray: [4.0, 3.0],
+      lineColor: const Color(0xFFFFFFFF).toARGB32(),
+      filter: ['==', ['get', 'featureType'], 'leader'],
+    ));
+    await map.style.setStyleLayerProperty('traffic-leader-lines', 'line-color', [
+      'match',
+      ['get', 'threat'],
+      'resolution', '#FF5252',
+      'alert', '#FF5252',
+      'proximate', '#FFC107',
+      '#AAAAAA',
+    ]);
+
+    // 5-min head markers (drawn first so 2-min is on top)
     await map.style.addLayer(CircleLayer(
+      id: 'traffic-head-5min',
+      sourceId: srcId,
+      circleRadius: 4.0,
+      circleColor: const Color(0xFFFFFFFF).toARGB32(),
+      circleOpacity: 0.4,
+      circleStrokeWidth: 1.0,
+      circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+      filter: ['all',
+        ['==', ['get', 'featureType'], 'head'],
+        ['==', ['get', 'head_interval'], 300],
+      ],
+    ));
+    await map.style.setStyleLayerProperty('traffic-head-5min', 'circle-color', [
+      'match',
+      ['get', 'threat'],
+      'resolution', '#FF5252',
+      'alert', '#FF5252',
+      'proximate', '#FFC107',
+      '#FFFFFF',
+    ]);
+
+    // 2-min head markers
+    await map.style.addLayer(CircleLayer(
+      id: 'traffic-head-2min',
+      sourceId: srcId,
+      circleRadius: 5.0,
+      circleColor: const Color(0xFFFFFFFF).toARGB32(),
+      circleOpacity: 0.6,
+      circleStrokeWidth: 1.0,
+      circleStrokeColor: Colors.white.withValues(alpha: 0.4).toARGB32(),
+      filter: ['all',
+        ['==', ['get', 'featureType'], 'head'],
+        ['==', ['get', 'head_interval'], 120],
+      ],
+    ));
+    await map.style.setStyleLayerProperty('traffic-head-2min', 'circle-color', [
+      'match',
+      ['get', 'threat'],
+      'resolution', '#FF5252',
+      'alert', '#FF5252',
+      'proximate', '#FFC107',
+      '#FFFFFF',
+    ]);
+
+    // Head altitude labels
+    await map.style.addLayer(SymbolLayer(
+      id: 'traffic-head-alt-labels',
+      sourceId: srcId,
+      textField: '{alt_tag}',
+      textSize: 8.0,
+      textColor: Colors.white.withValues(alpha: 0.7).toARGB32(),
+      textHaloColor: Colors.black.toARGB32(),
+      textHaloWidth: 1.0,
+      textOffset: [0.0, 1.2],
+      textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      filter: ['==', ['get', 'featureType'], 'head'],
+    ));
+
+    // Traffic target chevrons — directional markers colored by threat level
+    await map.style.addLayer(SymbolLayer(
       id: 'traffic-dots',
       sourceId: srcId,
-      circleRadius: 8.0,
-      circleColor: const Color(0xFFFFFFFF).toARGB32(),
-      circleStrokeWidth: 2.0,
-      circleStrokeColor: Colors.white.withValues(alpha: 0.5).toARGB32(),
+      iconImage: 'traffic-chevron',
+      iconSize: 0.6,
+      iconRotate: 0.0,
+      iconRotationAlignment: IconRotationAlignment.MAP,
+      iconAllowOverlap: true,
+      iconIgnorePlacement: true,
+      filter: ['==', ['get', 'featureType'], 'target'],
     ));
-    await map.style.setStyleLayerProperty('traffic-dots', 'circle-color', [
+    await map.style.setStyleLayerProperty(
+        'traffic-dots', 'icon-rotate', ['get', 'track']);
+    await map.style.setStyleLayerProperty('traffic-dots', 'icon-color', [
       'match',
       ['get', 'threat'],
       'resolution', '#FF5252',
@@ -889,6 +974,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textHaloWidth: 1.0,
       textOffset: [0.0, -1.8],
       textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      filter: ['==', ['get', 'featureType'], 'target'],
     ));
 
     // Relative altitude tag below the dot
@@ -902,6 +988,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textHaloWidth: 1.0,
       textOffset: [0.0, 1.2],
       textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      filter: ['==', ['get', 'featureType'], 'target'],
     ));
   }
 
@@ -1021,6 +1108,39 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       );
     } catch (e) {
       debugPrint('[EFB] Failed to register cone image: $e');
+    }
+  }
+
+  /// Register a chevron/triangle image for traffic targets, registered as SDF
+  /// so it can be dynamically colored by threat level via icon-color.
+  Future<void> _registerTrafficChevron(MapboxMap map) async {
+    try {
+      const w = 24;
+      const h = 24;
+      final pixels = Uint8List(w * h * 4);
+      // Draw a filled triangle pointing up: tip at (12, 2),
+      // base corners at (2, 22) and (22, 22)
+      for (int y = 2; y < h - 2; y++) {
+        final progress = (y - 2) / (h - 4);
+        final halfWidth = (progress * (w / 2 - 2)).round();
+        final cx = w ~/ 2;
+        for (int x = cx - halfWidth; x <= cx + halfWidth; x++) {
+          if (x < 0 || x >= w) continue;
+          final idx = (y * w + x) * 4;
+          pixels[idx] = 0xFF;     // R
+          pixels[idx + 1] = 0xFF; // G
+          pixels[idx + 2] = 0xFF; // B
+          pixels[idx + 3] = 0xFF; // A
+        }
+      }
+      final mbxImage = MbxImage(width: w, height: h, data: pixels);
+      await map.style.addStyleImage(
+        'traffic-chevron', 2.0, mbxImage,
+        true, // SDF — allows dynamic icon-color
+        <ImageStretches>[], <ImageStretches>[], null,
+      );
+    } catch (e) {
+      debugPrint('[EFB] Failed to register traffic chevron image: $e');
     }
   }
 

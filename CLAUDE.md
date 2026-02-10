@@ -33,9 +33,13 @@ npm run seed               # Seed database with FAA NASR data
 
 ```bash
 cd mobile
-flutter run                # Run on connected device/simulator
-flutter build apk          # Build Android APK
-flutter build ios          # Build iOS
+
+# First-time setup: copy .env.example and fill in your API keys
+cp .env.example .env
+
+flutter run --dart-define-from-file=.env                # Run on connected device/simulator
+flutter build apk --dart-define-from-file=.env          # Build Android APK
+flutter build ios --dart-define-from-file=.env           # Build iOS
 flutter test               # Run all tests
 flutter test test/path_test.dart  # Run single test file
 flutter analyze            # Dart static analysis
@@ -62,7 +66,7 @@ Flutter app using Riverpod for state management and GoRouter for navigation with
 
 Feature directories under `lib/features/`: maps, airports, flights, aircraft, more. Each feature contains its own screens and widgets.
 
-`lib/services/api_client.dart` wraps Dio for all backend communication (base URL: `http://localhost:3001/api`, 10s timeout).
+`lib/services/api_client.dart` wraps Dio for all backend communication (base URL from `AppConfig.apiBaseUrl`, 10s timeout). API keys and URLs are configured via `--dart-define-from-file=.env` (see `lib/core/config/app_config.dart`).
 
 The app uses a dark theme optimized for cockpit use.
 

@@ -9,13 +9,28 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // CORS for Flutter web dev and admin page
+  const corsOrigins = process.env.CORS_ORIGINS;
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow all localhost origins in development
-      if (!origin || /^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+      if (!origin) {
         callback(null, true);
+        return;
+      }
+      if (corsOrigins) {
+        // Explicit allowlist from env var (comma-separated)
+        const allowed = corsOrigins.split(',').map((s) => s.trim());
+        if (allowed.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
       } else {
-        callback(new Error('Not allowed by CORS'));
+        // Default: allow all localhost origins in development
+        if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
       }
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',

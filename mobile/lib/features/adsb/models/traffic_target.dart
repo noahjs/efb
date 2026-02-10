@@ -1,3 +1,5 @@
+import '../../traffic/models/projected_head.dart';
+
 /// Threat level classification based on proximity to ownship.
 enum ThreatLevel {
   /// No threat — beyond proximity thresholds.
@@ -11,6 +13,15 @@ enum ThreatLevel {
 
   /// Resolution — within 1 nm horizontal and 300 ft vertical.
   resolution,
+}
+
+/// Source of traffic data.
+enum TrafficSource {
+  /// GDL 90 ADS-B receiver (physical device).
+  gdl90,
+
+  /// Internet API (e.g. Airplanes.live).
+  api,
 }
 
 /// A single ADS-B traffic target decoded from GDL 90 Traffic Report (0x14).
@@ -67,6 +78,20 @@ class TrafficTarget {
   /// Threat classification based on proximity.
   final ThreatLevel threatLevel;
 
+  /// Data source for this target.
+  final TrafficSource source;
+
+  /// Interpolated position for smooth rendering between polls.
+  final double? interpolatedLat;
+  final double? interpolatedLon;
+  final int? interpolatedAlt;
+
+  /// Projected future positions (e.g. 2-min, 5-min heads).
+  final List<ProjectedHead> heads;
+
+  /// How stale the source position data was when received.
+  final Duration? positionAge;
+
   const TrafficTarget({
     required this.icaoAddress,
     required this.callsign,
@@ -85,6 +110,12 @@ class TrafficTarget {
     this.relativeDistance,
     this.relativeAltitude,
     this.threatLevel = ThreatLevel.none,
+    this.source = TrafficSource.gdl90,
+    this.interpolatedLat,
+    this.interpolatedLon,
+    this.interpolatedAlt,
+    this.heads = const [],
+    this.positionAge,
   });
 
   TrafficTarget copyWith({
@@ -105,6 +136,12 @@ class TrafficTarget {
     double? relativeDistance,
     int? relativeAltitude,
     ThreatLevel? threatLevel,
+    TrafficSource? source,
+    double? interpolatedLat,
+    double? interpolatedLon,
+    int? interpolatedAlt,
+    List<ProjectedHead>? heads,
+    Duration? positionAge,
   }) {
     return TrafficTarget(
       icaoAddress: icaoAddress ?? this.icaoAddress,
@@ -124,6 +161,12 @@ class TrafficTarget {
       relativeDistance: relativeDistance ?? this.relativeDistance,
       relativeAltitude: relativeAltitude ?? this.relativeAltitude,
       threatLevel: threatLevel ?? this.threatLevel,
+      source: source ?? this.source,
+      interpolatedLat: interpolatedLat ?? this.interpolatedLat,
+      interpolatedLon: interpolatedLon ?? this.interpolatedLon,
+      interpolatedAlt: interpolatedAlt ?? this.interpolatedAlt,
+      heads: heads ?? this.heads,
+      positionAge: positionAge ?? this.positionAge,
     );
   }
 
