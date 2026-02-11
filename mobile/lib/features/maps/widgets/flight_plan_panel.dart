@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/flight.dart';
@@ -12,6 +11,9 @@ import '../../../models/aircraft.dart';
 import '../../flights/widgets/altitude_picker_sheet.dart';
 import '../../flights/widgets/flight_edit_dialogs.dart';
 import '../../flights/widgets/preferred_route_sheet.dart';
+import 'flight_profile_chart.dart';
+
+enum _FplTab { edit, navlog, profile }
 
 class FlightPlanPanel extends ConsumerStatefulWidget {
   const FlightPlanPanel({super.key});
@@ -24,6 +26,7 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
   bool _saving = false;
   int? _dragFromIndex;
   int? _dragTargetSlot;
+  _FplTab _activeTab = _FplTab.edit;
 
   Flight? get _flight => ref.read(activeFlightProvider);
 
@@ -708,167 +711,182 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
 
           const Divider(height: 1, color: AppColors.divider),
 
-          // Route waypoints — horizontal draggable pills
-          if (waypoints.isNotEmpty)
+          // Tab-dependent content
+          if (_activeTab == _FplTab.profile)
+            const FlightProfileChart()
+          else if (_activeTab == _FplTab.navlog)
+            const SizedBox(
+              height: 120,
+              child: Center(
+                child: Text(
+                  'NavLog coming soon',
+                  style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+                ),
+              ),
+            )
+          else ...[
+            // Route waypoints — horizontal draggable pills
+            if (waypoints.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+                child: Wrap(
+                  spacing: 0,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: _buildDraggableWaypoints(waypoints, flight),
+                ),
+              ),
+
+            // Add waypoint button
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
-              child: Wrap(
-                spacing: 0,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: _buildDraggableWaypoints(waypoints, flight),
+              padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
+              child: GestureDetector(
+                onTap: () => _addWaypoint(flight),
+                child: Container(
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceLight,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: AppColors.divider, width: 0.5),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add, size: 16, color: AppColors.textMuted),
+                      SizedBox(width: 4),
+                      Text(
+                        'Add Waypoint',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
 
-          // Add waypoint button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 4, 10, 0),
-            child: GestureDetector(
-              onTap: () => _addWaypoint(flight),
-              child: Container(
-                height: 34,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: AppColors.divider, width: 0.5),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add, size: 16, color: AppColors.textMuted),
-                    SizedBox(width: 4),
-                    Text(
-                      'Add Waypoint',
+            // Swap / Clear / Find Route row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+              child: Row(
+                children: [
+                  // Find Route button
+                  GestureDetector(
+                    onTap: waypoints.length >= 2
+                        ? () => _openRouteFinder(flight, waypoints)
+                        : null,
+                    child: Container(
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.alt_route,
+                              size: 14,
+                              color: waypoints.length >= 2
+                                  ? AppColors.accent
+                                  : AppColors.textMuted),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Find Route',
+                            style: TextStyle(
+                              color: waypoints.length >= 2
+                                  ? AppColors.accent
+                                  : AppColors.textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_saving)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.5,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ),
+                  GestureDetector(
+                    onTap: _swapRoute,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceLight,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.swap_horiz,
+                          size: 18, color: AppColors.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _clearFlight,
+                    child: Text(
+                      'Clear',
                       style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 12,
+                        color: AppColors.accent,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-          ),
 
-          // Swap / Clear / Find Route row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
-            child: Row(
-              children: [
-                // Find Route button
-                GestureDetector(
-                  onTap: waypoints.length >= 2
-                      ? () => _openRouteFinder(flight, waypoints)
-                      : null,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceLight,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.alt_route,
-                            size: 14,
-                            color: waypoints.length >= 2
-                                ? AppColors.accent
-                                : AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Find Route',
-                          style: TextStyle(
-                            color: waypoints.length >= 2
-                                ? AppColors.accent
-                                : AppColors.textMuted,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
+            const Divider(height: 1, color: AppColors.divider),
+
+            // Stats bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  _StatItem(
+                    label: 'DIST',
+                    value: flight?.distanceNm != null
+                        ? '${flight!.distanceNm!.toStringAsFixed(0)} nm'
+                        : '--',
                   ),
-                ),
-                const Spacer(),
-                if (_saving)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
+                  _StatItem(
+                    label: 'ETE',
+                    value: _formatEte(flight?.eteMinutes),
                   ),
-                GestureDetector(
-                  onTap: _swapRoute,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceLight,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.swap_horiz,
-                        size: 18, color: AppColors.textSecondary),
+                  _StatItem(
+                    label: 'ETA',
+                    value: _formatEta(flight?.eta),
                   ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _clearFlight,
-                  child: Text(
-                    'Clear',
-                    style: TextStyle(
-                      color: AppColors.accent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  _StatItem(
+                    label: 'FUEL',
+                    value: flight?.flightFuelGallons != null
+                        ? '${flight!.flightFuelGallons!.toStringAsFixed(1)}g'
+                        : '--',
                   ),
-                ),
-              ],
+                  _StatItem(
+                    label: 'WIND',
+                    value: flight?.windComponent != null
+                        ? '${flight!.windComponent!.toStringAsFixed(0)}kts'
+                        : '--',
+                  ),
+                ],
+              ),
             ),
-          ),
-
-          const Divider(height: 1, color: AppColors.divider),
-
-          // Stats bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Row(
-              children: [
-                _StatItem(
-                  label: 'DIST',
-                  value: flight?.distanceNm != null
-                      ? '${flight!.distanceNm!.toStringAsFixed(0)} nm'
-                      : '--',
-                ),
-                _StatItem(
-                  label: 'ETE',
-                  value: _formatEte(flight?.eteMinutes),
-                ),
-                _StatItem(
-                  label: 'ETA',
-                  value: _formatEta(flight?.eta),
-                ),
-                _StatItem(
-                  label: 'FUEL',
-                  value: flight?.flightFuelGallons != null
-                      ? '${flight!.flightFuelGallons!.toStringAsFixed(1)}g'
-                      : '--',
-                ),
-                _StatItem(
-                  label: 'WIND',
-                  value: flight?.windComponent != null
-                      ? '${flight!.windComponent!.toStringAsFixed(0)}kts'
-                      : '--',
-                ),
-              ],
-            ),
-          ),
+          ],
 
           const Divider(height: 1, color: AppColors.divider),
 
@@ -884,31 +902,23 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
                 const Spacer(),
                 _TabButton(
                   label: 'Edit',
-                  onTap: () {
-                    if (flight?.id != null) {
-                      context.push('/flights/${flight!.id}');
-                    } else {
-                      context.push('/flights/new');
-                    }
-                  },
+                  isActive: _activeTab == _FplTab.edit,
+                  onTap: () =>
+                      setState(() => _activeTab = _FplTab.edit),
                 ),
                 const SizedBox(width: 4),
                 _TabButton(
                   label: 'NavLog',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('NavLog coming soon')),
-                    );
-                  },
+                  isActive: _activeTab == _FplTab.navlog,
+                  onTap: () =>
+                      setState(() => _activeTab = _FplTab.navlog),
                 ),
                 const SizedBox(width: 4),
                 _TabButton(
                   label: 'Profile',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Profile coming soon')),
-                    );
-                  },
+                  isActive: _activeTab == _FplTab.profile,
+                  onTap: () =>
+                      setState(() => _activeTab = _FplTab.profile),
                 ),
               ],
             ),
@@ -1017,9 +1027,14 @@ class _ActionIcon extends StatelessWidget {
 
 class _TabButton extends StatelessWidget {
   final String label;
+  final bool isActive;
   final VoidCallback onTap;
 
-  const _TabButton({required this.label, required this.onTap});
+  const _TabButton({
+    required this.label,
+    this.isActive = false,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1028,13 +1043,13 @@ class _TabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: AppColors.surfaceLight,
+          color: isActive ? AppColors.primary : AppColors.surfaceLight,
           borderRadius: BorderRadius.circular(6),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: isActive ? Colors.white : AppColors.textPrimary,
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),

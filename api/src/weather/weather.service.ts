@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Between } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import { AirportsService } from '../airports/airports.service';
-import { WEATHER } from '../config/constants';
+import { WEATHER, DATIS } from '../config/constants';
+import { WeatherStation } from './entities/weather-station.entity';
 
 interface WindsAloftAltitude {
   altitude: number;
@@ -42,6 +45,13 @@ export class WeatherService {
   // Simple in-memory cache: key -> { data, expiresAt }
   private cache = new Map<string, { data: any; expiresAt: number }>();
 
+  // API status tracking
+  private _totalRequests = 0;
+  private _totalErrors = 0;
+  private _lastFetchAt = 0;
+  private _lastErrorAt = 0;
+  private _lastError = '';
+
   private readonly NWS_HEADERS = {
     'User-Agent': WEATHER.NWS_USER_AGENT,
     Accept: 'application/geo+json',
@@ -50,7 +60,37 @@ export class WeatherService {
   constructor(
     private readonly http: HttpService,
     private readonly airportsService: AirportsService,
+    @InjectRepository(WeatherStation)
+    private readonly wxStationRepo: Repository<WeatherStation>,
   ) {}
+
+  async getDatis(icao: string): Promise<any> {
+    const cacheKey = `datis:${icao}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    try {
+      this._totalRequests++;
+      const { data } = await firstValueFrom(
+        this.http.get(`${DATIS.API_URL}/${icao}`, {
+          timeout: DATIS.TIMEOUT_MS,
+        }),
+      );
+
+      // API returns an array of ATIS entries or an error object
+      if (Array.isArray(data) && data.length > 0) {
+        this.setCache(cacheKey, data, DATIS.CACHE_TTL_MS);
+        return data;
+      }
+      return null;
+    } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
+      this.logger.warn(`No D-ATIS for ${icao}: ${this._lastError}`);
+      return null;
+    }
+  }
 
   async getMetar(icao: string): Promise<any> {
     const cacheKey = `metar:${icao}`;
@@ -58,6 +98,7 @@ export class WeatherService {
     if (cached) return cached;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(`${WEATHER.AWC_BASE_URL}/metar`, {
           params: { ids: icao, format: 'json', hours: 3 },
@@ -71,6 +112,9 @@ export class WeatherService {
       }
       return result;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(`Failed to fetch METAR for ${icao}`, error);
       return null;
     }
@@ -82,6 +126,7 @@ export class WeatherService {
     if (cached) return cached;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(`${WEATHER.AWC_BASE_URL}/taf`, {
           params: { ids: icao, format: 'json' },
@@ -94,6 +139,9 @@ export class WeatherService {
       }
       return result;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(`Failed to fetch TAF for ${icao}`, error);
       return null;
     }
@@ -110,11 +158,13 @@ export class WeatherService {
     if (cached) return cached;
 
     try {
+      this._totalRequests++;
       // AWC bbox format: lat0, lon0, lat1, lon1
       const bbox = `${bounds.minLat},${bounds.minLng},${bounds.maxLat},${bounds.maxLng}`;
       const { data } = await firstValueFrom(
         this.http.get(`${WEATHER.AWC_BASE_URL}/metar`, {
           params: { bbox, format: 'json', hours: 3 },
+          timeout: WEATHER.TIMEOUT_BULK_METAR_MS,
         }),
       );
 
@@ -133,6 +183,9 @@ export class WeatherService {
       this.setCache(cacheKey, result);
       return result;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Failed to fetch bulk METARs', error);
       return [];
     }
@@ -325,6 +378,7 @@ export class WeatherService {
     }
 
     try {
+      this._totalRequests++;
       const grid = await this.resolveNwsGrid(
         airport.latitude,
         airport.longitude,
@@ -358,6 +412,9 @@ export class WeatherService {
       this.setCache(cacheKey, result);
       return result;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(`Failed to fetch forecast for ${icao}`, error);
       return { error: 'Failed to fetch forecast', icao };
     }
@@ -475,6 +532,7 @@ export class WeatherService {
     if (cached) return cached;
 
     try {
+      this._totalRequests++;
       // Fetch both low and high altitude winds in parallel
       const [lowRes, highRes] = await Promise.all([
         firstValueFrom(
@@ -513,6 +571,9 @@ export class WeatherService {
       this.setCache(cacheKey, result, WEATHER.CACHE_TTL_WINDS_MS);
       return result;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(`Failed to fetch winds aloft for fcst=${fcst}`, error);
       return { data: new Map() };
     }
@@ -680,6 +741,7 @@ export class WeatherService {
     const faaId = airport?.identifier ?? icao.replace(/^K/, '');
 
     try {
+      this._totalRequests++;
       const params = new URLSearchParams();
       params.append('searchType', '0');
       params.append('designatorsForLocation', faaId);
@@ -754,6 +816,9 @@ export class WeatherService {
       this.setCache(cacheKey, result, WEATHER.CACHE_TTL_NOTAM_MS);
       return result;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(`Failed to fetch NOTAMs for ${icao}`, error);
       return { icao, count: 0, notams: [], error: 'Failed to fetch NOTAMs' };
     }
@@ -781,6 +846,7 @@ export class WeatherService {
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
+    this._totalRequests++;
     const { data } = await firstValueFrom(
       this.http.get(
         `${WEATHER.NWS_BASE_URL}/points/${lat.toFixed(4)},${lon.toFixed(4)}`,
@@ -797,6 +863,39 @@ export class WeatherService {
     return grid;
   }
 
+  async getWxStationsInBounds(bounds: {
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  }): Promise<WeatherStation[]> {
+    return this.wxStationRepo.find({
+      where: {
+        latitude: Between(bounds.minLat, bounds.maxLat),
+        longitude: Between(bounds.minLng, bounds.maxLng),
+      },
+    });
+  }
+
+  async getWxStation(icaoId: string): Promise<WeatherStation | null> {
+    return this.wxStationRepo.findOne({
+      where: { icao_id: icaoId },
+    });
+  }
+
+  getStats() {
+    return {
+      name: 'Weather',
+      baseUrl: WEATHER.AWC_BASE_URL,
+      cacheEntries: this.cache.size,
+      totalRequests: this._totalRequests,
+      totalErrors: this._totalErrors,
+      lastFetchAt: this._lastFetchAt || null,
+      lastErrorAt: this._lastErrorAt || null,
+      lastError: this._lastError || null,
+    };
+  }
+
   private getFromCache(key: string): any | null {
     const entry = this.cache.get(key);
     if (entry && entry.expiresAt > Date.now()) {
@@ -807,6 +906,7 @@ export class WeatherService {
   }
 
   private setCache(key: string, data: any, ttlMs?: number): void {
+    this._lastFetchAt = Date.now();
     this.cache.set(key, {
       data,
       expiresAt: Date.now() + (ttlMs ?? WEATHER.CACHE_TTL_METAR_MS),

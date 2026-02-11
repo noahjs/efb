@@ -111,6 +111,12 @@ export class Airport {
   @Column({ type: 'varchar', nullable: true })
   tower_hours: string;
 
+  @Column({ type: 'boolean', default: false })
+  has_datis: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  has_cpdlc: boolean;
+
   @OneToMany(() => Runway, (runway) => runway.airport, { cascade: true })
   runways: Runway[];
 

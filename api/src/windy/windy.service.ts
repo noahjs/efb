@@ -87,6 +87,13 @@ export class WindyService {
   private readonly logger = new Logger(WindyService.name);
   private cache = new Map<string, { data: any; expiresAt: number }>();
 
+  // API status tracking
+  private _totalRequests = 0;
+  private _totalErrors = 0;
+  private _lastFetchAt = 0;
+  private _lastErrorAt = 0;
+  private _lastError = '';
+
   constructor(private readonly http: HttpService) {}
 
   /**
@@ -147,6 +154,7 @@ export class WindyService {
       WINDS.MODEL_ENDPOINTS[useModel] || WINDS.MODEL_ENDPOINTS.gfs_seamless;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(`${WINDS.API_BASE_URL}${endpoint}`, {
           params: {
@@ -235,6 +243,9 @@ export class WindyService {
         results[uncachedIndices[idx]] = forecast;
       }
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(
         `Open-Meteo batch API error for ${uncachedPoints.length} points: ${error.message}`,
       );
@@ -430,7 +441,7 @@ export class WindyService {
    * Interpolate wind at a specific altitude from pressure-level data.
    * Uses the nearest available timestamp (current time).
    */
-  private getWindAtAltitude(
+  getWindAtAltitude(
     forecast: PointForecastResult,
     altitudeFt: number,
   ): { direction: number; speed: number } {
@@ -548,7 +559,7 @@ export class WindyService {
   /**
    * Sample points along a route at regular intervals.
    */
-  private sampleRoutePoints(
+  sampleRoutePoints(
     waypoints: Array<{ lat: number; lng: number }>,
     intervalNm: number,
   ): Array<{ lat: number; lng: number }> {
@@ -582,7 +593,7 @@ export class WindyService {
   /**
    * Compute great-circle bearing between two points (degrees).
    */
-  private bearing(
+  bearing(
     lat1: number,
     lng1: number,
     lat2: number,
@@ -601,7 +612,7 @@ export class WindyService {
   /**
    * Compute great-circle distance between two points (nautical miles).
    */
-  private distanceNm(
+  distanceNm(
     lat1: number,
     lng1: number,
     lat2: number,
@@ -803,6 +814,19 @@ export class WindyService {
 
   // --- Cache helpers ---
 
+  getStats() {
+    return {
+      name: 'Wind Data',
+      baseUrl: WINDS.API_BASE_URL,
+      cacheEntries: this.cache.size,
+      totalRequests: this._totalRequests,
+      totalErrors: this._totalErrors,
+      lastFetchAt: this._lastFetchAt || null,
+      lastErrorAt: this._lastErrorAt || null,
+      lastError: this._lastError || null,
+    };
+  }
+
   private getFromCache(key: string): any {
     const entry = this.cache.get(key);
     if (entry && entry.expiresAt > Date.now()) return entry.data;
@@ -811,6 +835,7 @@ export class WindyService {
   }
 
   private setCache(key: string, data: any, ttlMs: number): void {
+    this._lastFetchAt = Date.now();
     this.cache.set(key, { data, expiresAt: Date.now() + ttlMs });
   }
 }

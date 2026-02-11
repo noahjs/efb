@@ -21,10 +21,12 @@ import { filingConfig } from './filing.config';
   controllers: [FilingController],
   providers: [
     FilingService,
+    LeidosService,
     {
       provide: 'LEIDOS_CLIENT',
       useClass: filingConfig.useMock ? LeidosMockService : LeidosService,
     },
   ],
+  exports: [LeidosService],
 })
 export class FilingModule {}

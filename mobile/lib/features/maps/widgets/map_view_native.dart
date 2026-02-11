@@ -400,8 +400,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     for (final key in _overlayRegistry.keys) {
       await _addOverlaySource(_mapboxMap!, key);
     }
-    await _addAirportLayers(_mapboxMap!);
     await _addRouteLayer(_mapboxMap!);
+    await _addAirportLayers(_mapboxMap!);
     await _applyFlightCategoryMode(widget.showFlightCategory);
     // Push current data into the fresh sources
     _updateAirportsSource();
@@ -584,6 +584,17 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         filter: ['==', ['get', 'leg'], 'first'],
       ));
 
+      // Waypoint dots at each route coordinate (above lines, below airport layers)
+      await map.style.addLayer(CircleLayer(
+        id: 'route-waypoint-dots',
+        sourceId: 'route',
+        circleRadius: 6.0,
+        circleColor: const Color(0xFF888888).toARGB32(),
+        circleStrokeWidth: 1.5,
+        circleStrokeColor: const Color(0x99FFFFFF).toARGB32(),
+        filter: ['==', ['geometry-type'], 'Point'],
+      ));
+
       _routeSourceReady = true;
     } catch (e) {
       debugPrint('Failed to add route layer: $e');
@@ -614,6 +625,17 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           'coordinates': coords.sublist(1),
         },
         'properties': {'leg': 'rest'},
+      });
+    }
+    // Waypoint dots at each coordinate
+    for (final coord in coords) {
+      features.add({
+        'type': 'Feature',
+        'geometry': {
+          'type': 'Point',
+          'coordinates': coord,
+        },
+        'properties': {'isWaypoint': true},
       });
     }
     return jsonEncode({

@@ -5,51 +5,51 @@ import '../../../models/aircraft.dart';
 class AttachAircraftSheet extends StatelessWidget {
   final List<Aircraft> aircraftList;
   final int? currentAircraftId;
+  final ValueChanged<int> onSelected;
 
   const AttachAircraftSheet({
     super.key,
     required this.aircraftList,
+    required this.onSelected,
     this.currentAircraftId,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      child: SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Attach to Aircraft',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Attach to Aircraft',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
               ),
             ),
-            const Divider(height: 1, color: AppColors.divider),
-            ListTile(
-              leading: const Icon(Icons.close, color: AppColors.textMuted),
-              title: const Text('No Aircraft'),
-              selected: currentAircraftId == null,
-              onTap: () => Navigator.pop(context, -1),
+          ),
+          const Divider(height: 1, color: AppColors.divider),
+          ListTile(
+            leading: const Icon(Icons.close, color: AppColors.textMuted),
+            title: const Text('No Aircraft'),
+            selected: currentAircraftId == null,
+            onTap: () => onSelected(-1),
+          ),
+          ...aircraftList.map(
+            (a) => ListTile(
+              leading: const Icon(Icons.flight, color: AppColors.accent),
+              title: Text(a.tailNumber),
+              subtitle: Text(a.aircraftType,
+                  style: const TextStyle(color: AppColors.textMuted)),
+              selected: currentAircraftId == a.id,
+              onTap: () => onSelected(a.id!),
             ),
-            ...aircraftList.map(
-              (a) => ListTile(
-                leading: const Icon(Icons.flight, color: AppColors.accent),
-                title: Text(a.tailNumber),
-                subtitle: Text(a.aircraftType,
-                    style: const TextStyle(color: AppColors.textMuted)),
-                selected: currentAircraftId == a.id,
-                onTap: () => Navigator.pop(context, a.id),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

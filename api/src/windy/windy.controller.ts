@@ -1,11 +1,15 @@
 import { Controller, Get, Post, Query, Body } from '@nestjs/common';
 import { WindyService } from './windy.service';
+import { ElevationService } from './elevation.service';
 import { Public } from '../auth/guards/public.decorator';
 
 @Public()
 @Controller('windy')
 export class WindyController {
-  constructor(private readonly windyService: WindyService) {}
+  constructor(
+    private readonly windyService: WindyService,
+    private readonly elevationService: ElevationService,
+  ) {}
 
   /**
    * GET /api/windy/point?lat=39.57&lng=-104.85&model=namConus
@@ -74,6 +78,29 @@ export class WindyController {
    * GET /api/windy/streamlines?minLat=38&maxLat=42&minLng=-106&maxLng=-102&altitude=10000
    * Returns GeoJSON LineString features representing wind flow streamlines.
    */
+  /**
+   * POST /api/windy/profile
+   * Body: { waypoints: [{lat, lng}, ...], altitude: 9500, tas: 120, waypointIdentifiers?: ['APA', 'COS'] }
+   * Returns terrain elevation + wind profile along a route.
+   */
+  @Post('profile')
+  async routeProfile(
+    @Body()
+    body: {
+      waypoints: Array<{ lat: number; lng: number }>;
+      altitude: number;
+      tas: number;
+      waypointIdentifiers?: string[];
+    },
+  ) {
+    return this.elevationService.getRouteProfile(
+      body.waypoints,
+      body.altitude,
+      body.tas,
+      body.waypointIdentifiers,
+    );
+  }
+
   @Get('streamlines')
   async windStreamlines(
     @Query('minLat') minLat: string,

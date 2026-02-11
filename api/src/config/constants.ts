@@ -25,12 +25,20 @@ export const WEATHER = {
   CACHE_TTL_NOTAM_MS: 30 * 60 * 1000,
   CACHE_TTL_GRID_MS: 24 * 60 * 60 * 1000,
   TIMEOUT_NOTAM_MS: 30_000,
+  TIMEOUT_BULK_METAR_MS: 15_000,
   TAF_SEARCH_RADIUS_NM: 50,
   TAF_SEARCH_LIMIT: 20,
   METAR_SEARCH_RADIUS_NM: 30,
   METAR_SEARCH_LIMIT: 100,
   WINDS_SEARCH_RADIUS_NM: 100,
   WINDS_SEARCH_LIMIT: 50,
+};
+
+// --- D-ATIS (Digital ATIS via clowd.io) ---
+export const DATIS = {
+  API_URL: 'https://datis.clowd.io/api',
+  CACHE_TTL_MS: 5 * 60 * 1000, // 5 minutes
+  TIMEOUT_MS: 10_000,
 };
 
 // --- Imagery ---
@@ -92,13 +100,27 @@ export const WINDS = {
   } as Record<string, string>,
 };
 
+// --- Elevation (Open-Meteo Elevation API) ---
+export const ELEVATION = {
+  API_URL: 'https://api.open-meteo.com/v1/elevation',
+  SAMPLE_INTERVAL_NM: 5,
+  MAX_POINTS_PER_REQUEST: 100, // Open-Meteo batch limit
+  CACHE_TTL_MS: 24 * 60 * 60 * 1000, // 24 hours (terrain is static)
+  REQUEST_DELAY_MS: 500, // delay between batch requests to avoid 429
+};
+
 // --- Traffic ---
 export const TRAFFIC = {
-  AIRPLANES_LIVE_BASE_URL: 'https://api.airplanes.live/v2',
-  CACHE_TTL_MS: 8 * 1000, // 8s cache (slightly under 10s poll)
+  ADSB_LOL_BASE_URL: 'https://api.adsb.lol/v2',
   DEFAULT_RADIUS_NM: 30,
   MAX_RADIUS_NM: 250,
   TIMEOUT_MS: 10_000,
+  // Grid-based cache
+  GRID_CELL_DEG: 0.5, // ~30nm at mid-latitudes
+  GRID_QUERY_RADIUS_NM: 30, // radius per cell query
+  POLL_INTERVAL_MS: 3_000, // poll one cell every 3s
+  CELL_INACTIVE_MS: 2 * 60 * 1000, // drop cell after 2min with no requests
+  MAX_DATA_AGE_MS: 60 * 1000, // data older than 60s is considered stale
 };
 
 // --- Airports ---

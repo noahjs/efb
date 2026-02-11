@@ -77,7 +77,19 @@
       "WebFetch(domain:openmeteo.substack.com)",
       "WebFetch(domain:api.flutter.dev)",
       "Bash(npm audit:*)",
-      "Bash(npm run test:cov:*)"
+      "Bash(npm run test:cov:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:airplanes.live)",
+      "WebFetch(domain:api.adsb.lol)",
+      "WebFetch(domain:www.adsb.lol)",
+      "Bash(node -e \"\nconst axios = require\\(''axios''\\);\n// Simulate exactly what NestJS does - make the same request with the same params\naxios.get\\(''https://aviationweather.gov/api/data/metar'', {\n  params: { bbox: ''33.12073472611914,-115.37335358662813,46.33166373040132,-101.72898184792103'', format: ''json'', hours: 3 },\n  timeout: 10000,\n}\\).then\\(res => {\n  console.log\\(''Status:'', res.status\\);\n  console.log\\(''Items:'', Array.isArray\\(res.data\\) ? res.data.length : ''not array''\\);\n  console.log\\(''Type:'', typeof res.data\\);\n}\\).catch\\(err => {\n  console.log\\(''ERROR:'', err.message\\);\n  console.log\\(''Code:'', err.code\\);\n  if \\(err.response\\) console.log\\(''Response status:'', err.response.status\\);\n}\\);\n\")",
+      "Bash(xargs kill:*)",
+      "WebFetch(domain:datis.clowd.io)",
+      "WebFetch(domain:atis.info)",
+      "WebFetch(domain:aa.data.faa.gov)",
+      "WebFetch(domain:support.swim.faa.gov)",
+      "Bash(docker ps:*)",
+      "Bash(npx ts-node:*)"
     ]
   }
 }

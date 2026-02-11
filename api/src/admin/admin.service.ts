@@ -9,6 +9,12 @@ import { Fix } from '../navaids/entities/fix.entity';
 import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
+import { WeatherService } from '../weather/weather.service';
+import { ImageryService } from '../imagery/imagery.service';
+import { WindyService } from '../windy/windy.service';
+import { ElevationService } from '../windy/elevation.service';
+import { TrafficService } from '../traffic/traffic.service';
+import { LeidosService } from '../filing/leidos.service';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -98,7 +104,26 @@ export class AdminService {
     @InjectRepository(DtppCycle) private cycleRepo: Repository<DtppCycle>,
     @InjectRepository(FaaRegistryAircraft)
     private registryRepo: Repository<FaaRegistryAircraft>,
+    private readonly weatherService: WeatherService,
+    private readonly imageryService: ImageryService,
+    private readonly windyService: WindyService,
+    private readonly elevationService: ElevationService,
+    private readonly trafficService: TrafficService,
+    private readonly leidosService: LeidosService,
   ) {}
+
+  // --- API Status ---
+
+  getApiStatus() {
+    return [
+      this.weatherService.getStats(),
+      this.imageryService.getStats(),
+      this.windyService.getStats(),
+      this.elevationService.getStats(),
+      this.trafficService.getStats(),
+      this.leidosService.getStats(),
+    ];
+  }
 
   // --- Data inventory ---
 

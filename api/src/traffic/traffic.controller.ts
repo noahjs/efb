@@ -14,7 +14,7 @@ export class TrafficController {
   constructor(private readonly trafficService: TrafficService) {}
 
   @Get('nearby')
-  async getNearby(
+  getNearby(
     @Query('lat') latStr: string,
     @Query('lon') lonStr: string,
     @Query('radius') radiusStr?: string,
@@ -38,5 +38,10 @@ export class TrafficController {
     }
 
     return this.trafficService.getTrafficNearby(lat, lon, radius);
+  }
+
+  @Get('stats')
+  getStats() {
+    return this.trafficService.getStats();
   }
 }

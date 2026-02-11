@@ -27,6 +27,14 @@ export class AdminController {
   }
 
   /**
+   * Get API service health and stats
+   */
+  @Get('api-status')
+  getApiStatus() {
+    return this.adminService.getApiStatus();
+  }
+
+  /**
    * Get full system overview: database counts, chart status, disk usage, jobs
    */
   @Get('overview')

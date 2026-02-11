@@ -87,6 +87,13 @@ final notamsProvider =
   return client.getNotams(icao);
 });
 
+/// Provider for D-ATIS data
+final datisProvider =
+    FutureProvider.family<List<dynamic>?, String>((ref, icao) async {
+  final client = ref.read(apiClientProvider);
+  return client.getDatis(icao);
+});
+
 /// Provider for 7-day forecast data
 final forecastProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, icao) async {
@@ -146,3 +153,24 @@ final mapMetarsProvider = FutureProvider.family<List<dynamic>,
     );
   },
 );
+
+/// Provider for weather stations in map bounds
+final wxStationsBoundsProvider = FutureProvider.family<List<dynamic>,
+    ({double minLat, double maxLat, double minLng, double maxLng})>(
+  (ref, bounds) async {
+    final client = ref.read(apiClientProvider);
+    return client.getWxStationsInBounds(
+      minLat: bounds.minLat,
+      maxLat: bounds.maxLat,
+      minLng: bounds.minLng,
+      maxLng: bounds.maxLng,
+    );
+  },
+);
+
+/// Provider for weather station detail
+final wxStationDetailProvider =
+    FutureProvider.family<Map<String, dynamic>?, String>((ref, id) async {
+  final client = ref.read(apiClientProvider);
+  return client.getWxStation(id);
+});

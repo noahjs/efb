@@ -10,6 +10,13 @@ export class ImageryService {
   // Simple in-memory cache: key -> { data, expiresAt }
   private cache = new Map<string, { data: any; expiresAt: number }>();
 
+  // API status tracking
+  private _totalRequests = 0;
+  private _totalErrors = 0;
+  private _lastFetchAt = 0;
+  private _lastErrorAt = 0;
+  private _lastError = '';
+
   constructor(private readonly http: HttpService) {}
 
   getCatalog() {
@@ -269,6 +276,7 @@ export class ImageryService {
     const url = `${IMAGERY.AWC_BASE_URL}/data/products/gfa/F${paddedHour}_gfa_${type}_${region}.png`;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(url, {
           responseType: 'arraybuffer',
@@ -279,6 +287,9 @@ export class ImageryService {
       this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(
         `Failed to fetch GFA image: ${type}/${region}/F${paddedHour}`,
         error,
@@ -301,6 +312,7 @@ export class ImageryService {
     const url = `${IMAGERY.AWC_BASE_URL}/data/products/progs/${filename}`;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(url, {
           responseType: 'arraybuffer',
@@ -311,6 +323,9 @@ export class ImageryService {
       this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(
         `Failed to fetch prog chart: ${type}/F${paddedHour}`,
         error,
@@ -334,6 +349,7 @@ export class ImageryService {
     const url = `${IMAGERY.AWC_BASE_URL}/data/products/icing/${filename}`;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(url, {
           responseType: 'arraybuffer',
@@ -344,6 +360,9 @@ export class ImageryService {
       this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(
         `Failed to fetch icing chart: ${param}/${level}/F${paddedHour}`,
         error,
@@ -365,6 +384,7 @@ export class ImageryService {
     const url = `${IMAGERY.AWC_BASE_URL}/data/products/fax/F${paddedHour}_wind_${level}_${area}.gif`;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(url, {
           responseType: 'arraybuffer',
@@ -375,6 +395,9 @@ export class ImageryService {
       this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_WINDS_MS);
       return buffer;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(
         `Failed to fetch winds aloft chart: ${level}/${area}/F${paddedHour}`,
         error,
@@ -404,6 +427,7 @@ export class ImageryService {
     const url = `${IMAGERY.SPC_BASE_URL}/products/outlook/${filename}`;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(url, {
           responseType: 'arraybuffer',
@@ -414,6 +438,9 @@ export class ImageryService {
       this.setCache(cacheKey, buffer, IMAGERY.CACHE_TTL_GFA_MS);
       return buffer;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(
         `Failed to fetch convective outlook: day${day}/${type}`,
         error,
@@ -449,6 +476,7 @@ export class ImageryService {
     }
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(`${IMAGERY.AWC_BASE_URL}/api/data/${endpoint}`, {
           params,
@@ -458,6 +486,9 @@ export class ImageryService {
       this.setCache(cacheKey, data, IMAGERY.CACHE_TTL_ADVISORY_MS);
       return data;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error(`Failed to fetch advisories: ${type}`, error);
       return { type: 'FeatureCollection', features: [] };
     }
@@ -471,6 +502,7 @@ export class ImageryService {
     if (cached) return cached;
 
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(`${IMAGERY.AWC_BASE_URL}/api/data/pirep`, {
           params: {
@@ -484,6 +516,9 @@ export class ImageryService {
       this.setCache(cacheKey, data, IMAGERY.CACHE_TTL_ADVISORY_MS);
       return data;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Failed to fetch PIREPs', error);
       return { type: 'FeatureCollection', features: [] };
     }
@@ -495,6 +530,7 @@ export class ImageryService {
     if (cached) return cached;
 
     try {
+      this._totalRequests++;
       // Fetch GeoJSON polygons from FAA GeoServer WFS and metadata from TFR API in parallel
       const [wfsResponse, listResponse] = await Promise.all([
         firstValueFrom(
@@ -608,6 +644,9 @@ export class ImageryService {
       this.setCache(cacheKey, geojson, IMAGERY.CACHE_TTL_TFR_MS);
       return geojson;
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Failed to fetch TFRs', error);
       return { type: 'FeatureCollection', features: [] };
     }
@@ -684,6 +723,19 @@ export class ImageryService {
     return result;
   }
 
+  getStats() {
+    return {
+      name: 'Imagery',
+      baseUrl: IMAGERY.AWC_BASE_URL,
+      cacheEntries: this.cache.size,
+      totalRequests: this._totalRequests,
+      totalErrors: this._totalErrors,
+      lastFetchAt: this._lastFetchAt || null,
+      lastErrorAt: this._lastErrorAt || null,
+      lastError: this._lastError || null,
+    };
+  }
+
   private getFromCache(key: string): any | null {
     const entry = this.cache.get(key);
     if (entry && entry.expiresAt > Date.now()) {
@@ -694,6 +746,7 @@ export class ImageryService {
   }
 
   private setCache(key: string, data: any, ttlMs: number): void {
+    this._lastFetchAt = Date.now();
     this.cache.set(key, {
       data,
       expiresAt: Date.now() + ttlMs,

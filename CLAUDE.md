@@ -26,7 +26,42 @@ npm test                   # Jest unit tests
 npm run test:watch         # Jest in watch mode
 npm run test:cov           # Jest with coverage
 npm run test:e2e           # End-to-end tests
-npm run seed               # Seed database with FAA NASR data
+```
+
+#### Database Seeds
+
+All seed scripts run from the `api/` directory. Run them in the order listed for a fresh setup.
+
+```bash
+# 1. Airports, runways, frequencies (FAA NASR 28-day data)
+npm run seed
+
+# 2. Navaids (VOR, VORTAC, NDB) and fixes/waypoints
+npx ts-node -r tsconfig-paths/register src/seed/seed-navaids.ts
+
+# 3. Airspaces, airways, and ARTCC boundaries
+npx ts-node -r tsconfig-paths/register src/seed/seed-airspaces.ts
+
+# 4. IFR preferred routes, TEC routes, NARs
+npx ts-node -r tsconfig-paths/register src/seed/seed-routes.ts
+
+# 5. Terminal procedures (d-TPP metadata, ~17k records)
+npx ts-node -r tsconfig-paths/register src/seed/seed-procedures.ts
+
+# 6. CIFP coded instrument flight procedures (ARINC 424)
+npx ts-node -r tsconfig-paths/register src/seed/seed-cifp.ts
+
+# 7. FAA aircraft registry (N-number lookup)
+npx ts-node -r tsconfig-paths/register src/seed/seed-registry.ts
+
+# 8. Non-airport weather stations (AWC METAR sources not in airports DB)
+npx ts-node -r tsconfig-paths/register src/seed/seed-weather-stations.ts
+
+# 9. Demo user for development
+npx ts-node -r tsconfig-paths/register src/seed/seed-users.ts
+
+# 10. Sample aircraft (TBM 960 with profiles, fuel tanks, equipment)
+npm run seed:aircraft
 ```
 
 ### Frontend (mobile/)

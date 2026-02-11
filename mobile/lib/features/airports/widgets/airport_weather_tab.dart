@@ -5,47 +5,270 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/airport_providers.dart';
 
-class AirportWeatherTab extends StatelessWidget {
+class AirportWeatherTab extends ConsumerWidget {
   final String airportId;
   const AirportWeatherTab({super.key, required this.airportId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final airportAsync = ref.watch(airportDetailProvider(airportId));
+    final dbFlag = airportAsync.whenOrNull(
+          data: (airport) => airport?['has_datis'] == true,
+        ) ??
+        false;
+
+    // Also check if the D-ATIS API actually returned data (covers airports
+    // not yet seeded with has_datis=true).
+    final datisAsync = ref.watch(datisProvider(airportId));
+    final hasLiveData = datisAsync.whenOrNull(
+          data: (list) => list != null && list.isNotEmpty,
+        ) ??
+        false;
+
+    final showDatis = dbFlag || hasLiveData;
+
+    final tabs = <Tab>[
+      if (showDatis) const Tab(text: 'D-ATIS'),
+      const Tab(text: 'METAR'),
+      const Tab(text: 'TAF'),
+      const Tab(text: 'Ai-Fcst'),
+      const Tab(text: 'Daily'),
+      const Tab(text: 'Winds'),
+    ];
+
+    final views = <Widget>[
+      if (showDatis) _DatisView(airportId: airportId),
+      _MetarView(airportId: airportId),
+      _TafView(airportId: airportId),
+      _PlaceholderView(label: 'Ai-Fcst data coming soon'),
+      _DailyForecastView(airportId: airportId),
+      _WindsAloftView(airportId: airportId),
+    ];
+
     return DefaultTabController(
-      length: 5,
+      length: tabs.length,
       child: Column(
         children: [
-          // Sub-tabs
           Container(
             color: AppColors.surface,
-            child: const TabBar(
-              tabs: [
-                Tab(text: 'METAR'),
-                Tab(text: 'TAF'),
-                Tab(text: 'Ai-Fcst'),
-                Tab(text: 'Daily'),
-                Tab(text: 'Winds'),
-              ],
+            child: TabBar(
+              tabs: tabs,
               isScrollable: false,
-              labelStyle: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: TextStyle(fontSize: 12),
+              labelStyle:
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: const TextStyle(fontSize: 12),
               indicatorSize: TabBarIndicatorSize.tab,
             ),
           ),
           Expanded(
             child: TabBarView(
-              children: [
-                _MetarView(airportId: airportId),
-                _TafView(airportId: airportId),
-                _PlaceholderView(label: 'Ai-Fcst data coming soon'),
-                _DailyForecastView(airportId: airportId),
-                _WindsAloftView(airportId: airportId),
-              ],
+              children: views,
             ),
           ),
         ],
       ),
     );
+  }
+}
+
+class _DatisView extends ConsumerWidget {
+  final String airportId;
+  const _DatisView({required this.airportId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final datisAsync = ref.watch(datisProvider(airportId));
+
+    return datisAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => const Center(
+        child: Text(
+          'Failed to load D-ATIS',
+          style: TextStyle(color: AppColors.textMuted),
+        ),
+      ),
+      data: (atisList) {
+        if (atisList == null || atisList.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.speaker_notes_off,
+                      size: 48, color: AppColors.textMuted),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No D-ATIS Available',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'This airport does not have Digital ATIS. Listen on the published ATIS frequency.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: atisList.length,
+          itemBuilder: (context, index) {
+            final atis = atisList[index] as Map<String, dynamic>;
+            return _DatisCard(atis: atis);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _DatisCard extends StatelessWidget {
+  final Map<String, dynamic> atis;
+  const _DatisCard({required this.atis});
+
+  @override
+  Widget build(BuildContext context) {
+    final type = atis['type'] as String? ?? 'combined';
+    final datisText = atis['datis'] as String? ?? '';
+
+    // Extract ATIS letter from the text (e.g., "ATIS INFO A" or "...INFORMATION ALPHA")
+    final letter = _extractAtisLetter(datisText);
+
+    // Determine label for type
+    String typeLabel;
+    switch (type.toLowerCase()) {
+      case 'arr':
+        typeLabel = 'ARRIVAL';
+      case 'dep':
+        typeLabel = 'DEPARTURE';
+      default:
+        typeLabel = 'ATIS';
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with ATIS letter and type
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(8)),
+              border: Border(
+                bottom: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                if (letter != null)
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      letter,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                if (letter != null) const SizedBox(width: 10),
+                Text(
+                  typeLabel,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.record_voice_over,
+                    size: 16,
+                    color: AppColors.primary.withValues(alpha: 0.6)),
+              ],
+            ),
+          ),
+
+          // ATIS text
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              datisText,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w500,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String? _extractAtisLetter(String text) {
+    // Match "ATIS INFO X" or "INFORMATION ALPHA/BRAVO/..." patterns
+    final infoMatch =
+        RegExp(r'ATIS\s+INFO(?:RMATION)?\s+([A-Z])\b', caseSensitive: false)
+            .firstMatch(text);
+    if (infoMatch != null) return infoMatch.group(1);
+
+    final informationMatch =
+        RegExp(r'INFORMATION\s+([A-Z])\b', caseSensitive: false)
+            .firstMatch(text);
+    if (informationMatch != null) return informationMatch.group(1);
+
+    // Try phonetic alphabet
+    const phoneticToLetter = {
+      'ALFA': 'A', 'ALPHA': 'A', 'BRAVO': 'B', 'CHARLIE': 'C',
+      'DELTA': 'D', 'ECHO': 'E', 'FOXTROT': 'F', 'GOLF': 'G',
+      'HOTEL': 'H', 'INDIA': 'I', 'JULIET': 'J', 'JULIETT': 'J',
+      'KILO': 'K', 'LIMA': 'L', 'MIKE': 'M', 'NOVEMBER': 'N',
+      'OSCAR': 'O', 'PAPA': 'P', 'QUEBEC': 'Q', 'ROMEO': 'R',
+      'SIERRA': 'S', 'TANGO': 'T', 'UNIFORM': 'U', 'VICTOR': 'V',
+      'WHISKEY': 'W', 'XRAY': 'X', 'X-RAY': 'X', 'YANKEE': 'Y',
+      'ZULU': 'Z',
+    };
+
+    final phoneticPattern = phoneticToLetter.keys.join('|');
+    final phoneticMatch = RegExp(
+      r'INFORMATION\s+(' + phoneticPattern + r')\b',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (phoneticMatch != null) {
+      return phoneticToLetter[phoneticMatch.group(1)!.toUpperCase()];
+    }
+
+    return null;
   }
 }
 

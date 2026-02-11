@@ -9,7 +9,6 @@ import '../../../models/document_folder.dart';
 import '../../../services/api_client.dart';
 import '../../../services/aircraft_providers.dart';
 import '../../../services/document_providers.dart';
-import 'attach_aircraft_sheet.dart';
 import 'folder_create_dialog.dart';
 import 'move_to_folder_sheet.dart';
 import 'pdf_viewer_native.dart' if (dart.library.html) 'pdf_viewer_stub.dart';
@@ -29,6 +28,7 @@ class _DocumentViewerScreenState extends ConsumerState<DocumentViewerScreen> {
   Uint8List? _fileBytes;
   bool _loading = true;
   String? _error;
+  bool _overlayActive = false;
 
   @override
   void initState() {
@@ -262,6 +262,12 @@ class _DocumentViewerScreenState extends ConsumerState<DocumentViewerScreen> {
       );
     }
 
+    // Remove platform view from tree while overlays are shown,
+    // otherwise the native UIView swallows all touch events.
+    if (_overlayActive) {
+      return Container(color: AppColors.background);
+    }
+
     if (_doc?.isPdf == true) {
       return buildPdfViewer(_fileBytes!, widget.documentId);
     }
@@ -282,16 +288,28 @@ class _DocumentViewerScreenState extends ConsumerState<DocumentViewerScreen> {
     );
   }
 
+  /// Remove platform views, wait a frame, run [fn], then restore.
+  Future<T?> _withOverlay<T>(Future<T?> Function() fn) async {
+    setState(() => _overlayActive = true);
+    await Future.delayed(const Duration(milliseconds: 50));
+    if (!mounted) return null;
+    try {
+      return await fn();
+    } finally {
+      if (mounted) setState(() => _overlayActive = false);
+    }
+  }
+
   // ── Actions ──
 
   Future<void> _renameDocument() async {
-    final name = await showDialog<String>(
-      context: context,
-      builder: (_) => FolderCreateDialog(
-        title: 'Rename Document',
-        initialName: _doc?.originalName,
-      ),
-    );
+    final name = await _withOverlay(() => showDialog<String>(
+          context: context,
+          builder: (_) => FolderCreateDialog(
+            title: 'Rename Document',
+            initialName: _doc?.originalName,
+          ),
+        ));
     if (name == null || name == _doc?.originalName) return;
 
     try {
@@ -309,13 +327,64 @@ class _DocumentViewerScreenState extends ConsumerState<DocumentViewerScreen> {
   }
 
   Future<void> _selectAircraft(List<Aircraft> aircraftList) async {
-    final selected = await showModalBottomSheet<int>(
-      context: context,
-      builder: (_) => AttachAircraftSheet(
-        aircraftList: aircraftList,
-        currentAircraftId: _doc?.aircraftId,
-      ),
-    );
+    final selected = await _withOverlay(() => showDialog<int>(
+          context: context,
+          builder: (dialogContext) => SimpleDialog(
+            title: const Text('Attach to Aircraft'),
+            children: [
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(dialogContext, -1),
+                child: Row(
+                  children: [
+                    const Icon(Icons.close, color: AppColors.textMuted),
+                    const SizedBox(width: 16),
+                    Text(
+                      'No Aircraft',
+                      style: TextStyle(
+                        color: _doc?.aircraftId == null
+                            ? AppColors.accent
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ...aircraftList.map(
+                (a) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(dialogContext, a.id),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.flight, color: AppColors.accent),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              a.tailNumber,
+                              style: TextStyle(
+                                color: _doc?.aircraftId == a.id
+                                    ? AppColors.accent
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              a.aircraftType,
+                              style: const TextStyle(
+                                color: AppColors.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ));
     if (selected == null) return;
 
     try {
@@ -334,13 +403,13 @@ class _DocumentViewerScreenState extends ConsumerState<DocumentViewerScreen> {
   }
 
   Future<void> _selectFolder(List<DocumentFolder> folders) async {
-    final folderId = await showModalBottomSheet<int>(
-      context: context,
-      builder: (_) => MoveToFolderSheet(
-        folders: folders,
-        currentFolderId: _doc?.folderId,
-      ),
-    );
+    final folderId = await _withOverlay(() => showModalBottomSheet<int>(
+          context: context,
+          builder: (_) => MoveToFolderSheet(
+            folders: folders,
+            currentFolderId: _doc?.folderId,
+          ),
+        ));
     if (folderId == null) return;
 
     try {

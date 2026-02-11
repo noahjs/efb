@@ -19,6 +19,7 @@ import 'widgets/aeronautical_settings_panel.dart';
 import 'widgets/map_view.dart';
 import 'widgets/airport_bottom_sheet.dart';
 import 'widgets/navaid_bottom_sheet.dart';
+import 'widgets/wx_station_bottom_sheet.dart';
 import 'widgets/fix_bottom_sheet.dart';
 import 'widgets/map_long_press_sheet.dart';
 import 'widgets/pirep_bottom_sheet.dart';
@@ -56,6 +57,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
 
   MapBounds? _currentBounds;
   Timer? _boundsDebounce;
+
+  // Weather station tracking (populated during build for tap routing)
+  Map<String, Map<String, dynamic>> _weatherStations = {};
 
   // Search state
   final _searchController = TextEditingController();
@@ -260,12 +264,33 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   }
 
   void _onAirportTapped(String id) {
+    // Check if this is a synthetic weather station (non-airport METAR source)
+    final wxEntry = _findWeatherStation(id);
+    if (wxEntry != null) {
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        builder: (_) => WxStationBottomSheet(
+          stationId: id,
+          metarData: wxEntry['_metarData'] as Map<dynamic, dynamic>?,
+        ),
+      );
+      return;
+    }
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => AirportBottomSheet(airportId: id),
     );
+  }
+
+  /// Find a synthetic weather station entry in the current airports list.
+  Map<String, dynamic>? _findWeatherStation(String id) {
+    // Access the current build-time airports list isn't available here directly,
+    // so we use a stateful approach: store weather station IDs during build.
+    return _weatherStations[id];
   }
 
   void _onPirepTapped(Map<String, dynamic> properties) {
@@ -690,6 +715,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       }).toList();
     }
 
+    // Reset weather station tracking for this build cycle
+    final newWxStations = <String, Map<String, dynamic>>{};
+
     // When flight category overlay is active, fetch METARs and merge/create dots
     if (showFlightCategory && _currentBounds != null) {
       final metarsAsync = ref.watch(mapMetarsProvider(_currentBounds!));
@@ -702,6 +730,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
             if (icao != null) metarMap[icao] = m;
           }
         }
+        debugPrint('[EFB] Flight category: ${metarMap.length} unique METARs, ${airports.length} airports in list');
 
         // Tag existing airports with their flight category
         final matched = <String>{};
@@ -715,6 +744,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           }
           return a;
         }).toList();
+        debugPrint('[EFB] Matched ${matched.length} airports to METARs, ${metarMap.length - matched.length} unmatched');
 
         // Add METAR stations that aren't already in the airports list
         for (final entry in metarMap.entries) {
@@ -724,16 +754,22 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           final lon = m['lon'] as num?;
           final cat = m['fltCat'] as String?;
           if (lat == null || lon == null || cat == null) continue;
-          airports.add({
+          final wxEntry = {
             'identifier': entry.key,
             'icao_identifier': entry.key,
             'latitude': lat.toDouble(),
             'longitude': lon.toDouble(),
             'category': cat,
-          });
+            'isWeatherStation': true,
+            '_metarData': m,
+          };
+          airports.add(wxEntry);
+          newWxStations[entry.key] = wxEntry;
         }
+        debugPrint('[EFB] ${newWxStations.length} wx stations added as dots, total airports now: ${airports.length}');
       }
     }
+    _weatherStations = newWxStations;
 
     // When aeronautical overlay is active, fetch airspace/airway/ARTCC data
     Map<String, dynamic>? airspaceGeoJson;

@@ -33,6 +33,12 @@ export class WeatherController {
     return this.weatherService.getNotams(icao.toUpperCase());
   }
 
+  @Get('datis/:icao')
+  async datis(@Param('icao') icao: string) {
+    const data = await this.weatherService.getDatis(icao.toUpperCase());
+    return data ?? { error: 'No D-ATIS available', icao };
+  }
+
   @Get('taf/:icao/nearest')
   async nearestTaf(@Param('icao') icao: string) {
     return this.weatherService.getNearestTaf(icao.toUpperCase());
@@ -42,6 +48,27 @@ export class WeatherController {
   async taf(@Param('icao') icao: string) {
     const data = await this.weatherService.getTaf(icao.toUpperCase());
     return data ?? { error: 'No TAF available', icao };
+  }
+
+  @Get('wx-stations/bounds')
+  async wxStationsBounds(
+    @Query('minLat') minLat: string,
+    @Query('maxLat') maxLat: string,
+    @Query('minLng') minLng: string,
+    @Query('maxLng') maxLng: string,
+  ) {
+    return this.weatherService.getWxStationsInBounds({
+      minLat: parseFloat(minLat),
+      maxLat: parseFloat(maxLat),
+      minLng: parseFloat(minLng),
+      maxLng: parseFloat(maxLng),
+    });
+  }
+
+  @Get('wx-stations/:id')
+  async wxStation(@Param('id') id: string) {
+    const station = await this.weatherService.getWxStation(id.toUpperCase());
+    return station ?? { error: 'Weather station not found', id };
   }
 
   @Get('stations')

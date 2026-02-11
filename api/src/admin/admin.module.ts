@@ -10,6 +10,11 @@ import { Fix } from '../navaids/entities/fix.entity';
 import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
+import { WeatherModule } from '../weather/weather.module';
+import { ImageryModule } from '../imagery/imagery.module';
+import { WindyModule } from '../windy/windy.module';
+import { TrafficModule } from '../traffic/traffic.module';
+import { FilingModule } from '../filing/filing.module';
 
 @Module({
   imports: [
@@ -23,6 +28,11 @@ import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.
       DtppCycle,
       FaaRegistryAircraft,
     ]),
+    WeatherModule,
+    ImageryModule,
+    WindyModule,
+    TrafficModule,
+    FilingModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

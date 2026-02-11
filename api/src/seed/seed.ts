@@ -707,6 +707,76 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
   return sampleAirports.length;
 }
 
+async function seedDatisCapability(ds: DataSource): Promise<number> {
+  const repo = ds.getRepository(Airport);
+
+  // Find towered airports with ICAO identifiers — these are candidates for D-ATIS
+  const toweredAirports = await repo
+    .createQueryBuilder('a')
+    .select(['a.identifier', 'a.icao_identifier'])
+    .where('a.tower_hours IS NOT NULL')
+    .andWhere('a.icao_identifier IS NOT NULL')
+    .getMany();
+
+  console.log(
+    `  Checking ${toweredAirports.length} towered airports for D-ATIS...`,
+  );
+
+  let count = 0;
+  const batchSize = 20;
+  const delayMs = 500;
+
+  for (let i = 0; i < toweredAirports.length; i += batchSize) {
+    const batch = toweredAirports.slice(i, i + batchSize);
+
+    const results = await Promise.allSettled(
+      batch.map(async (apt) => {
+        try {
+          const response = await fetch(
+            `https://datis.clowd.io/api/${apt.icao_identifier}`,
+            { signal: AbortSignal.timeout(5000) },
+          );
+          if (!response.ok) return false;
+          const data = await response.json();
+          return Array.isArray(data) && data.length > 0;
+        } catch {
+          return false;
+        }
+      }),
+    );
+
+    const idsToUpdate: string[] = [];
+    for (let j = 0; j < results.length; j++) {
+      const result = results[j];
+      if (result.status === 'fulfilled' && result.value) {
+        idsToUpdate.push(batch[j].identifier);
+      }
+    }
+
+    if (idsToUpdate.length > 0) {
+      await repo
+        .createQueryBuilder()
+        .update()
+        .set({ has_datis: true })
+        .where('identifier IN (:...ids)', { ids: idsToUpdate })
+        .execute();
+      count += idsToUpdate.length;
+    }
+
+    if (i + batchSize < toweredAirports.length) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    // Progress
+    const checked = Math.min(i + batchSize, toweredAirports.length);
+    if (checked % 100 === 0 || checked === toweredAirports.length) {
+      console.log(`  Checked ${checked}/${toweredAirports.length} (${count} with D-ATIS so far)`);
+    }
+  }
+
+  return count;
+}
+
 async function main() {
   console.log('=== EFB NASR Data Seed ===\n');
 
@@ -748,6 +818,11 @@ async function main() {
   const freqCount = await seedFrequencies(ds);
   console.log(`  Imported ${freqCount} frequencies.\n`);
 
+  // Seed D-ATIS capability (must be after airports + tower hours)
+  console.log('Seeding D-ATIS capability...');
+  const datisCount = await seedDatisCapability(ds);
+  console.log(`  Marked ${datisCount} airports with D-ATIS.\n`);
+
   // Summary
   console.log('=== Seed Complete ===');
   console.log(`  Airports:     ${airportCount}`);
@@ -756,6 +831,7 @@ async function main() {
   console.log(`  Runways:      ${rwyCount}`);
   console.log(`  Runway Ends:  ${endCount}`);
   console.log(`  Frequencies:  ${freqCount}`);
+  console.log(`  D-ATIS:       ${datisCount}`);
 
   await ds.destroy();
 }

@@ -157,6 +157,18 @@ class ApiClient {
     }
   }
 
+  Future<List<dynamic>?> getDatis(String icao) async {
+    try {
+      final response = await _dio.get('/weather/datis/$icao');
+      final data = response.data;
+      if (data is List) return data;
+      // API returns error object when no D-ATIS available
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<List<dynamic>> getBulkMetars({
     required double minLat,
     required double maxLat,
@@ -175,6 +187,38 @@ class ApiClient {
       return [];
     }
   }
+  // --- Weather Stations ---
+
+  Future<List<dynamic>> getWxStationsInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  }) async {
+    try {
+      final response =
+          await _dio.get('/weather/wx-stations/bounds', queryParameters: {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+      });
+      return response.data;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getWxStation(String id) async {
+    try {
+      final response = await _dio.get('/weather/wx-stations/$id');
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   // --- Windy (Winds Aloft) ---
 
   Future<Map<String, dynamic>?> getWindGrid({
@@ -223,6 +267,34 @@ class ApiClient {
       );
       return response.data;
     } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getRouteProfile({
+    required List<Map<String, double>> waypoints,
+    required int altitude,
+    required int tas,
+    List<String>? waypointIdentifiers,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/windy/profile',
+        data: {
+          'waypoints': waypoints,
+          'altitude': altitude,
+          'tas': tas,
+          if (waypointIdentifiers != null)
+            'waypointIdentifiers': waypointIdentifiers,
+        },
+        options: Options(
+          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 30),
+        ),
+      );
+      return response.data;
+    } catch (e) {
+      print('getRouteProfile error: $e');
       return null;
     }
   }

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AirportsModule } from './airports/airports.module';
 import { WeatherModule } from './weather/weather.module';
+import { WeatherStation } from './weather/entities/weather-station.entity';
 import { TilesModule } from './tiles/tiles.module';
 import { AdminModule } from './admin/admin.module';
 import { FlightsModule } from './flights/flights.module';
@@ -100,6 +101,7 @@ import { dbConfig } from './db.config';
         CifpRunway,
         Document,
         DocumentFolder,
+        WeatherStation,
       ],
     }),
     AirportsModule,

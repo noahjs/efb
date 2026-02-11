@@ -17,7 +17,27 @@ export class LeidosService implements LeidosClient {
   private readonly logger = new Logger(LeidosService.name);
   private readonly baseUrl = filingConfig.leidosBaseUrl;
 
+  // API status tracking
+  private _totalRequests = 0;
+  private _totalErrors = 0;
+  private _lastFetchAt = 0;
+  private _lastErrorAt = 0;
+  private _lastError = '';
+
   constructor(private readonly http: HttpService) {}
+
+  getStats() {
+    return {
+      name: 'Filing (Leidos)',
+      baseUrl: this.baseUrl,
+      cacheEntries: 0,
+      totalRequests: this._totalRequests,
+      totalErrors: this._totalErrors,
+      lastFetchAt: this._lastFetchAt || null,
+      lastErrorAt: this._lastErrorAt || null,
+      lastError: this._lastError || null,
+    };
+  }
 
   private get authHeader(): string {
     const credentials = Buffer.from(
@@ -30,6 +50,7 @@ export class LeidosService implements LeidosClient {
     request: LeidosFileRequest,
   ): Promise<LeidosFileResponse> {
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.post(`${this.baseUrl}/flightplan/file`, request, {
           headers: {
@@ -40,6 +61,7 @@ export class LeidosService implements LeidosClient {
         }),
       );
 
+      this._lastFetchAt = Date.now();
       return {
         success: true,
         flightIdentifier: data.flightIdentifier,
@@ -47,6 +69,9 @@ export class LeidosService implements LeidosClient {
         message: data.message,
       };
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Leidos file request failed', error);
       return {
         success: false,
@@ -61,6 +86,7 @@ export class LeidosService implements LeidosClient {
     request: LeidosAmendRequest,
   ): Promise<LeidosFileResponse> {
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.post(`${this.baseUrl}/flightplan/amend`, request, {
           headers: {
@@ -71,6 +97,7 @@ export class LeidosService implements LeidosClient {
         }),
       );
 
+      this._lastFetchAt = Date.now();
       return {
         success: true,
         flightIdentifier: data.flightIdentifier,
@@ -78,6 +105,9 @@ export class LeidosService implements LeidosClient {
         message: data.message,
       };
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Leidos amend request failed', error);
       return {
         success: false,
@@ -92,6 +122,7 @@ export class LeidosService implements LeidosClient {
     request: LeidosCancelRequest,
   ): Promise<LeidosFileResponse> {
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.post(`${this.baseUrl}/flightplan/cancel`, request, {
           headers: {
@@ -102,6 +133,7 @@ export class LeidosService implements LeidosClient {
         }),
       );
 
+      this._lastFetchAt = Date.now();
       return {
         success: true,
         flightIdentifier: data.flightIdentifier || request.flightIdentifier,
@@ -109,6 +141,9 @@ export class LeidosService implements LeidosClient {
         message: data.message,
       };
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Leidos cancel request failed', error);
       return {
         success: false,
@@ -123,6 +158,7 @@ export class LeidosService implements LeidosClient {
     request: LeidosCloseRequest,
   ): Promise<LeidosFileResponse> {
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.post(`${this.baseUrl}/flightplan/close`, request, {
           headers: {
@@ -133,6 +169,7 @@ export class LeidosService implements LeidosClient {
         }),
       );
 
+      this._lastFetchAt = Date.now();
       return {
         success: true,
         flightIdentifier: data.flightIdentifier || request.flightIdentifier,
@@ -140,6 +177,9 @@ export class LeidosService implements LeidosClient {
         message: data.message,
       };
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Leidos close request failed', error);
       return {
         success: false,
@@ -155,6 +195,7 @@ export class LeidosService implements LeidosClient {
     flightIdentifier: string,
   ): Promise<LeidosStatusResponse> {
     try {
+      this._totalRequests++;
       const { data } = await firstValueFrom(
         this.http.get(`${this.baseUrl}/flightplan/status`, {
           headers: {
@@ -165,6 +206,7 @@ export class LeidosService implements LeidosClient {
         }),
       );
 
+      this._lastFetchAt = Date.now();
       return {
         flightIdentifier,
         status: data.status,
@@ -172,6 +214,9 @@ export class LeidosService implements LeidosClient {
         message: data.message,
       };
     } catch (error) {
+      this._totalErrors++;
+      this._lastErrorAt = Date.now();
+      this._lastError = error?.message || String(error);
       this.logger.error('Leidos status request failed', error);
       return {
         flightIdentifier,

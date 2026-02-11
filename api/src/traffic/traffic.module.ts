@@ -8,5 +8,6 @@ import { TRAFFIC } from '../config/constants';
   imports: [HttpModule.register({ timeout: TRAFFIC.TIMEOUT_MS })],
   controllers: [TrafficController],
   providers: [TrafficService],
+  exports: [TrafficService],
 })
 export class TrafficModule {}

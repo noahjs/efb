@@ -12,5 +12,6 @@ import { ImageryService } from './imagery.service';
   ],
   controllers: [ImageryController],
   providers: [ImageryService],
+  exports: [ImageryService],
 })
 export class ImageryModule {}
