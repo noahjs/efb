@@ -6,6 +6,8 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/config/app_config.dart';
 import 'map_view.dart' show EfbMapController, MapBounds;
 import 'wind_barb_renderer.dart';
+import 'wind_arrow_renderer.dart';
+import 'wind_heatmap_controller.dart';
 
 /// Native (iOS/Android) implementation using mapbox_maps_flutter SDK.
 class PlatformMapView extends StatefulWidget {
@@ -391,11 +393,15 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await _addVfrTiles(_mapboxMap!);
     await _addHillshadeLayer(_mapboxMap!);
     await _addAeronauticalLayers(_mapboxMap!);
-    // Register wind barb images for the symbol layer
+    // Register wind barb images and arrow for the symbol layer
     await _registerWindBarbImages(_mapboxMap!);
+    await _registerWindArrowImage(_mapboxMap!);
     // Register own-position cone image and traffic chevron
     await _registerConeImage(_mapboxMap!);
     await _registerTrafficChevron(_mapboxMap!);
+    // Wind heatmap raster layer — positioned above aero/hillshade,
+    // below wind arrow overlays (which are added in the loop below).
+    await WindHeatmapController.createHeatmapLayer(_mapboxMap!);
     // Register all overlay sources and layers
     for (final key in _overlayRegistry.keys) {
       await _addOverlaySource(_mapboxMap!, key);
@@ -584,16 +590,19 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         filter: ['==', ['get', 'leg'], 'first'],
       ));
 
-      // Waypoint dots at each route coordinate (above lines, below airport layers)
-      await map.style.addLayer(CircleLayer(
-        id: 'route-waypoint-dots',
-        sourceId: 'route',
-        circleRadius: 6.0,
-        circleColor: const Color(0xFF888888).toARGB32(),
-        circleStrokeWidth: 1.5,
-        circleStrokeColor: const Color(0x99FFFFFF).toARGB32(),
-        filter: ['==', ['geometry-type'], 'Point'],
-      ));
+      // Waypoint dots at each route coordinate — explicitly above route lines
+      await map.style.addLayerAt(
+        CircleLayer(
+          id: 'route-waypoint-dots',
+          sourceId: 'route',
+          circleRadius: 6.0,
+          circleColor: const Color(0xFF888888).toARGB32(),
+          circleStrokeWidth: 1.5,
+          circleStrokeColor: const Color(0x99FFFFFF).toARGB32(),
+          filter: ['==', ['geometry-type'], 'Point'],
+        ),
+        LayerPosition(above: 'route-line-first'),
+      );
 
       _routeSourceReady = true;
     } catch (e) {
@@ -1014,12 +1023,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupWindsAloftLayers(MapboxMap map, String srcId) async {
-    // Wind barb symbols — icon-image via template string matching registered images
+    debugPrint('[EFB] _setupWindsAloftLayers: using wind-arrow icons');
+    // Directional arrow indicators — SDF image colored by wind speed
     await map.style.addLayer(SymbolLayer(
       id: 'winds-aloft-barbs',
       sourceId: srcId,
-      iconImage: '{barbIcon}',
-      iconSize: 0.5,
+      iconImage: 'wind-arrow',
+      iconSize: 0.45,
       iconRotate: 0.0,
       iconRotationAlignment: IconRotationAlignment.MAP,
       iconAllowOverlap: true,
@@ -1028,13 +1038,16 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     // Data-driven rotation from feature properties
     await map.style.setStyleLayerProperty(
         'winds-aloft-barbs', 'icon-rotate', ['get', 'rotation']);
+    // Data-driven color from feature properties
+    await map.style.setStyleLayerProperty(
+        'winds-aloft-barbs', 'icon-color', ['get', 'color']);
 
-    // Speed labels below barbs
+    // Speed labels below arrows (speed only, direction conveyed by arrow)
     await map.style.addLayer(SymbolLayer(
       id: 'winds-aloft-speed-labels',
       sourceId: srcId,
-      textField: '{label}',
-      textSize: 10.0,
+      textField: '{speedLabel}',
+      textSize: 11.0,
       textColor: Colors.white.toARGB32(),
       textHaloColor: Colors.black.toARGB32(),
       textHaloWidth: 1.0,
@@ -1089,17 +1102,16 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupStreamlineLayers(MapboxMap map, String srcId) async {
+    // White semi-transparent lines for animated particle trails
     await map.style.addLayer(LineLayer(
       id: 'wind-streamlines-line',
       sourceId: srcId,
-      lineWidth: 2.0,
-      lineOpacity: 0.7,
+      lineWidth: 1.5,
+      lineOpacity: 0.6,
       lineCap: LineCap.ROUND,
       lineJoin: LineJoin.ROUND,
-      lineColor: const Color(0xFF4CAF50).toARGB32(),
+      lineColor: const Color(0xFFFFFFFF).toARGB32(),
     ));
-    await map.style.setStyleLayerProperty(
-        'wind-streamlines-line', 'line-color', ['get', 'color']);
   }
 
   /// Register the heading cone image for the own-position overlay.
@@ -1195,6 +1207,30 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       debugPrint('[EFB] Successfully registered $registered/${barbs.length} barb images');
     } catch (e) {
       debugPrint('[EFB] Failed to generate wind barb images: $e');
+    }
+  }
+
+  /// Register the wind arrow SDF image for directional indicators.
+  Future<void> _registerWindArrowImage(MapboxMap map) async {
+    try {
+      final arrow = WindArrowRenderer.generateArrow(scale: 2.0);
+      final mbxImage = MbxImage(
+        width: arrow.width,
+        height: arrow.height,
+        data: Uint8List.fromList(arrow.data),
+      );
+      await map.style.addStyleImage(
+        'wind-arrow',
+        2.0,
+        mbxImage,
+        true, // SDF — allows dynamic icon-color
+        <ImageStretches>[],
+        <ImageStretches>[],
+        null,
+      );
+      debugPrint('[EFB] Registered wind-arrow SDF image');
+    } catch (e) {
+      debugPrint('[EFB] Failed to register wind arrow image: $e');
     }
   }
 

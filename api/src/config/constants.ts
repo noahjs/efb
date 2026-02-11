@@ -123,6 +123,16 @@ export const TRAFFIC = {
   MAX_DATA_AGE_MS: 60 * 1000, // data older than 60s is considered stale
 };
 
+// --- Briefing ---
+export const BRIEFING = {
+  ROUTE_CORRIDOR_NM: 25,
+  ROUTE_STATION_INTERVAL_NM: 75,
+  WINDS_TABLE_ALTITUDE_STEP: 2000,
+  WINDS_TABLE_ALTITUDE_RANGE: 4000,
+  PIREP_AGE_HOURS: 3,
+  NOTAM_CLOSURE_KEYWORDS: ['CLSD', 'CLOSED', 'UNSAFE', 'UNSERVICEABLE'],
+};
+
 // --- Airports ---
 export const AIRPORTS = {
   SEARCH_DEFAULT_LIMIT: 50,

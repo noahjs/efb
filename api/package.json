@@ -25,7 +25,8 @@
     "seed:aircraft": "ts-node -r tsconfig-paths/register src/seed/seed-aircraft.ts",
     "seed:airspaces": "ts-node -r tsconfig-paths/register src/seed/seed-airspaces.ts",
     "seed:registry": "ts-node -r tsconfig-paths/register src/seed/seed-registry.ts",
-    "seed:cifp": "ts-node -r tsconfig-paths/register src/seed/seed-cifp.ts"
+    "seed:cifp": "ts-node -r tsconfig-paths/register src/seed/seed-cifp.ts",
+    "seed:fbos": "ts-node -r tsconfig-paths/register src/seed/seed-fbos.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
@@ -45,6 +46,7 @@
     "fast-xml-parser": "^5.3.4",
     "google-auth-library": "^10.5.0",
     "multer": "^2.0.2",
+    "node-html-parser": "^7.0.2",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pdf-lib": "^1.17.1",

@@ -354,6 +354,7 @@ class _DocumentsScreenState extends ConsumerState<DocumentsScreen> {
       builder: (_) => MoveToFolderSheet(
         folders: folders,
         currentFolderId: doc.folderId,
+        aircraftId: widget.aircraftId,
       ),
     );
     if (folderId == null) return;

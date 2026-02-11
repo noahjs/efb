@@ -39,11 +39,17 @@ export class FlightsService {
   }
 
   async findById(id: number, userId?: string) {
-    const where: any = { id };
-    if (userId) {
-      where.user_id = userId;
-    }
-    const flight = await this.flightRepo.findOne({ where });
+    const flight = await this.flightRepo
+      .createQueryBuilder('flight')
+      .leftJoinAndSelect('flight.arrival_fbo', 'arrival_fbo')
+      .where('flight.id = :id', { id })
+      .andWhere(
+        userId
+          ? '(flight.user_id = :userId OR flight.user_id IS NULL)'
+          : '1=1',
+        { userId },
+      )
+      .getOne();
     if (!flight) {
       throw new NotFoundException(`Flight ${id} not found`);
     }
@@ -58,9 +64,14 @@ export class FlightsService {
 
   async update(id: number, dto: UpdateFlightDto, userId?: string) {
     const flight = await this.findById(id, userId);
+    // Clear loaded relation so TypeORM uses the raw column from dto
+    if ('arrival_fbo_id' in dto) {
+      delete (flight as any).arrival_fbo;
+    }
     Object.assign(flight, dto);
     await this.calculate(flight);
-    return this.flightRepo.save(flight);
+    await this.flightRepo.save(flight);
+    return this.findById(id, userId);
   }
 
   /**

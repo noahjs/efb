@@ -97,6 +97,24 @@ export class AdminController {
   }
 
   /**
+   * Trigger FBO scrape from AirNav
+   */
+  @Post('scrape/fbos')
+  @HttpCode(200)
+  async scrapeFbos() {
+    return this.adminService.runScrapeFbos();
+  }
+
+  /**
+   * Trigger fuel price update from AirNav
+   */
+  @Post('scrape/fuel-prices')
+  @HttpCode(200)
+  async updateFuelPrices() {
+    return this.adminService.runUpdateFuelPrices();
+  }
+
+  /**
    * Clear cached procedure PDFs
    */
   @Delete('procedures/pdf-cache')

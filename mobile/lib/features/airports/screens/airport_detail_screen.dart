@@ -270,7 +270,7 @@ class _AirportHeader extends ConsumerWidget {
               },
             ),
             const SizedBox(width: 8),
-            _QuickAction(label: 'FBOs', onTap: () {}),
+            _QuickAction(label: 'FBOs', onTap: () => context.push('/airports/$airportId/fbos')),
           ],
         ),
       ],

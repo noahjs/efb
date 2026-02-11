@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_theme.dart';
 
 class FlightQuickActions extends StatelessWidget {
-  const FlightQuickActions({super.key});
+  final int? flightId;
+
+  const FlightQuickActions({super.key, this.flightId});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +22,9 @@ class FlightQuickActions extends StatelessWidget {
           _ActionButton(
             label: 'Briefing',
             icon: Icons.description_outlined,
-            onTap: () => _showStub(context, 'Briefing'),
+            onTap: flightId != null
+                ? () => context.push('/flights/$flightId/briefing')
+                : () => _showStub(context, 'Briefing'),
           ),
           const SizedBox(width: 8),
           _ActionButton(

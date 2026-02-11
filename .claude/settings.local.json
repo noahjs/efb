@@ -89,7 +89,14 @@
       "WebFetch(domain:aa.data.faa.gov)",
       "WebFetch(domain:support.swim.faa.gov)",
       "Bash(docker ps:*)",
-      "Bash(npx ts-node:*)"
+      "Bash(npx ts-node:*)",
+      "Bash(node -e:*)",
+      "Bash(flutter build:*)",
+      "Bash(pod install)",
+      "Bash(xargs:*)",
+      "Bash(gem list:*)",
+      "Bash(npx nest build:*)",
+      "Bash(brew install:*)"
     ]
   }
 }

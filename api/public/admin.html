@@ -287,6 +287,14 @@
       <div class="value green" id="statRegistry">--</div>
     </div>
     <div class="stat-card">
+      <div class="label">FBOs</div>
+      <div class="value green" id="statFbos">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Fuel Prices</div>
+      <div class="value blue" id="statFuelPrices">--</div>
+    </div>
+    <div class="stat-card">
       <div class="label">Charts Installed</div>
       <div class="value amber" id="statCharts">--</div>
     </div>
@@ -371,6 +379,29 @@
         Downloads the FAA Releasable Aircraft database and imports ~300K+ aircraft registrations
         with manufacturer, model, and engine data. Used for N-number lookup and auto-fill
         when creating aircraft.
+      </p>
+    </div>
+  </div>
+
+  <!-- FBO & Fuel Data -->
+  <div class="section">
+    <div class="section-header">
+      <h2>FBO & Fuel Data</h2>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary" onclick="scrapeFbos()">
+          Scrape FBOs (AirNav)
+        </button>
+        <button class="btn" onclick="updateFuelPrices()">
+          Update Fuel Prices
+        </button>
+      </div>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Scrapes FBO directory and fuel prices from AirNav.com. Full scrape crawls all airports
+        without existing FBO data (~2-3 hours for 5,000 airports at 2s/request). "Update Fuel Prices"
+        only re-scrapes airports that already have FBOs. Both modes are resumable — restart picks up
+        where it left off.
       </p>
     </div>
   </div>
@@ -504,6 +535,8 @@ async function refreshData() {
     document.getElementById('statFixes').textContent = data.database.fixes.toLocaleString();
     document.getElementById('statProcedures').textContent = data.database.procedures.toLocaleString();
     document.getElementById('statRegistry').textContent = (data.database.registryAircraft || 0).toLocaleString();
+    document.getElementById('statFbos').textContent = (data.database.fbos || 0).toLocaleString();
+    document.getElementById('statFuelPrices').textContent = (data.database.fuelPrices || 0).toLocaleString();
     document.getElementById('statCharts').textContent =
       `${data.charts.installedCount} / ${data.charts.totalAvailable}`;
 
@@ -687,6 +720,20 @@ async function seedProcedures() {
 async function seedRegistry() {
   toast('Starting aircraft registry seed job...');
   await fetchJSON(`${API}/seed/registry`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function scrapeFbos() {
+  toast('Starting FBO scrape job...');
+  await fetchJSON(`${API}/scrape/fbos`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function updateFuelPrices() {
+  toast('Starting fuel price update job...');
+  await fetchJSON(`${API}/scrape/fuel-prices`, { method: 'POST' });
   setTimeout(refreshData, 500);
   if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
 }

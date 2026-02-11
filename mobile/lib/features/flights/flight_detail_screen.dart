@@ -15,6 +15,7 @@ import 'widgets/flight_aircraft_section.dart';
 import 'widgets/flight_route_section.dart';
 import 'widgets/flight_payload_section.dart';
 import 'widgets/flight_fuel_section.dart';
+import 'widgets/flight_services_section.dart';
 import 'widgets/flight_weights_section.dart';
 import 'widgets/flight_actions_section.dart';
 import 'widgets/flight_filing_bar.dart';
@@ -239,7 +240,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
           Expanded(
             child: ListView(
               children: [
-                const FlightQuickActions(),
+                FlightQuickActions(flightId: _flight.id),
                 FlightDepartureSection(
                   flight: _flight,
                   onChanged: _saveField,
@@ -254,6 +255,10 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
                   apiClient: ref.read(apiClientProvider),
                 ),
                 FlightFuelSection(
+                  flight: _flight,
+                  onChanged: _saveField,
+                ),
+                FlightServicesSection(
                   flight: _flight,
                   onChanged: _saveField,
                 ),

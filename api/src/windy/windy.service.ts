@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { PNG } from 'pngjs';
 import { WINDS } from '../config/constants';
 
 export interface WindPoint {
@@ -64,6 +65,7 @@ export interface WindGridResult {
       label: string;
       color: string;
       barbIcon: string;
+      speedLabel: string;
     };
   }>;
 }
@@ -421,6 +423,7 @@ export class WindyService {
           label: `${Math.round(wind.direction)}/${Math.round(wind.speed)}`,
           color: this.windSpeedColor(wind.speed),
           barbIcon: this.barbIconName(wind.speed),
+          speedLabel: `${Math.round(wind.speed)}`,
         },
       };
     });
@@ -433,6 +436,142 @@ export class WindyService {
 
     this.setCache(cacheKey, result, WINDS.CACHE_TTL_GRID_MS);
     return result;
+  }
+
+  /**
+   * Generate a wind speed heatmap as a PNG image.
+   * Uses bilinear interpolation from a ~1° internal wind grid.
+   */
+  async getWindHeatmapPng(
+    bounds: {
+      minLat: number;
+      maxLat: number;
+      minLng: number;
+      maxLng: number;
+    },
+    altitudeFt: number,
+    width = 256,
+    height = 256,
+  ): Promise<Buffer> {
+    const cacheKey = `wind-heatmap:${bounds.minLat.toFixed(0)}:${bounds.maxLat.toFixed(0)}:${bounds.minLng.toFixed(0)}:${bounds.maxLng.toFixed(0)}:${altitudeFt}:${width}:${height}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
+
+    // Build internal grid at ~1° spacing
+    const gridSpacing = 1.0;
+    const gridPoints: Array<{ lat: number; lng: number }> = [];
+    const gridMinLat =
+      Math.floor(bounds.minLat / gridSpacing) * gridSpacing - gridSpacing;
+    const gridMaxLat =
+      Math.ceil(bounds.maxLat / gridSpacing) * gridSpacing + gridSpacing;
+    const gridMinLng =
+      Math.floor(bounds.minLng / gridSpacing) * gridSpacing - gridSpacing;
+    const gridMaxLng =
+      Math.ceil(bounds.maxLng / gridSpacing) * gridSpacing + gridSpacing;
+
+    for (let lat = gridMinLat; lat <= gridMaxLat; lat += gridSpacing) {
+      for (let lng = gridMinLng; lng <= gridMaxLng; lng += gridSpacing) {
+        gridPoints.push({ lat, lng });
+      }
+    }
+
+    // Fetch wind data for all grid points
+    const forecasts = await this.getBatchForecasts(gridPoints);
+
+    // Build speed lookup grid
+    const cols = Math.round((gridMaxLng - gridMinLng) / gridSpacing) + 1;
+    const rows = Math.round((gridMaxLat - gridMinLat) / gridSpacing) + 1;
+    const speedGrid = new Float32Array(rows * cols);
+
+    for (let i = 0; i < gridPoints.length; i++) {
+      const wind = this.getWindAtAltitude(forecasts[i], altitudeFt);
+      const row = Math.round((gridPoints[i].lat - gridMinLat) / gridSpacing);
+      const col = Math.round((gridPoints[i].lng - gridMinLng) / gridSpacing);
+      if (row >= 0 && row < rows && col >= 0 && col < cols) {
+        speedGrid[row * cols + col] = wind.speed;
+      }
+    }
+
+    // Bilinear interpolation helper
+    const getSpeed = (lat: number, lng: number): number => {
+      const fRow = (lat - gridMinLat) / gridSpacing;
+      const fCol = (lng - gridMinLng) / gridSpacing;
+      const r0 = Math.floor(fRow);
+      const c0 = Math.floor(fCol);
+      const r1 = Math.min(r0 + 1, rows - 1);
+      const c1 = Math.min(c0 + 1, cols - 1);
+      const fr = fRow - r0;
+      const fc = fCol - c0;
+      const s00 = speedGrid[Math.max(0, r0) * cols + Math.max(0, c0)];
+      const s01 = speedGrid[Math.max(0, r0) * cols + c1];
+      const s10 = speedGrid[r1 * cols + Math.max(0, c0)];
+      const s11 = speedGrid[r1 * cols + c1];
+      return s00 * (1 - fr) * (1 - fc) +
+        s01 * (1 - fr) * fc +
+        s10 * fr * (1 - fc) +
+        s11 * fr * fc;
+    };
+
+    // Render PNG
+    const png = new PNG({ width, height });
+
+    for (let py = 0; py < height; py++) {
+      for (let px = 0; px < width; px++) {
+        const lat = bounds.maxLat - (py / height) * (bounds.maxLat - bounds.minLat);
+        const lng = bounds.minLng + (px / width) * (bounds.maxLng - bounds.minLng);
+        const speed = getSpeed(lat, lng);
+        const color = this.heatmapColor(speed);
+        const idx = (py * width + px) * 4;
+        png.data[idx] = color[0];
+        png.data[idx + 1] = color[1];
+        png.data[idx + 2] = color[2];
+        png.data[idx + 3] = 160; // semi-transparent
+      }
+    }
+
+    const buffer = PNG.sync.write(png);
+    this.setCache(cacheKey, buffer, WINDS.CACHE_TTL_GRID_MS);
+    return buffer;
+  }
+
+  /**
+   * Windy-style 10-stop heatmap color gradient.
+   * Returns [R, G, B] for a given wind speed in knots.
+   */
+  private heatmapColor(speedKt: number): [number, number, number] {
+    // Gradient stops: [speed, R, G, B]
+    const stops: [number, number, number, number][] = [
+      [0, 30, 60, 150],    // deep blue
+      [5, 40, 100, 200],   // blue
+      [10, 0, 170, 180],   // teal
+      [15, 50, 190, 80],   // green
+      [20, 140, 210, 50],  // yellow-green
+      [30, 255, 220, 0],   // yellow
+      [40, 255, 165, 0],   // orange
+      [50, 240, 80, 30],   // red
+      [65, 180, 20, 20],   // dark red
+      [80, 150, 0, 150],   // purple
+    ];
+
+    if (speedKt <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
+    if (speedKt >= stops[stops.length - 1][0]) {
+      const last = stops[stops.length - 1];
+      return [last[1], last[2], last[3]];
+    }
+
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (speedKt >= stops[i][0] && speedKt <= stops[i + 1][0]) {
+        const t =
+          (speedKt - stops[i][0]) / (stops[i + 1][0] - stops[i][0]);
+        return [
+          Math.round(stops[i][1] + (stops[i + 1][1] - stops[i][1]) * t),
+          Math.round(stops[i][2] + (stops[i + 1][2] - stops[i][2]) * t),
+          Math.round(stops[i][3] + (stops[i + 1][3] - stops[i][3]) * t),
+        ];
+      }
+    }
+
+    return [150, 0, 150]; // fallback
   }
 
   // --- Helper methods ---

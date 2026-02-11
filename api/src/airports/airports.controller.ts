@@ -60,6 +60,11 @@ export class AirportsController {
     );
   }
 
+  @Get(':id/fbos')
+  async fbos(@Param('id') id: string) {
+    return this.airportsService.getFbos(id.toUpperCase());
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const airport = await this.airportsService.findById(id.toUpperCase());

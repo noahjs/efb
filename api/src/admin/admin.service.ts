@@ -9,6 +9,8 @@ import { Fix } from '../navaids/entities/fix.entity';
 import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
+import { Fbo } from '../fbos/entities/fbo.entity';
+import { FuelPrice } from '../fbos/entities/fuel-price.entity';
 import { WeatherService } from '../weather/weather.service';
 import { ImageryService } from '../imagery/imagery.service';
 import { WindyService } from '../windy/windy.service';
@@ -104,6 +106,8 @@ export class AdminService {
     @InjectRepository(DtppCycle) private cycleRepo: Repository<DtppCycle>,
     @InjectRepository(FaaRegistryAircraft)
     private registryRepo: Repository<FaaRegistryAircraft>,
+    @InjectRepository(Fbo) private fboRepo: Repository<Fbo>,
+    @InjectRepository(FuelPrice) private fuelPriceRepo: Repository<FuelPrice>,
     private readonly weatherService: WeatherService,
     private readonly imageryService: ImageryService,
     private readonly windyService: WindyService,
@@ -135,6 +139,8 @@ export class AdminService {
     const fixes = await this.fixRepo.count();
     const procedures = await this.procedureRepo.count();
     const registryAircraft = await this.registryRepo.count();
+    const fbos = await this.fboRepo.count();
+    const fuelPrices = await this.fuelPriceRepo.count();
     const charts = this.getInstalledCharts();
     const diskUsage = this.getDiskUsage();
 
@@ -154,6 +160,8 @@ export class AdminService {
         fixes,
         procedures,
         registryAircraft,
+        fbos,
+        fuelPrices,
       },
       dtppCycle,
       charts: {
@@ -326,6 +334,72 @@ export class AdminService {
     this.runScript(
       'npx',
       ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
+      job,
+    );
+
+    return job;
+  }
+
+  // --- Scrape FBOs ---
+
+  async runScrapeFbos(): Promise<JobStatus> {
+    const jobId = `scrape-fbos-${Date.now()}`;
+    const job: JobStatus = {
+      id: jobId,
+      type: 'scrape-fbos',
+      label: 'Scrape FBOs (AirNav)',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      log: ['Starting FBO scrape from AirNav...'],
+    };
+    this.jobs.set(jobId, job);
+
+    const seedScript = path.join(
+      this.scriptsDir,
+      '..',
+      'src',
+      'seed',
+      'seed-fbos.ts',
+    );
+    this.runScript(
+      'npx',
+      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
+      job,
+    );
+
+    return job;
+  }
+
+  // --- Update fuel prices ---
+
+  async runUpdateFuelPrices(): Promise<JobStatus> {
+    const jobId = `update-fuel-prices-${Date.now()}`;
+    const job: JobStatus = {
+      id: jobId,
+      type: 'update-fuel-prices',
+      label: 'Update Fuel Prices (AirNav)',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      log: ['Starting fuel price update from AirNav...'],
+    };
+    this.jobs.set(jobId, job);
+
+    const seedScript = path.join(
+      this.scriptsDir,
+      '..',
+      'src',
+      'seed',
+      'seed-fbos.ts',
+    );
+    this.runScript(
+      'npx',
+      [
+        'ts-node',
+        '-r',
+        'tsconfig-paths/register',
+        seedScript,
+        '--update-prices',
+      ],
       job,
     );
 

@@ -2,7 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, ILike } from 'typeorm';
 import { Airport, Runway, Frequency } from './entities';
+import { Fbo } from '../fbos/entities/fbo.entity';
 import { AIRPORTS } from '../config/constants';
+import {
+  computeBoundingBox,
+  getPositionAlongRoute,
+} from '../briefing/utils/route-corridor.util';
 
 @Injectable()
 export class AirportsService {
@@ -13,6 +18,8 @@ export class AirportsService {
     private runwayRepo: Repository<Runway>,
     @InjectRepository(Frequency)
     private frequencyRepo: Repository<Frequency>,
+    @InjectRepository(Fbo)
+    private fboRepo: Repository<Fbo>,
   ) {}
 
   async search(
@@ -101,6 +108,15 @@ export class AirportsService {
     });
   }
 
+  async getFbos(identifier: string) {
+    const faaId = await this.resolveFaaIdentifier(identifier);
+    return this.fboRepo.find({
+      where: { airport_identifier: faaId },
+      relations: ['fuel_prices'],
+      order: { name: 'ASC' },
+    });
+  }
+
   /**
    * Resolve an identifier (FAA or ICAO) to the FAA 3-letter code.
    * If the identifier matches an airport's icao_identifier, returns the
@@ -134,6 +150,62 @@ export class AirportsService {
       })
       .take(limit)
       .getMany();
+  }
+
+  /**
+   * Find all airports within a corridor of the given route.
+   * Returns airports sorted by their position along the route,
+   * with distanceAlongRoute (nm from departure) and distanceFromRoute (nm off-track).
+   */
+  async findAirportsInCorridor(
+    waypoints: { latitude: number; longitude: number }[],
+    corridorNm: number,
+  ): Promise<
+    (Airport & { distanceAlongRoute: number; distanceFromRoute: number })[]
+  > {
+    if (waypoints.length < 2) return [];
+
+    const bbox = computeBoundingBox(waypoints, corridorNm);
+
+    const candidates = await this.airportRepo
+      .createQueryBuilder('airport')
+      .where('airport.latitude BETWEEN :minLat AND :maxLat', {
+        minLat: bbox.minLat,
+        maxLat: bbox.maxLat,
+      })
+      .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', {
+        minLng: bbox.minLng,
+        maxLng: bbox.maxLng,
+      })
+      .getMany();
+
+    const results: (Airport & {
+      distanceAlongRoute: number;
+      distanceFromRoute: number;
+    })[] = [];
+
+    for (const airport of candidates) {
+      if (airport.latitude == null || airport.longitude == null) continue;
+
+      const pos = getPositionAlongRoute(
+        airport.latitude,
+        airport.longitude,
+        waypoints,
+        corridorNm,
+      );
+
+      if (pos.inCorridor) {
+        results.push(
+          Object.assign(airport, {
+            distanceAlongRoute: Math.round(pos.alongTrackNm),
+            distanceFromRoute:
+              Math.round(pos.crossTrackNm * 10) / 10,
+          }),
+        );
+      }
+    }
+
+    return results.sort((a, b) => a.distanceAlongRoute - b.distanceAlongRoute);
   }
 
   private haversineNm(

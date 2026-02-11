@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryColumn, OneToMany, Index } from 'typeorm';
 import { Runway } from './runway.entity';
 import { Frequency } from './frequency.entity';
+import { Fbo } from '../../fbos/entities/fbo.entity';
 import { DataGroup } from '../../config/constants';
 
 @Entity('a_airports')
@@ -122,4 +123,10 @@ export class Airport {
 
   @OneToMany(() => Frequency, (freq) => freq.airport, { cascade: true })
   frequencies: Frequency[];
+
+  @Column({ type: 'timestamp', nullable: true })
+  fbo_scraped_at: Date;
+
+  @OneToMany(() => Fbo, (fbo) => fbo.airport, { cascade: true })
+  fbos: Fbo[];
 }

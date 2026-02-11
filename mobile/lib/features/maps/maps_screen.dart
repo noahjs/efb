@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,6 +26,8 @@ import 'widgets/map_long_press_sheet.dart';
 import 'widgets/pirep_bottom_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
 import 'widgets/approach_overlay.dart';
+import 'widgets/wind_heatmap_controller.dart';
+import 'widgets/wind_particle_animator.dart';
 import 'widgets/wind_altitude_slider.dart';
 import '../../services/windy_providers.dart';
 import '../adsb/providers/adsb_providers.dart';
@@ -54,6 +57,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   int _windsAloftAltitude = 9000; // default winds aloft display altitude
   final _mapController = EfbMapController();
   final _approachController = ApproachOverlayController();
+  final _heatmapController = WindHeatmapController();
+  final _particleAnimator = WindParticleAnimator();
 
   MapBounds? _currentBounds;
   Timer? _boundsDebounce;
@@ -77,9 +82,12 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     _loadSettings();
     _mapController.onMapReady = (map) {
       _approachController.attach(map);
+      _heatmapController.attach(map);
+      _particleAnimator.attach(map);
     };
     _mapController.onStyleReloaded = () {
       _approachController.reapply();
+      _heatmapController.reapply();
     };
   }
 
@@ -89,6 +97,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _particleAnimator.stop();
     super.dispose();
   }
 
@@ -876,10 +885,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       }
     }
 
-    // When Winds Aloft overlay is active, fetch wind grid and streamlines
+    // When Winds Aloft overlay is active, fetch wind grid, heatmap, and particles
     final showWindsAloft = _activeOverlays.contains('winds_aloft');
     Map<String, dynamic>? windsAloftGeoJson;
-    Map<String, dynamic>? windStreamlinesGeoJson;
     if (showWindsAloft && _currentBounds != null) {
       final windParams = WindGridParams(
         bounds: _currentBounds!,
@@ -888,8 +896,55 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       final windsAsync = ref.watch(windGridProvider(windParams));
       windsAloftGeoJson = windsAsync.value;
 
-      final streamAsync = ref.watch(windStreamlineProvider(windParams));
-      windStreamlinesGeoJson = streamAsync.value;
+      // Heatmap overlay — schedule as post-frame callback to avoid
+      // race conditions from concurrent async calls during build()
+      final client = ref.read(apiClientProvider);
+      final heatmapUrl = client.getWindHeatmapUrl(
+        minLat: _currentBounds!.minLat,
+        maxLat: _currentBounds!.maxLat,
+        minLng: _currentBounds!.minLng,
+        maxLng: _currentBounds!.maxLng,
+        altitude: _windsAloftAltitude,
+      );
+      final hmBounds = _currentBounds!;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _heatmapController.show(
+          imageUrl: heatmapUrl,
+          minLat: hmBounds.minLat,
+          maxLat: hmBounds.maxLat,
+          minLng: hmBounds.minLng,
+          maxLng: hmBounds.maxLng,
+        );
+      });
+
+      // Particle animation — fetch wind field data and feed to animator
+      final windFieldAsync = ref.watch(windFieldProvider(windParams));
+      final windField = windFieldAsync.value;
+      if (windField != null && windField.isNotEmpty) {
+        final pBounds = _currentBounds!;
+        final pWindField = windField;
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _particleAnimator.updateWindField(
+            pWindField,
+            minLat: pBounds.minLat,
+            maxLat: pBounds.maxLat,
+            minLng: pBounds.minLng,
+            maxLng: pBounds.maxLng,
+          );
+          if (!_particleAnimator.isRunning) {
+            debugPrint('[EFB] Starting particle animator with ${pWindField.length} wind field points');
+            _particleAnimator.start();
+          }
+        });
+      }
+    } else {
+      // Clean up when winds aloft is deactivated
+      if (_heatmapController.isActive) {
+        _heatmapController.hide();
+      }
+      if (_particleAnimator.isRunning) {
+        _particleAnimator.stop();
+      }
     }
 
     // When traffic overlay is active, build traffic GeoJSON from unified provider
@@ -975,7 +1030,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                 if (metarOverlayGeoJson != null) 'metar-overlay': metarOverlayGeoJson,
                 if (trafficGeoJson != null) 'traffic': trafficGeoJson,
                 if (windsAloftGeoJson != null) 'winds-aloft': windsAloftGeoJson,
-                if (windStreamlinesGeoJson != null) 'wind-streamlines': windStreamlinesGeoJson,
                 if (ownPositionGeoJson != null) 'own-position': ownPositionGeoJson,
               },
             ),

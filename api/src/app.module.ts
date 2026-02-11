@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AirportsModule } from './airports/airports.module';
 import { WeatherModule } from './weather/weather.module';
 import { WeatherStation } from './weather/entities/weather-station.entity';
+import { Fbo } from './fbos/entities/fbo.entity';
+import { FuelPrice } from './fbos/entities/fuel-price.entity';
 import { TilesModule } from './tiles/tiles.module';
 import { AdminModule } from './admin/admin.module';
 import { FlightsModule } from './flights/flights.module';
@@ -59,6 +61,7 @@ import { Document } from './documents/entities/document.entity';
 import { DocumentFolder } from './documents/entities/document-folder.entity';
 import { TrafficModule } from './traffic/traffic.module';
 import { AuthModule } from './auth/auth.module';
+import { BriefingModule } from './briefing/briefing.module';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -102,6 +105,8 @@ import { dbConfig } from './db.config';
         Document,
         DocumentFolder,
         WeatherStation,
+        Fbo,
+        FuelPrice,
       ],
     }),
     AirportsModule,
@@ -127,6 +132,7 @@ import { dbConfig } from './db.config';
     DocumentsModule,
     TrafficModule,
     AuthModule,
+    BriefingModule,
   ],
 })
 export class AppModule {}

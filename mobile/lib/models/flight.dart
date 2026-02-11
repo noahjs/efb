@@ -34,6 +34,8 @@ class Flight {
   final double? windComponent;
   final String? eta;
   final String? calculatedAt;
+  final int? arrivalFboId;
+  final String? arrivalFboName;
   final String? createdAt;
   final String? updatedAt;
 
@@ -73,6 +75,8 @@ class Flight {
     this.windComponent,
     this.eta,
     this.calculatedAt,
+    this.arrivalFboId,
+    this.arrivalFboName,
     this.createdAt,
     this.updatedAt,
   });
@@ -115,6 +119,8 @@ class Flight {
       windComponent: (json['wind_component'] as num?)?.toDouble(),
       eta: json['eta'] as String?,
       calculatedAt: json['calculated_at'] as String?,
+      arrivalFboId: json['arrival_fbo_id'] as int?,
+      arrivalFboName: (json['arrival_fbo'] as Map<String, dynamic>?)?['name'] as String?,
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
     );
@@ -148,6 +154,7 @@ class Flight {
       'filing_status': filingStatus,
       'endurance_hours': enduranceHours,
       'remarks': remarks,
+      'arrival_fbo_id': arrivalFboId,
     };
   }
 
@@ -206,6 +213,8 @@ class Flight {
     double? windComponent,
     String? eta,
     String? calculatedAt,
+    int? arrivalFboId,
+    String? arrivalFboName,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -247,6 +256,8 @@ class Flight {
       windComponent: windComponent ?? this.windComponent,
       eta: eta ?? this.eta,
       calculatedAt: calculatedAt ?? this.calculatedAt,
+      arrivalFboId: arrivalFboId ?? this.arrivalFboId,
+      arrivalFboName: arrivalFboName ?? this.arrivalFboName,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

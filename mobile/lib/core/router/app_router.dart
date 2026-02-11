@@ -43,9 +43,13 @@ import '../../features/weight_balance/screens/wb_profile_editor_screen.dart';
 import '../../features/weight_balance/screens/flight_wb_screen.dart';
 import '../../features/approach_charts/screens/approach_list_screen.dart';
 import '../../features/approach_charts/screens/approach_chart_screen.dart';
+import '../../features/airports/screens/fbo_list_screen.dart';
+import '../../features/airports/screens/fbo_detail_screen.dart';
+import '../../models/fbo.dart';
 import '../../features/documents/documents_screen.dart';
 import '../../features/documents/widgets/document_viewer_screen.dart';
 import '../../features/more/more_screen.dart';
+import '../../features/flights/briefing/briefing_screen.dart';
 import '../../features/more/pilot_profile_screen.dart';
 import '../../features/adsb/screens/receiver_settings_screen.dart';
 import '../../services/auth_providers.dart';
@@ -223,6 +227,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
 
+      // FBOs
+      GoRoute(
+        path: '/airports/:id/fbos',
+        builder: (context, state) {
+          final airportId = state.pathParameters['id']!;
+          return FboListScreen(airportId: airportId);
+        },
+      ),
+      GoRoute(
+        path: '/airports/:id/fbos/:fboId',
+        builder: (context, state) {
+          final fbo = state.extra as Fbo;
+          return FboDetailScreen(fbo: fbo);
+        },
+      ),
+
       // Flights
       GoRoute(
         path: '/flights/new',
@@ -253,6 +273,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ? ToldMode.landing
               : ToldMode.takeoff;
           return ToldCardScreen(flightId: id, mode: mode);
+        },
+      ),
+      GoRoute(
+        path: '/flights/:id/briefing',
+        builder: (context, state) {
+          final id = int.parse(state.pathParameters['id']!);
+          return BriefingScreen(flightId: id);
         },
       ),
       GoRoute(

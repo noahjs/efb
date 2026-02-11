@@ -382,7 +382,7 @@ class _AircraftDetailScreenState extends ConsumerState<AircraftDetailScreen> {
             value: '',
             showChevron: true,
             onTap: () =>
-                context.go('/aircraft/${a.id}/documents'),
+                context.push('/aircraft/${a.id}/documents'),
           ),
 
           // Actions section

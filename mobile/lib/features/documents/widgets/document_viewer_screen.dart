@@ -408,6 +408,7 @@ class _DocumentViewerScreenState extends ConsumerState<DocumentViewerScreen> {
           builder: (_) => MoveToFolderSheet(
             folders: folders,
             currentFolderId: _doc?.folderId,
+            aircraftId: _doc?.aircraftId,
           ),
         ));
     if (folderId == null) return;

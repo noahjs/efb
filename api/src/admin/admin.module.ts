@@ -10,6 +10,8 @@ import { Fix } from '../navaids/entities/fix.entity';
 import { Procedure } from '../procedures/entities/procedure.entity';
 import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
+import { Fbo } from '../fbos/entities/fbo.entity';
+import { FuelPrice } from '../fbos/entities/fuel-price.entity';
 import { WeatherModule } from '../weather/weather.module';
 import { ImageryModule } from '../imagery/imagery.module';
 import { WindyModule } from '../windy/windy.module';
@@ -27,6 +29,8 @@ import { FilingModule } from '../filing/filing.module';
       Procedure,
       DtppCycle,
       FaaRegistryAircraft,
+      Fbo,
+      FuelPrice,
     ]),
     WeatherModule,
     ImageryModule,

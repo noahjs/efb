@@ -10,6 +10,7 @@ import {
 import { Aircraft } from '../../aircraft/entities/aircraft.entity';
 import { PerformanceProfile } from '../../aircraft/entities/performance-profile.entity';
 import { User } from '../../users/entities/user.entity';
+import { Fbo } from '../../fbos/entities/fbo.entity';
 import { DataGroup } from '../../config/constants';
 
 @Entity('u_flights')
@@ -127,6 +128,14 @@ export class Flight {
 
   @Column({ type: 'text', nullable: true })
   remarks: string;
+
+  // FBO
+  @Column({ type: 'integer', nullable: true })
+  arrival_fbo_id: number;
+
+  @ManyToOne(() => Fbo, { nullable: true, eager: true })
+  @JoinColumn({ name: 'arrival_fbo_id' })
+  arrival_fbo: Fbo;
 
   // Computed (populated by future milestones)
   @Column({ type: 'float', nullable: true })

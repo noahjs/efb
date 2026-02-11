@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, Res, Header } from '@nestjs/common';
+import type { Response } from 'express';
 import { WindyService } from './windy.service';
 import { ElevationService } from './elevation.service';
 import { Public } from '../auth/guards/public.decorator';
@@ -99,6 +100,37 @@ export class WindyController {
       body.tas,
       body.waypointIdentifiers,
     );
+  }
+
+  /**
+   * GET /api/windy/heatmap?minLat=38&maxLat=42&minLng=-106&maxLng=-102&altitude=10000&width=256&height=256
+   * Returns a PNG image of wind speed heatmap.
+   */
+  @Get('heatmap')
+  @Header('Content-Type', 'image/png')
+  @Header('Cache-Control', 'public, max-age=1800')
+  async windHeatmap(
+    @Query('minLat') minLat: string,
+    @Query('maxLat') maxLat: string,
+    @Query('minLng') minLng: string,
+    @Query('maxLng') maxLng: string,
+    @Query('altitude') altitude: string,
+    @Query('width') width?: string,
+    @Query('height') height?: string,
+    @Res() res?: Response,
+  ) {
+    const buffer = await this.windyService.getWindHeatmapPng(
+      {
+        minLat: parseFloat(minLat),
+        maxLat: parseFloat(maxLat),
+        minLng: parseFloat(minLng),
+        maxLng: parseFloat(maxLng),
+      },
+      parseInt(altitude, 10),
+      width ? parseInt(width, 10) : 256,
+      height ? parseInt(height, 10) : 256,
+    );
+    res!.end(buffer);
   }
 
   @Get('streamlines')

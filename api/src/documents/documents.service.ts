@@ -121,9 +121,14 @@ export class DocumentsService {
   }
 
   async updateDocument(id: number, dto: UpdateDocumentDto): Promise<Document> {
-    const doc = await this.getDocument(id);
-    Object.assign(doc, dto);
-    await this.documentRepo.save(doc);
+    await this.getDocument(id); // throws NotFoundException if missing
+    const updates: Record<string, any> = {};
+    for (const [key, value] of Object.entries(dto)) {
+      if (value !== undefined) updates[key] = value;
+    }
+    if (Object.keys(updates).length > 0) {
+      await this.documentRepo.update(id, updates);
+    }
     return this.getDocument(id);
   }
 

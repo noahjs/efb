@@ -92,6 +92,11 @@ class ApiClient {
     return response.data;
   }
 
+  Future<List<dynamic>> getFbos(String identifier) async {
+    final response = await _dio.get('/airports/$identifier/fbos');
+    return response.data;
+  }
+
   // --- Weather ---
 
   Future<Map<String, dynamic>?> getMetar(String icao) async {
@@ -316,6 +321,23 @@ class ApiClient {
     }
   }
 
+  /// Build the URL for the wind heatmap PNG endpoint (used by ImageSource directly).
+  String getWindHeatmapUrl({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    required int altitude,
+    int width = 256,
+    int height = 256,
+  }) {
+    return '${_dio.options.baseUrl}/windy/heatmap'
+        '?minLat=$minLat&maxLat=$maxLat'
+        '&minLng=$minLng&maxLng=$maxLng'
+        '&altitude=$altitude'
+        '&width=$width&height=$height';
+  }
+
   // --- Procedures ---
 
   Future<Map<String, dynamic>> getProcedures(String airportId) async {
@@ -406,6 +428,14 @@ class ApiClient {
 
   Future<void> deleteFlight(int id) async {
     await _dio.delete('/flights/$id');
+  }
+
+  Future<Map<String, dynamic>> getFlightBriefing(int flightId) async {
+    final response = await _dio.get(
+      '/flights/$flightId/briefing',
+      options: Options(receiveTimeout: const Duration(seconds: 120)),
+    );
+    return response.data;
   }
 
   Future<Map<String, dynamic>> getFlightCalculationDebug(int id) async {
@@ -857,6 +887,14 @@ class ApiClient {
     } catch (_) {
       return null;
     }
+  }
+
+  String? getProgChartUrl({required String type, int forecastHour = 0}) {
+    return '${_dio.options.baseUrl}/imagery/prog/$type?forecastHour=$forecastHour';
+  }
+
+  String getGfaImageUrl(String type, String region, {int forecastHour = 3}) {
+    return '${_dio.options.baseUrl}/imagery/gfa/$type/$region?forecastHour=$forecastHour';
   }
 
   Future<Uint8List?> getProgChart(String type, {int forecastHour = 6}) async {

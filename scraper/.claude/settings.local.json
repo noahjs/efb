@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "WebSearch",
+      "WebFetch(domain:aviation-fuel-prices.com)",
+      "WebFetch(domain:www.iflightplanner.com)",
+      "WebFetch(domain:aviationfuelprices.com)",
+      "Bash(ls:*)",
+      "WebFetch(domain:www.airnav.com)",
+      "Bash(npx tsc:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(PGPASSWORD=efb psql:*)",
+      "Bash(npm run build:*)",
+      "Bash(flutter analyze:*)",
+      "Bash(docker exec:*)",
+      "Bash(docker ps:*)"
+    ]
+  }
+}

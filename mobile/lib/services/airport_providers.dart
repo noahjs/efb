@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api_client.dart';
+import '../models/fbo.dart';
 
 /// Provider for starred airports (full airport objects)
 final starredAirportsProvider =
@@ -173,4 +174,12 @@ final wxStationDetailProvider =
     FutureProvider.family<Map<String, dynamic>?, String>((ref, id) async {
   final client = ref.read(apiClientProvider);
   return client.getWxStation(id);
+});
+
+/// Provider for airport FBOs
+final airportFbosProvider =
+    FutureProvider.family<List<Fbo>, String>((ref, id) async {
+  final client = ref.read(apiClientProvider);
+  final data = await client.getFbos(id);
+  return data.map((j) => Fbo.fromJson(j as Map<String, dynamic>)).toList();
 });

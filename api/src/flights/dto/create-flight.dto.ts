@@ -115,4 +115,8 @@ export class CreateFlightDto {
   @IsOptional()
   @IsString()
   remarks?: string;
+
+  @IsOptional()
+  @IsNumber()
+  arrival_fbo_id?: number;
 }
