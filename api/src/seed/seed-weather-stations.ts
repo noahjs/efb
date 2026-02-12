@@ -153,11 +153,15 @@ async function seedWeatherStations(ds: DataSource): Promise<number> {
         .where('icao_identifier IN (:...ids)', { ids: batch })
         .execute();
     }
-    console.log(`  Updated ${matchedIcaos.length} airports with has_metar = true.`);
+    console.log(
+      `  Updated ${matchedIcaos.length} airports with has_metar = true.`,
+    );
   }
 
   // Step 2c: Determine TAF capability for airport stations
-  console.log('\n  Fetching stationinfo for airport ICAOs to check TAF capability...');
+  console.log(
+    '\n  Fetching stationinfo for airport ICAOs to check TAF capability...',
+  );
   const airportStationInfo = await fetchStationInfo(matchedIcaos);
   const tafIcaos: string[] = [];
   for (const [icao, info] of airportStationInfo) {

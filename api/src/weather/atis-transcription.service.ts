@@ -104,7 +104,9 @@ export class AtisTranscriptionService {
 
       // Upload audio to GCS and save recording (fire-and-forget)
       this.uploadAndSaveRecording(icao, audio).catch((err) =>
-        this.logger.error(`Failed to save ATIS audio for ${icao}: ${err.message}`),
+        this.logger.error(
+          `Failed to save ATIS audio for ${icao}: ${err.message}`,
+        ),
       );
 
       return result;

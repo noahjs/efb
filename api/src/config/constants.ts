@@ -145,6 +145,27 @@ export const BRIEFING = {
   NOTAM_CLOSURE_KEYWORDS: ['CLSD', 'CLOSED', 'UNSAFE', 'UNSERVICEABLE'],
 };
 
+// --- Data Platform (background polling) ---
+export const DATA_PLATFORM = {
+  SCHEDULER_INTERVAL_SECONDS: 60,
+  WORKER_CONCURRENCY: 3,
+  CONUS_BOUNDS: {
+    minLat: 24,
+    maxLat: 50,
+    minLng: -125,
+    maxLng: -66,
+  },
+  WIND_GRID_SPACING_DEG: 1.0,
+  WIND_GRID_BATCH_SIZE: 250,
+  METAR_STATE_BATCH_SIZE: 6,
+  NOTAM_CONCURRENCY: 2,
+  NOTAM_THROTTLE_MS: 500,
+  TFR_TEXT_BATCH_SIZE: 10,
+  // Staleness thresholds for on-demand data
+  NWS_FORECAST_STALE_MS: 30 * 60 * 1000, // 30 min
+  NOTAM_ON_DEMAND_STALE_MS: 30 * 60 * 1000, // 30 min
+};
+
 // --- Airports ---
 export const AIRPORTS = {
   SEARCH_DEFAULT_LIMIT: 50,

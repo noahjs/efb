@@ -124,7 +124,8 @@ function assessIcing(response: BriefingResponse): RiskCategory {
       level = mergeRisk(level, 'yellow');
       if (alerts.length === 0) {
         alerts.push(
-          adv.plainEnglish || `Icing advisory near route (${adv.altitudeRelation} cruise)`,
+          adv.plainEnglish ||
+            `Icing advisory near route (${adv.altitudeRelation} cruise)`,
         );
       }
     } else if (adv.altitudeRelation == null) {
@@ -144,10 +145,7 @@ function assessTurbulence(response: BriefingResponse): RiskCategory {
   let level: RiskLevel = 'green';
   const airmets = response.adverseConditions.airmets;
 
-  const turbAdvisories = [
-    ...airmets.turbulenceLow,
-    ...airmets.turbulenceHigh,
-  ];
+  const turbAdvisories = [...airmets.turbulenceLow, ...airmets.turbulenceHigh];
 
   // Check SIGMETs for turbulence
   const turbSigmets = response.adverseConditions.sigmets.filter((s) =>
@@ -157,7 +155,9 @@ function assessTurbulence(response: BriefingResponse): RiskCategory {
   for (const sig of turbSigmets) {
     if (sig.altitudeRelation === 'within') {
       level = 'red';
-      alerts.push(sig.plainEnglish || 'SIGMET turbulence within cruise altitude');
+      alerts.push(
+        sig.plainEnglish || 'SIGMET turbulence within cruise altitude',
+      );
     }
   }
 
@@ -197,9 +197,7 @@ function assessThunderstorms(response: BriefingResponse): RiskCategory {
       }
     } else {
       level = 'yellow';
-      alerts.push(
-        `${convSigmets.length} convective SIGMET(s) near route`,
-      );
+      alerts.push(`${convSigmets.length} convective SIGMET(s) near route`);
     }
   }
 
@@ -233,7 +231,9 @@ function assessNotams(response: BriefingResponse): RiskCategory {
     const text = (notam.text || notam.fullText || '').toUpperCase();
     if (text.includes('RWY') || text.includes('RUNWAY')) {
       level = 'red';
-      alerts.push(`Runway closure: ${notam.icaoId} - ${notam.text.slice(0, 60)}`);
+      alerts.push(
+        `Runway closure: ${notam.icaoId} - ${notam.text.slice(0, 60)}`,
+      );
     } else if (text.includes('TWY') || text.includes('TAXIWAY')) {
       level = mergeRisk(level, 'yellow');
       if (alerts.length < 2) {

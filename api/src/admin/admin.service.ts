@@ -17,6 +17,7 @@ import { WindyService } from '../windy/windy.service';
 import { ElevationService } from '../windy/elevation.service';
 import { TrafficService } from '../traffic/traffic.service';
 import { LeidosService } from '../filing/leidos.service';
+import { DataSchedulerService } from '../data-platform/data-scheduler.service';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -114,6 +115,7 @@ export class AdminService {
     private readonly elevationService: ElevationService,
     private readonly trafficService: TrafficService,
     private readonly leidosService: LeidosService,
+    private readonly dataScheduler: DataSchedulerService,
   ) {}
 
   // --- API Status ---
@@ -481,6 +483,12 @@ export class AdminService {
     }
 
     return { deleted };
+  }
+
+  // --- Data Platform ---
+
+  async getDataSources() {
+    return this.dataScheduler.getDataSources();
   }
 
   // --- Helpers ---

@@ -1007,9 +1007,7 @@ export class BriefingService {
   /**
    * Parse clouds array from AWC METAR response.
    */
-  private parseClouds(
-    raw: any,
-  ): Array<{ cover: string; base: number | null }> {
+  private parseClouds(raw: any): Array<{ cover: string; base: number | null }> {
     if (!Array.isArray(raw)) return [];
     return raw.map((c: any) => ({
       cover: c.cover || c.type || '',

@@ -17,6 +17,7 @@ import { ImageryModule } from '../imagery/imagery.module';
 import { WindyModule } from '../windy/windy.module';
 import { TrafficModule } from '../traffic/traffic.module';
 import { FilingModule } from '../filing/filing.module';
+import { DataPlatformModule } from '../data-platform/data-platform.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { FilingModule } from '../filing/filing.module';
     WindyModule,
     TrafficModule,
     FilingModule,
+    DataPlatformModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

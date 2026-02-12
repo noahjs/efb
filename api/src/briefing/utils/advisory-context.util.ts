@@ -77,7 +77,12 @@ export function findAffectedSegment(
     if (!wpAffected) {
       for (const ring of rings) {
         for (const coord of ring) {
-          const dist = haversineNm(wp.latitude, wp.longitude, coord[1], coord[0]);
+          const dist = haversineNm(
+            wp.latitude,
+            wp.longitude,
+            coord[1],
+            coord[0],
+          );
           if (dist <= corridorNm) {
             wpAffected = true;
             break;

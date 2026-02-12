@@ -144,7 +144,8 @@ function findNearestMetar(
     // Since we don't have lat/lng for stations, use the ordered index
     // as a proxy for route distance
     const totalDist = metars.length > 1 ? metars.length - 1 : 1;
-    const wpFraction = wp.etaMinutes / (metars.length > 0 ? Math.max(wp.etaMinutes, 1) : 1);
+    const wpFraction =
+      wp.etaMinutes / (metars.length > 0 ? Math.max(wp.etaMinutes, 1) : 1);
 
     // Just pick the metar with the closest index
     for (const metar of metars) {
@@ -164,7 +165,12 @@ function findNearestMetar(
 
 function findForecastAtEta(
   wp: BriefingWaypoint,
-  tafs: { station: string; icaoId: string; section: string; fcsts: TafForecastPeriod[] }[],
+  tafs: {
+    station: string;
+    icaoId: string;
+    section: string;
+    fcsts: TafForecastPeriod[];
+  }[],
   etaZulu: string | null,
 ): TafForecastPeriod | null {
   if (tafs.length === 0) return null;
