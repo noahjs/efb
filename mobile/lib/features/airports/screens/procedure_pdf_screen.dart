@@ -7,6 +7,7 @@ class ProcedurePdfScreen extends StatelessWidget {
   final String pdfUrl;
   final String? airportId;
   final String? chartCode;
+  final int? procedureId;
 
   const ProcedurePdfScreen({
     super.key,
@@ -14,6 +15,7 @@ class ProcedurePdfScreen extends StatelessWidget {
     required this.pdfUrl,
     this.airportId,
     this.chartCode,
+    this.procedureId,
   });
 
   @override
@@ -23,6 +25,7 @@ class ProcedurePdfScreen extends StatelessWidget {
       pdfUrl: pdfUrl,
       airportId: airportId,
       chartCode: chartCode,
+      procedureId: procedureId,
     );
   }
 }

@@ -43,8 +43,7 @@ export class WeatherController {
 
   @Get('datis/:icao')
   async datis(@Param('icao') icao: string) {
-    const data = await this.weatherService.getDatis(icao.toUpperCase());
-    return data ?? { error: 'No D-ATIS available', icao };
+    return this.weatherService.getDatis(icao.toUpperCase());
   }
 
   @Get('taf/:icao/nearest')

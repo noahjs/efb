@@ -65,6 +65,18 @@ import { DocumentFolder } from './documents/entities/document-folder.entity';
 import { TrafficModule } from './traffic/traffic.module';
 import { AuthModule } from './auth/auth.module';
 import { BriefingModule } from './briefing/briefing.module';
+import { DataPlatformModule } from './data-platform/data-platform.module';
+import { Metar } from './data-platform/entities/metar.entity';
+import { Taf } from './data-platform/entities/taf.entity';
+import { Advisory } from './data-platform/entities/advisory.entity';
+import { Pirep } from './data-platform/entities/pirep.entity';
+import { Tfr } from './data-platform/entities/tfr.entity';
+import { WindsAloft } from './data-platform/entities/winds-aloft.entity';
+import { WindGrid } from './data-platform/entities/wind-grid.entity';
+import { Notam } from './data-platform/entities/notam.entity';
+import { NwsForecast } from './data-platform/entities/nws-forecast.entity';
+import { Atis } from './data-platform/entities/atis.entity';
+import { DataSource as DataSourceEntity } from './data-platform/entities/data-source.entity';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -112,6 +124,17 @@ import { dbConfig } from './db.config';
         AtisRecording,
         Fbo,
         FuelPrice,
+        DataSourceEntity,
+        Metar,
+        Taf,
+        Advisory,
+        Pirep,
+        Tfr,
+        WindsAloft,
+        WindGrid,
+        Notam,
+        NwsForecast,
+        Atis,
       ],
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
@@ -139,6 +162,7 @@ import { dbConfig } from './db.config';
     TrafficModule,
     AuthModule,
     BriefingModule,
+    DataPlatformModule,
   ],
 })
 export class AppModule {}

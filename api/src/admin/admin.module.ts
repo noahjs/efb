@@ -12,11 +12,14 @@ import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
 import { Fbo } from '../fbos/entities/fbo.entity';
 import { FuelPrice } from '../fbos/entities/fuel-price.entity';
+import { Metar } from '../data-platform/entities/metar.entity';
+import { Taf } from '../data-platform/entities/taf.entity';
 import { WeatherModule } from '../weather/weather.module';
 import { ImageryModule } from '../imagery/imagery.module';
 import { WindyModule } from '../windy/windy.module';
 import { TrafficModule } from '../traffic/traffic.module';
 import { FilingModule } from '../filing/filing.module';
+import { DataPlatformModule } from '../data-platform/data-platform.module';
 
 @Module({
   imports: [
@@ -31,12 +34,15 @@ import { FilingModule } from '../filing/filing.module';
       FaaRegistryAircraft,
       Fbo,
       FuelPrice,
+      Metar,
+      Taf,
     ]),
     WeatherModule,
     ImageryModule,
     WindyModule,
     TrafficModule,
     FilingModule,
+    DataPlatformModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

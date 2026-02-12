@@ -14,6 +14,8 @@ import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { RunwayEnd } from '../airports/entities/runway-end.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
+import { Fbo } from '../fbos/entities/fbo.entity';
+import { FuelPrice } from '../fbos/entities/fuel-price.entity';
 import { dbConfig } from '../db.config';
 
 const AWC_METAR_URL = 'https://aviationweather.gov/api/data/metar';
@@ -31,7 +33,7 @@ async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
     // Airport has OneToMany relations that require related entities
-    entities: [WeatherStation, Airport, Runway, RunwayEnd, Frequency],
+    entities: [WeatherStation, Airport, Runway, RunwayEnd, Frequency, Fbo, FuelPrice],
   });
   await ds.initialize();
   return ds;
@@ -153,11 +155,15 @@ async function seedWeatherStations(ds: DataSource): Promise<number> {
         .where('icao_identifier IN (:...ids)', { ids: batch })
         .execute();
     }
-    console.log(`  Updated ${matchedIcaos.length} airports with has_metar = true.`);
+    console.log(
+      `  Updated ${matchedIcaos.length} airports with has_metar = true.`,
+    );
   }
 
   // Step 2c: Determine TAF capability for airport stations
-  console.log('\n  Fetching stationinfo for airport ICAOs to check TAF capability...');
+  console.log(
+    '\n  Fetching stationinfo for airport ICAOs to check TAF capability...',
+  );
   const airportStationInfo = await fetchStationInfo(matchedIcaos);
   const tafIcaos: string[] = [];
   for (const [icao, info] of airportStationInfo) {

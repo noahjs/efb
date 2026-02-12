@@ -21,6 +21,7 @@ import {
   WindsAloftCell,
   GfaProduct,
   TafForecastPeriod,
+  FlightPhaseProfile,
 } from './interfaces/briefing-response.interface';
 import {
   computeBoundingBox,
@@ -179,6 +180,12 @@ export class BriefingService {
     const waypoints = this.enrichWaypoints(
       calcResult.waypoints,
       calcResult.ete_minutes,
+    );
+
+    // 3b. Extract flight phase profile from 3-phase calculation
+    const phaseProfile = this.extractPhaseProfile(
+      calcResult.phases,
+      calcResult.distance_nm,
     );
 
     // 4. Compute bounding box
@@ -381,6 +388,7 @@ export class BriefingService {
         eta: calcResult.eta,
         distanceNm: calcResult.distance_nm,
         waypoints,
+        phaseProfile,
       },
       routeAirports: corridorAirports.map((a) => ({
         identifier: a.identifier,
@@ -481,6 +489,28 @@ export class BriefingService {
           ? Math.round((distances[i] / totalDist) * totalEteMinutes)
           : 0,
     }));
+  }
+
+  /**
+   * Extract flight phase profile from 3-phase calculation result.
+   */
+  private extractPhaseProfile(
+    phases: any[] | null,
+    totalDistanceNm: number | null,
+  ): FlightPhaseProfile | null {
+    if (!phases || phases.length !== 3 || !totalDistanceNm) return null;
+
+    const climb = phases[0];
+    const descent = phases[2];
+
+    return {
+      departureElevationFt: climb.start_altitude_ft,
+      destinationElevationFt: descent.end_altitude_ft,
+      cruiseAltitudeFt: climb.end_altitude_ft,
+      tocDistanceNm: climb.distance_nm,
+      todDistanceNm: totalDistanceNm - descent.distance_nm,
+      totalDistanceNm,
+    };
   }
 
   /**
@@ -1007,9 +1037,7 @@ export class BriefingService {
   /**
    * Parse clouds array from AWC METAR response.
    */
-  private parseClouds(
-    raw: any,
-  ): Array<{ cover: string; base: number | null }> {
+  private parseClouds(raw: any): Array<{ cover: string; base: number | null }> {
     if (!Array.isArray(raw)) return [];
     return raw.map((c: any) => ({
       cover: c.cover || c.type || '',

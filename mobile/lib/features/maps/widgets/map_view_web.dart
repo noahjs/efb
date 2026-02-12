@@ -13,19 +13,16 @@ class PlatformMapView extends StatefulWidget {
   final bool showFlightCategory;
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
+  final ValueChanged<String>? onNavaidTapped;
+  final ValueChanged<String>? onFixTapped;
   final ValueChanged<Map<String, dynamic>>? onPirepTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
+  final VoidCallback? onMapTapped;
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
-  final Map<String, dynamic>? airspaceGeoJson;
-  final Map<String, dynamic>? airwayGeoJson;
-  final Map<String, dynamic>? artccGeoJson;
-  final Map<String, dynamic>? navaidGeoJson;
-  final Map<String, dynamic>? fixGeoJson;
-
-  /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'advisories', 'pireps').
+  /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'airspaces', 'pireps').
   final Map<String, Map<String, dynamic>?> overlays;
 
   const PlatformMapView({
@@ -34,17 +31,15 @@ class PlatformMapView extends StatefulWidget {
     this.showFlightCategory = false,
     this.interactive = true,
     this.onAirportTapped,
+    this.onNavaidTapped,
+    this.onFixTapped,
     this.onPirepTapped,
     this.onBoundsChanged,
     this.onMapLongPressed,
+    this.onMapTapped,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
-    this.airspaceGeoJson,
-    this.airwayGeoJson,
-    this.artccGeoJson,
-    this.navaidGeoJson,
-    this.fixGeoJson,
     this.overlays = const {},
   });
 
@@ -52,8 +47,17 @@ class PlatformMapView extends StatefulWidget {
   State<PlatformMapView> createState() => _PlatformMapViewState();
 }
 
+@JS('_efbOnMapTap')
+external set _onMapTapJs(JSFunction? fn);
+
 @JS('_efbOnAirportTap')
 external set _onAirportTapJs(JSFunction? fn);
+
+@JS('_efbOnNavaidTap')
+external set _onNavaidTapJs(JSFunction? fn);
+
+@JS('_efbOnFixTap')
+external set _onFixTapJs(JSFunction? fn);
 
 @JS('_efbOnPirepTap')
 external set _onPirepTapJs(JSFunction? fn);
@@ -63,6 +67,9 @@ external set _onBoundsChangedJs(JSFunction? fn);
 
 @JS('_efbOnMapLongPress')
 external set _onMapLongPressJs(JSFunction? fn);
+
+@JS('_efbOnUserPanned')
+external set _onUserPannedJs(JSFunction? fn);
 
 class _PlatformMapViewState extends State<PlatformMapView> {
   final String _viewType =
@@ -135,6 +142,18 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       ''');
     };
 
+    // Follow mode: smooth camera tracking for ownship
+    widget.controller?.onFollowTo = (double lat, double lng, {double bearing = 0}) {
+      _evalJs('''
+        (function() {
+          var map = window.$_mapVar;
+          if (map) map.flyTo({center: [$lng, $lat], bearing: $bearing, duration: 400});
+        })();
+      ''');
+    };
+
+    // onUserPanned is set by maps_screen.dart — no-op here, callback via JS
+
     // Particle animation via JS
     widget.controller?.onUpdateParticleField = (windField,
         {required minLat, required maxLat, required minLng, required maxLng}) {
@@ -174,9 +193,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     widget.controller?.onZoomIn = null;
     widget.controller?.onZoomOut = null;
     widget.controller?.onFlyTo = null;
+    widget.controller?.onFollowTo = null;
     _onAirportTapJs = null;
     _onBoundsChangedJs = null;
     _onMapLongPressJs = null;
+    _onUserPannedJs = null;
     // Stop particle animation
     if (_particlesRunning) {
       _evalJs('if (window._efbParticles) window._efbParticles.stop();');
@@ -199,8 +220,20 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   void _registerCallbacks() {
+    _onMapTapJs = (() {
+      widget.onMapTapped?.call();
+    }).toJS;
+
     _onAirportTapJs = ((JSString id) {
       widget.onAirportTapped?.call(id.toDart);
+    }).toJS;
+
+    _onNavaidTapJs = ((JSString id) {
+      widget.onNavaidTapped?.call(id.toDart);
+    }).toJS;
+
+    _onFixTapJs = ((JSString id) {
+      widget.onFixTapped?.call(id.toDart);
     }).toJS;
 
     _onPirepTapJs = ((JSString propsJson) {
@@ -217,6 +250,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         minLng: minLng.toDartDouble,
         maxLng: maxLng.toDartDouble,
       ));
+    }).toJS;
+
+    _onUserPannedJs = (() {
+      widget.controller?.onUserPanned?.call();
     }).toJS;
 
     _onMapLongPressJs =
@@ -268,22 +305,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (oldWidget.routeCoordinates != widget.routeCoordinates) {
       _updateRouteSource();
     }
-    if (oldWidget.airspaceGeoJson != widget.airspaceGeoJson) {
-      _updateAeroSource('airspaces', widget.airspaceGeoJson);
-    }
-    if (oldWidget.airwayGeoJson != widget.airwayGeoJson) {
-      _updateAeroSource('airways', widget.airwayGeoJson);
-    }
-    if (oldWidget.artccGeoJson != widget.artccGeoJson) {
-      _updateAeroSource('artcc', widget.artccGeoJson);
-    }
-    if (oldWidget.navaidGeoJson != widget.navaidGeoJson) {
-      _updateAeroSource('navaids', widget.navaidGeoJson);
-    }
-    if (oldWidget.fixGeoJson != widget.fixGeoJson) {
-      _updateAeroSource('fixes', widget.fixGeoJson);
-    }
-    // Update generic overlays
+    // Update overlays (including aeronautical sub-layers)
     final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
     for (final key in allKeys) {
       if (oldWidget.overlays[key] != widget.overlays[key]) {
@@ -404,7 +426,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.setStyle('$newStyle');
           map.once('style.load', function() {
             ${_vfrTilesJs(vfrVisibility)}
-            ${_aeronauticalLayersJs()}
             ${_airportLayersJs(widget.showFlightCategory)}
             ${_routeLayerJs()}
             ${_overlayLayersJs()}
@@ -418,11 +439,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       Future.delayed(const Duration(milliseconds: 200), () {
         _updateAirportsSource();
         _updateRouteSource();
-        _updateAeroSource('airspaces', widget.airspaceGeoJson);
-        _updateAeroSource('airways', widget.airwayGeoJson);
-        _updateAeroSource('artcc', widget.artccGeoJson);
-        _updateAeroSource('navaids', widget.navaidGeoJson);
-        _updateAeroSource('fixes', widget.fixGeoJson);
         for (final key in widget.overlays.keys) {
           _updateOverlaySource(key, widget.overlays[key]);
         }
@@ -466,7 +482,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
         map.on('load', function() {
           ${_vfrTilesJs(vfrVisibility)}
-          ${_aeronauticalLayersJs()}
           ${_airportLayersJs(widget.showFlightCategory)}
           ${_routeLayerJs()}
           ${_overlayLayersJs()}
@@ -847,9 +862,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     });
   }
 
-  /// Creates aeronautical GeoJSON sources and layers (ARTCC, airways, airspaces).
-  static String _aeronauticalLayersJs() {
+  /// Creates GeoJSON sources and layers for all overlays (aeronautical + situational).
+  static String _overlayLayersJs() {
     return '''
+          // ── Aeronautical layers (rendered beneath situational overlays) ──
           map.addSource('artcc', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
@@ -1055,30 +1071,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'text-halo-width': 1
             }
           });
-    ''';
-  }
 
-  void _updateAeroSource(String sourceId, Map<String, dynamic>? data) {
-    if (!_mapReady) return;
-    final geojson = data != null
-        ? jsonEncode(data)
-        : '{"type":"FeatureCollection","features":[]}';
-    final escaped = geojson.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
-    _evalJs('''
-      (function() {
-        var map = window.$_mapVar;
-        if (!map) return;
-        var src = map.getSource('$sourceId');
-        if (src) {
-          src.setData(JSON.parse('$escaped'));
-        }
-      })();
-    ''');
-  }
-
-  /// Creates GeoJSON sources and layers for all generic overlays.
-  static String _overlayLayersJs() {
-    return '''
           // ── TFR overlay ──
           map.addSource('tfrs', {
             type: 'geojson',
@@ -1134,14 +1127,17 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             data: { type: 'FeatureCollection', features: [] }
           });
           map.addLayer({
-            id: 'pirep-dots',
-            type: 'circle',
+            id: 'pirep-symbols',
+            type: 'symbol',
             source: 'pireps',
+            layout: {
+              'text-field': ['get', 'symbol'],
+              'text-size': 16,
+              'text-allow-overlap': true,
+              'text-ignore-placement': true
+            },
             paint: {
-              'circle-radius': 6,
-              'circle-color': ['coalesce', ['get', 'color'], '#B0B4BC'],
-              'circle-stroke-width': 1.5,
-              'circle-stroke-color': 'rgba(255,255,255,0.3)'
+              'text-color': ['coalesce', ['get', 'color'], '#B0B4BC']
             }
           });
           map.addLayer({
@@ -1150,7 +1146,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             source: 'pireps',
             filter: ['==', 'isUrgent', true],
             paint: {
-              'circle-radius': 10,
+              'circle-radius': 12,
               'circle-color': 'transparent',
               'circle-stroke-width': 2,
               'circle-stroke-color': '#FF5252'
@@ -1390,6 +1386,40 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             }
           });
 
+          // ── Breadcrumb trail overlay ──
+          map.addSource('breadcrumb', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'breadcrumb-border',
+            type: 'line',
+            source: 'breadcrumb',
+            paint: {
+              'line-color': '#000000',
+              'line-width': 4,
+              'line-opacity': 0.5
+            },
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            }
+          });
+          map.addLayer({
+            id: 'breadcrumb-line',
+            type: 'line',
+            source: 'breadcrumb',
+            paint: {
+              'line-color': '#00E5FF',
+              'line-width': 2.5,
+              'line-opacity': 0.85
+            },
+            layout: {
+              'line-cap': 'round',
+              'line-join': 'round'
+            }
+          });
+
           // ── Own Position overlay ──
           map.addSource('own-position', {
             type: 'geojson',
@@ -1600,6 +1630,12 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
   static String _airportClickHandlersJs() {
     return '''
+          map.on('click', function() {
+            if (window._efbOnMapTap) {
+              window._efbOnMapTap();
+            }
+          });
+
           map.on('click', 'airport-dots', function(e) {
             if (e.features && e.features.length > 0) {
               var id = e.features[0].properties.id;
@@ -1617,7 +1653,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             map.getCanvas().style.cursor = '';
           });
 
-          map.on('click', 'pirep-dots', function(e) {
+          map.on('click', 'pirep-symbols', function(e) {
             if (e.features && e.features.length > 0) {
               var props = JSON.stringify(e.features[0].properties);
               if (window._efbOnPirepTap) {
@@ -1626,11 +1662,45 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             }
           });
 
-          map.on('mouseenter', 'pirep-dots', function() {
+          map.on('mouseenter', 'pirep-symbols', function() {
             map.getCanvas().style.cursor = 'pointer';
           });
 
-          map.on('mouseleave', 'pirep-dots', function() {
+          map.on('mouseleave', 'pirep-symbols', function() {
+            map.getCanvas().style.cursor = '';
+          });
+
+          map.on('click', 'navaid-symbols', function(e) {
+            if (e.features && e.features.length > 0) {
+              var id = e.features[0].properties.identifier;
+              if (id && window._efbOnNavaidTap) {
+                window._efbOnNavaidTap(id);
+              }
+            }
+          });
+
+          map.on('mouseenter', 'navaid-symbols', function() {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+
+          map.on('mouseleave', 'navaid-symbols', function() {
+            map.getCanvas().style.cursor = '';
+          });
+
+          map.on('click', 'fix-symbols', function(e) {
+            if (e.features && e.features.length > 0) {
+              var id = e.features[0].properties.identifier;
+              if (id && window._efbOnFixTap) {
+                window._efbOnFixTap(id);
+              }
+            }
+          });
+
+          map.on('mouseenter', 'fix-symbols', function() {
+            map.getCanvas().style.cursor = 'pointer';
+          });
+
+          map.on('mouseleave', 'fix-symbols', function() {
             map.getCanvas().style.cursor = '';
           });
     ''';
@@ -1679,6 +1749,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             if (window._efbOnBoundsChanged) {
               window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
             }
+          });
+
+          map.on('dragstart', function() {
+            if (window._efbOnUserPanned) window._efbOnUserPanned();
           });
     ''';
   }

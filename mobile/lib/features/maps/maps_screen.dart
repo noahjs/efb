@@ -4,30 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../services/api_client.dart';
 import '../../services/airport_providers.dart';
-import '../../services/aeronautical_providers.dart';
+import '../../services/api_client.dart';
 import '../../services/map_flight_provider.dart';
-import '../imagery/imagery_providers.dart';
-import 'widgets/map_toolbar.dart';
-import 'widgets/map_sidebar.dart';
-import 'widgets/map_bottom_bar.dart';
-import 'widgets/layer_picker.dart';
-import 'widgets/aeronautical_settings_panel.dart';
-import 'widgets/map_view.dart';
-import 'widgets/airport_bottom_sheet.dart';
-import 'widgets/navaid_bottom_sheet.dart';
-import 'widgets/wx_station_bottom_sheet.dart';
-import 'widgets/fix_bottom_sheet.dart';
-import 'widgets/map_long_press_sheet.dart';
-import 'widgets/pirep_bottom_sheet.dart';
-import 'widgets/flight_plan_panel.dart';
-import 'widgets/approach_overlay.dart';
-import 'widgets/wind_heatmap_controller.dart';
-import 'widgets/wind_altitude_slider.dart';
 import '../../services/windy_providers.dart';
 import '../adsb/providers/adsb_providers.dart';
 import '../adsb/widgets/adsb_status_bar.dart';
@@ -36,6 +17,28 @@ import '../traffic/providers/traffic_providers.dart';
 import '../traffic/providers/traffic_alert_provider.dart';
 import '../traffic/widgets/traffic_settings_panel.dart';
 import '../traffic/widgets/traffic_alert_banner.dart';
+import 'layers/map_layer_def.dart';
+import 'layers/map_layer_registry.dart';
+import 'providers/follow_mode_provider.dart';
+import 'providers/layer_data_providers.dart';
+import 'providers/map_layer_state_provider.dart';
+import 'providers/overlay_assembly_provider.dart';
+import 'widgets/aeronautical_settings_panel.dart';
+import 'widgets/airport_bottom_sheet.dart';
+import 'widgets/approach_overlay.dart';
+import 'widgets/fix_bottom_sheet.dart';
+import 'widgets/flight_plan_panel.dart';
+import 'widgets/layer_picker.dart';
+import 'widgets/map_bottom_bar.dart';
+import 'widgets/map_long_press_sheet.dart';
+import 'widgets/map_sidebar.dart';
+import 'widgets/map_toolbar.dart';
+import 'widgets/map_view.dart';
+import 'widgets/navaid_bottom_sheet.dart';
+import 'widgets/pirep_bottom_sheet.dart';
+import 'widgets/wind_altitude_slider.dart';
+import 'widgets/wind_heatmap_controller.dart';
+import 'widgets/wx_station_bottom_sheet.dart';
 
 class MapsScreen extends ConsumerStatefulWidget {
   const MapsScreen({super.key});
@@ -45,24 +48,25 @@ class MapsScreen extends ConsumerStatefulWidget {
 }
 
 class _MapsScreenState extends ConsumerState<MapsScreen> {
+  // UI panel toggles (local to this widget, not persisted)
   bool _showLayerPicker = false;
   bool _showFlightPlan = false;
-  String _selectedBaseLayer = 'satellite';
-  Set<String> _activeOverlays = {'flight_category'};
-  AeroSettings _aero = const AeroSettings();
   bool _showAeroSettings = false;
-  TrafficSettings _trafficSettings = const TrafficSettings();
   bool _showTrafficSettings = false;
-  int _windsAloftAltitude = 9000; // default winds aloft display altitude
+
+  // Imperative controllers
   final _mapController = EfbMapController();
   final _approachController = ApproachOverlayController();
   final _heatmapController = WindHeatmapController();
 
-  MapBounds? _currentBounds;
+  // Bounds debouncing
   Timer? _boundsDebounce;
 
-  // Weather station tracking (populated during build for tap routing)
-  Map<String, Map<String, dynamic>> _weatherStations = {};
+  // Track open map-feature bottom sheet so we never stack two.
+  // Generation counter prevents a stale whenComplete from clearing the flag
+  // after a newer sheet has already been opened.
+  bool _isFeatureSheetOpen = false;
+  int _featureSheetGen = 0;
 
   // Search state
   final _searchController = TextEditingController();
@@ -77,7 +81,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
     _mapController.onMapReady = (map) {
       _approachController.attach(map);
       _heatmapController.attach(map);
@@ -85,6 +88,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     _mapController.onStyleReloaded = () {
       _approachController.reapply();
       _heatmapController.reapply();
+    };
+    _mapController.onUserPanned = () {
+      ref.read(followModeProvider.notifier).set(FollowMode.off);
     };
   }
 
@@ -98,28 +104,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final baseLayer = prefs.getString('map_base_layer') ?? 'satellite';
-    final overlays = prefs.getStringList('map_overlays') ?? ['flight_category'];
-    final aero = await AeroSettings.load();
-    final traffic = await TrafficSettings.load();
-    if (mounted) {
-      setState(() {
-        _selectedBaseLayer = baseLayer;
-        _activeOverlays = overlays.toSet();
-        _aero = aero;
-        _trafficSettings = traffic;
-      });
-    }
-  }
-
-  Future<void> _saveMapSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setString('map_base_layer', _selectedBaseLayer);
-    prefs.setStringList('map_overlays', _activeOverlays.toList());
-    _aero.save();
-  }
+  // ── Search ────────────────────────────────────────────────────────────────
 
   void _onSearchChanged(String query) {
     _searchDebounce?.cancel();
@@ -201,24 +186,47 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     _showFixSheet(fix);
   }
 
-  void _showNavaidSheet(String identifier) {
-    showModalBottomSheet(
+  /// Dismiss any currently-open map-feature bottom sheet before opening another.
+  void _dismissFeatureSheet() {
+    if (_isFeatureSheetOpen && mounted) {
+      Navigator.of(context).pop();
+      _isFeatureSheetOpen = false;
+    }
+  }
+
+  /// Show a modal bottom sheet for a map feature, ensuring only one is open.
+  Future<void> _showFeatureSheet(WidgetBuilder builder) {
+    _dismissFeatureSheet();
+    _isFeatureSheetOpen = true;
+    final gen = ++_featureSheetGen;
+    return showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => NavaidBottomSheet(navaidId: identifier),
-    );
+      builder: builder,
+    ).whenComplete(() {
+      // Only clear flag if no newer sheet has been opened since
+      if (_featureSheetGen == gen) {
+        _isFeatureSheetOpen = false;
+      }
+    });
+  }
+
+  void _showNavaidSheet(String identifier) {
+    _showFeatureSheet((_) => NavaidBottomSheet(navaidId: identifier));
   }
 
   void _showFixSheet(Map<String, dynamic> fixData) {
     final identifier = fixData['identifier'] ?? '';
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => FixBottomSheet(fixId: identifier, fixData: fixData),
-    );
+    _showFeatureSheet(
+        (_) => FixBottomSheet(fixId: identifier, fixData: fixData));
   }
+
+  void _showFixSheetById(String identifier) {
+    _showFeatureSheet((_) => FixBottomSheet(fixId: identifier));
+  }
+
+  // ── Panel toggles ────────────────────────────────────────────────────────
 
   void _toggleLayerPicker() {
     setState(() {
@@ -238,32 +246,31 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     });
   }
 
-  void _onBaseLayerChanged(String layer) {
-    setState(() {
-      _selectedBaseLayer = layer;
-      _showLayerPicker = false;
-    });
-    _saveMapSettings();
-  }
+  // ── Map callbacks ────────────────────────────────────────────────────────
 
-  void _onOverlayToggled(String overlay) {
-    setState(() {
-      if (_activeOverlays.contains(overlay)) {
-        _activeOverlays.remove(overlay);
-      } else {
-        _activeOverlays.add(overlay);
+  void _onBoundsChanged(MapBounds bounds) {
+    // Always keep particle viewport in sync — no debounce needed for this
+    if (_mapController.particlesRunning) {
+      _mapController.updateParticleViewport(
+        minLat: bounds.minLat,
+        maxLat: bounds.maxLat,
+        minLng: bounds.minLng,
+        maxLng: bounds.maxLng,
+      );
+    }
+
+    _boundsDebounce?.cancel();
+    _boundsDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) {
+        ref.read(mapBoundsProvider.notifier).set(bounds);
       }
     });
-    _saveMapSettings();
   }
 
   void _onMapLongPressed(
       double lat, double lng, List<Map<String, dynamic>> features) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => PointerInterceptor(
+    _showFeatureSheet(
+      (_) => PointerInterceptor(
         child: MapLongPressSheet(lat: lat, lng: lng, aeroFeatures: features),
       ),
     );
@@ -271,92 +278,30 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
 
   void _onAirportTapped(String id) {
     // Check if this is a synthetic weather station (non-airport METAR source)
-    final wxEntry = _findWeatherStation(id);
+    final wxStations = ref.read(airportListProvider).weatherStations;
+    final wxEntry = wxStations[id];
     if (wxEntry != null) {
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: (_) => WxStationBottomSheet(
+      _showFeatureSheet(
+        (_) => WxStationBottomSheet(
           stationId: id,
           metarData: wxEntry['_metarData'] as Map<dynamic, dynamic>?,
         ),
       );
       return;
     }
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => AirportBottomSheet(airportId: id),
-    );
-  }
-
-  /// Find a synthetic weather station entry in the current airports list.
-  Map<String, dynamic>? _findWeatherStation(String id) {
-    // Access the current build-time airports list isn't available here directly,
-    // so we use a stateful approach: store weather station IDs during build.
-    return _weatherStations[id];
+    _showFeatureSheet((_) => AirportBottomSheet(airportId: id));
   }
 
   void _onPirepTapped(Map<String, dynamic> properties) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => PirepBottomSheet(properties: properties),
-    );
+    _showFeatureSheet((_) => PirepBottomSheet(properties: properties));
   }
 
-  static Map<String, dynamic> _navaidsToGeoJson(List<dynamic> navaids) {
-    final features = navaids
-        .where((n) => n['latitude'] != null && n['longitude'] != null)
-        .map((n) => {
-              'type': 'Feature',
-              'geometry': {
-                'type': 'Point',
-                'coordinates': [n['longitude'], n['latitude']],
-              },
-              'properties': {
-                'identifier': n['identifier'] ?? '',
-                'name': n['name'] ?? '',
-                'navType': n['type'] ?? '',
-                'frequency': n['frequency'] ?? '',
-              },
-            })
-        .toList();
-    return {'type': 'FeatureCollection', 'features': features};
-  }
-
-  static Map<String, dynamic> _fixesToGeoJson(List<dynamic> fixes) {
-    final features = fixes
-        .where((f) => f['latitude'] != null && f['longitude'] != null)
-        .map((f) => {
-              'type': 'Feature',
-              'geometry': {
-                'type': 'Point',
-                'coordinates': [f['longitude'], f['latitude']],
-              },
-              'properties': {
-                'identifier': f['identifier'] ?? '',
-              },
-            })
-        .toList();
-    return {'type': 'FeatureCollection', 'features': features};
-  }
-
-  void _onBoundsChanged(MapBounds bounds) {
-    _boundsDebounce?.cancel();
-    _boundsDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        setState(() {
-          _currentBounds = bounds;
-        });
-      }
-    });
-  }
+  // ── Settings panels ──────────────────────────────────────────────────────
 
   void _showAeroSettingsPanel() {
+    _dismissFeatureSheet();
+    final layerState = ref.read(mapLayerStateProvider).value;
+    if (layerState == null) return;
     setState(() => _showAeroSettings = true);
     showModalBottomSheet(
       context: context,
@@ -364,10 +309,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       isScrollControlled: true,
       builder: (_) => PointerInterceptor(
         child: _AeroSettingsSheet(
-          settings: _aero,
+          settings: layerState.aeroSettings,
           onChanged: (newSettings) {
-            setState(() => _aero = newSettings);
-            _saveMapSettings();
+            ref.read(mapLayerStateProvider.notifier).setAeroSettings(newSettings);
           },
           onClose: () => Navigator.of(context).pop(),
         ),
@@ -378,6 +322,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   }
 
   void _showTrafficSettingsPanel() {
+    _dismissFeatureSheet();
+    final layerState = ref.read(mapLayerStateProvider).value;
+    if (layerState == null) return;
     setState(() => _showTrafficSettings = true);
     showModalBottomSheet(
       context: context,
@@ -385,11 +332,10 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       isScrollControlled: true,
       builder: (_) => PointerInterceptor(
         child: _TrafficSettingsSheet(
-          settings: _trafficSettings,
+          settings: layerState.trafficSettings,
           onChanged: (newSettings) {
-            setState(() => _trafficSettings = newSettings);
-            newSettings.save();
-            // Invalidate the provider so the traffic layer picks up changes
+            ref.read(mapLayerStateProvider.notifier).setTrafficSettings(newSettings);
+            // Invalidate so the traffic layer picks up changes
             ref.invalidate(trafficSettingsProvider);
           },
           onClose: () => Navigator.of(context).pop(),
@@ -401,17 +347,13 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   }
 
   void _onApproachTapped() {
-    // If overlay is active, remove it
     if (_approachController.isActive) {
       _approachController.hide();
       setState(() {});
       return;
     }
 
-    // Show a dialog to enter airport identifier
     final textController = TextEditingController();
-
-    // Pre-fill from active flight if available
     final flight = ref.read(activeFlightProvider);
     if (flight?.destinationIdentifier != null &&
         flight!.destinationIdentifier!.isNotEmpty) {
@@ -464,6 +406,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   }
 
   void _showApproachPicker(String airportId) {
+    _dismissFeatureSheet();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -479,6 +422,328 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       ),
     );
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final toolbarBottom = MediaQuery.of(context).padding.top + 90;
+    final showOverlay = _showLayerPicker || _showAeroSettings ||
+        _showTrafficSettings || _showFlightPlan;
+
+    // Read layer state from provider
+    final layerState = ref.watch(mapLayerStateProvider).value;
+    if (layerState == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final baseLayerDef = kLayerById[layerState.baseLayer];
+    final baseLayerKey = baseLayerDef?.sourceKey ?? 'dark';
+    final showFlightCategory = layerState.isActive(MapLayerId.flightCategory);
+    final showWindsAloft = layerState.isActive(MapLayerId.windsAloft);
+    final showTraffic = layerState.isActive(MapLayerId.traffic);
+
+    // Assembled overlays from all layer data providers
+    final overlays = ref.watch(assembledOverlaysProvider);
+
+    // Airport list (with flight category merge)
+    final airportResult = ref.watch(airportListProvider);
+
+    // Winds aloft side-effects: heatmap + particle animation
+    final bounds = ref.watch(mapBoundsProvider);
+    if (showWindsAloft && bounds != null) {
+      final windParams = WindGridParams(
+        bounds: bounds,
+        altitude: layerState.windsAloftAltitude,
+      );
+
+      // Heatmap overlay
+      final client = ref.read(apiClientProvider);
+      final heatmapUrl = client.getWindHeatmapUrl(
+        minLat: bounds.minLat,
+        maxLat: bounds.maxLat,
+        minLng: bounds.minLng,
+        maxLng: bounds.maxLng,
+        altitude: layerState.windsAloftAltitude,
+      );
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _heatmapController.show(
+          imageUrl: heatmapUrl,
+          minLat: bounds.minLat,
+          maxLat: bounds.maxLat,
+          minLng: bounds.minLng,
+          maxLng: bounds.maxLng,
+        );
+      });
+
+      // Particle animation
+      final windFieldAsync = ref.watch(windFieldProvider(windParams));
+      final windField = windFieldAsync.value;
+      if (windField != null && windField.isNotEmpty) {
+        final pWindField = windField
+            .map((wf) => <String, dynamic>{
+                  'lat': wf.lat,
+                  'lng': wf.lng,
+                  'direction': wf.direction,
+                  'speed': wf.speed,
+                })
+            .toList();
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          _mapController.updateParticleField(
+            pWindField,
+            minLat: bounds.minLat,
+            maxLat: bounds.maxLat,
+            minLng: bounds.minLng,
+            maxLng: bounds.maxLng,
+          );
+          if (!_mapController.particlesRunning) {
+            debugPrint(
+                '[EFB] Starting particle animation with ${pWindField.length} wind field points');
+            _mapController.startParticles();
+          }
+        });
+      }
+    } else {
+      // Clean up when winds aloft is deactivated
+      if (_heatmapController.isActive) {
+        _heatmapController.hide();
+      }
+      if (_mapController.particlesRunning) {
+        _mapController.stopParticles();
+      }
+    }
+
+    // Traffic loading indicator
+    final trafficLoading =
+        showTraffic && ref.watch(unifiedTrafficProvider).isEmpty;
+
+    // Follow mode
+    final followMode = ref.watch(followModeProvider);
+    final activePos = ref.watch(activePositionProvider);
+    if (followMode != FollowMode.off && activePos != null) {
+      final fLat = activePos.latitude;
+      final fLng = activePos.longitude;
+      final fBearing =
+          followMode == FollowMode.trackUp ? activePos.track.toDouble() : 0.0;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _mapController.followTo(fLat, fLng, bearing: fBearing);
+      });
+    }
+
+    // Route line from active flight
+    final activeFlight = ref.watch(activeFlightProvider);
+    final routeCoordinates = <List<double>>[];
+    final routeStr = activeFlight?.routeString;
+    final routeWaypoints = (routeStr != null && routeStr.trim().isNotEmpty)
+        ? routeStr.trim().split(RegExp(r'\s+'))
+        : <String>[];
+    if (routeWaypoints.isNotEmpty) {
+      final resolvedAsync =
+          ref.watch(resolvedRouteProvider(routeWaypoints.join(',')));
+      final resolved = resolvedAsync.value;
+      if (resolved != null) {
+        for (final wp in resolved) {
+          if (wp is Map &&
+              wp['latitude'] != null &&
+              wp['longitude'] != null) {
+            routeCoordinates.add([
+              (wp['longitude'] as num).toDouble(),
+              (wp['latitude'] as num).toDouble(),
+            ]);
+          }
+        }
+      }
+    }
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Map fills the entire screen
+          Positioned.fill(
+            child: EfbMapView(
+              baseLayer: baseLayerKey,
+              showFlightCategory: showFlightCategory,
+              interactive: !showOverlay,
+              onMapTapped: _dismissFeatureSheet,
+              onAirportTapped: _onAirportTapped,
+              onNavaidTapped: _showNavaidSheet,
+              onFixTapped: _showFixSheetById,
+              onPirepTapped: _onPirepTapped,
+              onBoundsChanged: _onBoundsChanged,
+              onMapLongPressed: _onMapLongPressed,
+              airports: airportResult.airports,
+              routeCoordinates: routeCoordinates,
+              controller: _mapController,
+              overlays: overlays,
+            ),
+          ),
+
+          // Left sidebar controls
+          Positioned(
+            left: 0,
+            bottom: 80,
+            child: MapSidebar(
+              onZoomIn: _mapController.zoomIn,
+              onZoomOut: _mapController.zoomOut,
+              onAeroSettingsTap: _showAeroSettingsPanel,
+              onTrafficSettingsTap: _showTrafficSettingsPanel,
+              isTrafficActive: showTraffic,
+              isTrafficLoading: trafficLoading,
+              onApproachTap: _onApproachTapped,
+              isApproachActive: _approachController.isActive,
+              followMode: followMode,
+              onFollowModeChanged: (mode) {
+                ref.read(followModeProvider.notifier).set(mode);
+                if (mode != FollowMode.off) {
+                  final pos = ref.read(activePositionProvider);
+                  if (pos != null) {
+                    _mapController.followTo(pos.latitude, pos.longitude,
+                        bearing: mode == FollowMode.trackUp
+                            ? pos.track.toDouble()
+                            : 0);
+                  }
+                }
+              },
+            ),
+          ),
+
+          // Wind altitude slider (right edge, only when winds aloft active)
+          if (showWindsAloft)
+            Positioned(
+              right: 8,
+              top: MediaQuery.of(context).padding.top + 100,
+              child: WindAltitudeSlider(
+                altitude: layerState.windsAloftAltitude,
+                onChanged: (alt) {
+                  ref
+                      .read(mapLayerStateProvider.notifier)
+                      .setWindsAloftAltitude(alt);
+                },
+              ),
+            ),
+
+          // Traffic proximity alert banner
+          if (showTraffic && ref.watch(trafficAlertProvider) != null)
+            Positioned(
+              top: toolbarBottom + 8,
+              left: 0,
+              right: 0,
+              child: Center(
+                child:
+                    TrafficAlertBanner(alert: ref.watch(trafficAlertProvider)!),
+              ),
+            ),
+
+          // ADS-B status bar
+          Positioned(
+            bottom: 36,
+            left: 0,
+            right: 0,
+            child: Center(child: AdsbStatusBar()),
+          ),
+
+          // Bottom info bar
+          const Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: MapBottomBar(),
+          ),
+
+          // Layer picker overlay (below toolbar, above map)
+          if (_showLayerPicker)
+            Positioned(
+              top: toolbarBottom,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: PointerInterceptor(
+                child: GestureDetector(
+                  onTap: _toggleLayerPicker,
+                  child: Container(
+                    color: Colors.black38,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: LayerPicker(
+                        onClose: _toggleLayerPicker,
+                        onBaseLayerSelected: () {
+                          setState(() => _showLayerPicker = false);
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+          // Top toolbar (always on top of overlays)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                MapToolbar(
+                  onLayersTap: _toggleLayerPicker,
+                  onFplTap: _toggleFlightPlan,
+                  isFplOpen: _showFlightPlan,
+                  searchController: _searchController,
+                  searchFocusNode: _searchFocusNode,
+                  onSearchChanged: _onSearchChanged,
+                  onSearchTap: () {
+                    setState(() => _isSearching = true);
+                  },
+                  onSearchClear: _clearSearch,
+                  isSearching: _isSearching,
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: _showFlightPlan
+                      ? const FlightPlanPanel()
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+
+          // Search results dropdown
+          if (_isSearching && _searchController.text.isNotEmpty)
+            Positioned(
+              top: toolbarBottom,
+              left: 8,
+              right: 8,
+              child: PointerInterceptor(
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black45,
+                          blurRadius: 12,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: _buildSearchResults(),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Search results UI ─────────────────────────────────────────────────────
 
   Widget _buildSearchResults() {
     if (_searchLoading) {
@@ -712,7 +977,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                state.isNotEmpty ? 'Intersection \u2022 $state' : 'Intersection',
+                state.isNotEmpty
+                    ? 'Intersection \u2022 $state'
+                    : 'Intersection',
                 style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textMuted,
@@ -729,698 +996,10 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final toolbarBottom = MediaQuery.of(context).padding.top + 90;
-    final showOverlay = _showLayerPicker || _showAeroSettings || _showTrafficSettings || _showFlightPlan;
-    final showFlightCategory = _activeOverlays.contains('flight_category');
-
-    // Fetch airports when aeronautical overlay is active and airports are enabled
-    final showAeronautical = _activeOverlays.contains('aeronautical');
-    var airports = <Map<String, dynamic>>[];
-    if (showAeronautical && _aero.showAirports && _currentBounds != null) {
-      final airportsAsync = ref.watch(mapAirportsProvider(_currentBounds!));
-      airports = airportsAsync.value
-              ?.cast<Map<String, dynamic>>()
-              .toList() ??
-          [];
-
-      // Granular airport filtering by facility type and use
-      airports = airports.where((a) {
-        final type = a['facility_type'] ?? '';
-        final use = a['facility_use'] ?? '';
-        if (type == 'H' && !_aero.showHeliports) return false;
-        if (type == 'S' && !_aero.showSeaplaneBases) return false;
-        if (['G', 'U', 'B'].contains(type) && !_aero.showOtherFields) return false;
-        if (use == 'PR' && !_aero.showPrivateAirports) return false;
-        return true;
-      }).toList();
-    }
-
-    // Reset weather station tracking for this build cycle
-    final newWxStations = <String, Map<String, dynamic>>{};
-
-    // When flight category overlay is active, fetch METARs and merge/create dots
-    if (showFlightCategory && _currentBounds != null) {
-      final metarsAsync = ref.watch(mapMetarsProvider(_currentBounds!));
-      final metars = metarsAsync.value;
-      if (metars != null) {
-        final metarMap = <String, Map<dynamic, dynamic>>{};
-        for (final m in metars) {
-          if (m is Map) {
-            final icao = m['icaoId'] as String?;
-            if (icao != null) metarMap[icao] = m;
-          }
-        }
-        debugPrint('[EFB] Flight category: ${metarMap.length} unique METARs, ${airports.length} airports in list');
-
-        // Tag existing airports with their flight category
-        final matched = <String>{};
-        airports = airports.map((a) {
-          final icao = a['icao_identifier'] ?? a['identifier'] ?? '';
-          final metar = metarMap[icao.toString()];
-          if (metar != null) {
-            matched.add(icao.toString());
-            final cat = metar['fltCat'] as String?;
-            if (cat != null) return {...a, 'category': cat};
-          }
-          return a;
-        }).toList();
-        debugPrint('[EFB] Matched ${matched.length} airports to METARs, ${metarMap.length - matched.length} unmatched');
-
-        // Add METAR stations that aren't already in the airports list
-        for (final entry in metarMap.entries) {
-          if (matched.contains(entry.key)) continue;
-          final m = entry.value;
-          final lat = m['lat'] as num?;
-          final lon = m['lon'] as num?;
-          final cat = m['fltCat'] as String?;
-          if (lat == null || lon == null || cat == null) continue;
-          final wxEntry = {
-            'identifier': entry.key,
-            'icao_identifier': entry.key,
-            'latitude': lat.toDouble(),
-            'longitude': lon.toDouble(),
-            'category': cat,
-            'isWeatherStation': true,
-            '_metarData': m,
-          };
-          airports.add(wxEntry);
-          newWxStations[entry.key] = wxEntry;
-        }
-        debugPrint('[EFB] ${newWxStations.length} wx stations added as dots, total airports now: ${airports.length}');
-      }
-    }
-    _weatherStations = newWxStations;
-
-    // When aeronautical overlay is active, fetch airspace/airway/ARTCC data
-    Map<String, dynamic>? airspaceGeoJson;
-    Map<String, dynamic>? airwayGeoJson;
-    Map<String, dynamic>? artccGeoJson;
-    Map<String, dynamic>? navaidGeoJson;
-    Map<String, dynamic>? fixGeoJson;
-    if (showAeronautical && _currentBounds != null) {
-      if (_aero.showAirspaces) {
-        // Build airspace class filter from sub-toggles
-        final classes = <String>['B', 'C', 'D'];
-        if (_aero.showClassE) classes.add('E');
-        final classesStr = classes.join(',');
-
-        airspaceGeoJson = ref
-            .watch(mapAirspacesProvider((
-              minLat: _currentBounds!.minLat,
-              maxLat: _currentBounds!.maxLat,
-              minLng: _currentBounds!.minLng,
-              maxLng: _currentBounds!.maxLng,
-              classes: classesStr,
-            )))
-            .value;
-      }
-      if (_aero.showAirways) {
-        // Build airway type filter from sub-toggles
-        final types = <String>[];
-        if (_aero.showLowAirways) types.addAll(['V', 'T']);
-        if (_aero.showHighAirways) types.addAll(['J', 'Q']);
-        final typesStr = types.isNotEmpty ? types.join(',') : null;
-
-        airwayGeoJson = ref
-            .watch(mapAirwaysProvider((
-              minLat: _currentBounds!.minLat,
-              maxLat: _currentBounds!.maxLat,
-              minLng: _currentBounds!.minLng,
-              maxLng: _currentBounds!.maxLng,
-              types: typesStr,
-            )))
-            .value;
-      }
-      if (_aero.showArtcc) {
-        artccGeoJson =
-            ref.watch(mapArtccProvider(_currentBounds!)).value;
-      }
-      if (_aero.showNavaids) {
-        final navaids = ref
-            .watch(mapNavaidsProvider(_currentBounds!))
-            .value;
-        if (navaids != null) {
-          navaidGeoJson = _navaidsToGeoJson(navaids);
-        }
-      }
-      if (_aero.showFixes) {
-        final fixes = ref
-            .watch(mapFixesProvider(_currentBounds!))
-            .value;
-        if (fixes != null) {
-          fixGeoJson = _fixesToGeoJson(fixes);
-        }
-      }
-    }
-
-    // When TFR overlay is active, fetch TFR GeoJSON
-    final showTfrs = _activeOverlays.contains('tfrs');
-    Map<String, dynamic>? tfrGeoJson;
-    if (showTfrs) {
-      tfrGeoJson = ref.watch(tfrsProvider).value;
-    }
-
-    // When AIR/SIGMET overlay is active, fetch advisory GeoJSON
-    final showAirSigmet = _activeOverlays.contains('air_sigmet');
-    Map<String, dynamic>? advisoryGeoJson;
-    if (showAirSigmet) {
-      // Fetch all three advisory types and merge into one FeatureCollection
-      final gairmets = ref.watch(advisoriesProvider(
-          const AdvisoryParams(type: 'gairmets'))).value;
-      final sigmets = ref.watch(advisoriesProvider(
-          const AdvisoryParams(type: 'sigmets'))).value;
-      final cwas = ref.watch(advisoriesProvider(
-          const AdvisoryParams(type: 'cwas'))).value;
-
-      final allFeatures = <dynamic>[
-        ...?_extractFeatures(gairmets),
-        ...?_extractFeatures(sigmets),
-        ...?_extractFeatures(cwas),
-      ];
-      debugPrint('[EFB] air_sigmet: gairmets=${gairmets != null}, sigmets=${sigmets != null}, cwas=${cwas != null}, total features=${allFeatures.length}');
-      if (allFeatures.isNotEmpty) {
-        advisoryGeoJson = _enrichAdvisoryGeoJson({
-          'type': 'FeatureCollection',
-          'features': allFeatures,
-        });
-      }
-    }
-
-    // When PIREPs overlay is active, fetch PIREP GeoJSON
-    final showPireps = _activeOverlays.contains('pireps');
-    Map<String, dynamic>? pirepGeoJson;
-    if (showPireps && _currentBounds != null) {
-      // AWC PIREP API expects bbox as minLat,minLon,maxLat,maxLon
-      final bbox = '${_currentBounds!.minLat},${_currentBounds!.minLng},'
-          '${_currentBounds!.maxLat},${_currentBounds!.maxLng}';
-      final pirepsData = ref.watch(mapPirepsProvider(bbox)).value;
-      if (pirepsData != null) {
-        pirepGeoJson = _enrichPirepGeoJson(pirepsData);
-      }
-    }
-
-    // METAR-derived overlays (surface wind, temperature, visibility, ceiling)
-    final metarOverlayTypes = {'surface_wind', 'temperature', 'visibility', 'ceiling'};
-    final activeMetarOverlay = _activeOverlays.intersection(metarOverlayTypes);
-    Map<String, dynamic>? metarOverlayGeoJson;
-    if (activeMetarOverlay.isNotEmpty && _currentBounds != null) {
-      final metarsAsync = ref.watch(mapMetarsProvider(_currentBounds!));
-      final metars = metarsAsync.value;
-      if (metars != null) {
-        metarOverlayGeoJson = _buildMetarOverlayGeoJson(
-          metars,
-          activeMetarOverlay.first,
-        );
-      }
-    }
-
-    // When Winds Aloft overlay is active, fetch wind grid, heatmap, and particles
-    final showWindsAloft = _activeOverlays.contains('winds_aloft');
-    Map<String, dynamic>? windsAloftGeoJson;
-    if (showWindsAloft && _currentBounds != null) {
-      final windParams = WindGridParams(
-        bounds: _currentBounds!,
-        altitude: _windsAloftAltitude,
-      );
-      final windsAsync = ref.watch(windGridProvider(windParams));
-      windsAloftGeoJson = windsAsync.value;
-
-      // Heatmap overlay — schedule as post-frame callback to avoid
-      // race conditions from concurrent async calls during build()
-      final client = ref.read(apiClientProvider);
-      final heatmapUrl = client.getWindHeatmapUrl(
-        minLat: _currentBounds!.minLat,
-        maxLat: _currentBounds!.maxLat,
-        minLng: _currentBounds!.minLng,
-        maxLng: _currentBounds!.maxLng,
-        altitude: _windsAloftAltitude,
-      );
-      final hmBounds = _currentBounds!;
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        _heatmapController.show(
-          imageUrl: heatmapUrl,
-          minLat: hmBounds.minLat,
-          maxLat: hmBounds.maxLat,
-          minLng: hmBounds.minLng,
-          maxLng: hmBounds.maxLng,
-        );
-      });
-
-      // Particle animation — fetch wind field data and feed to platform animator
-      final windFieldAsync = ref.watch(windFieldProvider(windParams));
-      final windField = windFieldAsync.value;
-      if (windField != null && windField.isNotEmpty) {
-        final pBounds = _currentBounds!;
-        final pWindField = windField
-            .map((wf) => <String, dynamic>{
-                  'lat': wf.lat,
-                  'lng': wf.lng,
-                  'direction': wf.direction,
-                  'speed': wf.speed,
-                })
-            .toList();
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          _mapController.updateParticleField(
-            pWindField,
-            minLat: pBounds.minLat,
-            maxLat: pBounds.maxLat,
-            minLng: pBounds.minLng,
-            maxLng: pBounds.maxLng,
-          );
-          if (!_mapController.particlesRunning) {
-            debugPrint('[EFB] Starting particle animation with ${pWindField.length} wind field points');
-            _mapController.startParticles();
-          }
-        });
-      }
-    } else {
-      // Clean up when winds aloft is deactivated
-      if (_heatmapController.isActive) {
-        _heatmapController.hide();
-      }
-      if (_mapController.particlesRunning) {
-        _mapController.stopParticles();
-      }
-    }
-
-    // When traffic overlay is active, build traffic GeoJSON from unified provider
-    final showTraffic = _activeOverlays.contains('traffic');
-    Map<String, dynamic>? trafficGeoJson;
-    final trafficLoading = showTraffic &&
-        ref.watch(unifiedTrafficProvider).isEmpty;
-    if (showTraffic) {
-      trafficGeoJson = ref.watch(trafficGeoJsonProvider);
-    }
-
-    // Own-position overlay (always shown when GPS available)
-    Map<String, dynamic>? ownPositionGeoJson;
-    final activePos = ref.watch(activePositionProvider);
-    if (activePos != null) {
-      ownPositionGeoJson = {
-        'type': 'FeatureCollection',
-        'features': [
-          {
-            'type': 'Feature',
-            'geometry': {
-              'type': 'Point',
-              'coordinates': [activePos.longitude, activePos.latitude],
-            },
-            'properties': {
-              'groundspeed': activePos.groundspeed,
-              'track': activePos.track,
-            },
-          },
-        ],
-      };
-    }
-
-    // Build route line coordinates from active flight's routeString
-    // Uses the waypoint resolver which handles airports, navaids, and fixes
-    final activeFlight = ref.watch(activeFlightProvider);
-    final routeCoordinates = <List<double>>[];
-    final routeStr = activeFlight?.routeString;
-    final routeWaypoints = (routeStr != null && routeStr.trim().isNotEmpty)
-        ? routeStr.trim().split(RegExp(r'\s+'))
-        : <String>[];
-    if (routeWaypoints.isNotEmpty) {
-      final resolvedAsync =
-          ref.watch(resolvedRouteProvider(routeWaypoints.join(',')));
-      final resolved = resolvedAsync.value;
-      if (resolved != null) {
-        for (final wp in resolved) {
-          if (wp is Map &&
-              wp['latitude'] != null &&
-              wp['longitude'] != null) {
-            routeCoordinates.add([
-              (wp['longitude'] as num).toDouble(),
-              (wp['latitude'] as num).toDouble(),
-            ]);
-          }
-        }
-      }
-    }
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Map fills the entire screen
-          Positioned.fill(
-            child: EfbMapView(
-              baseLayer: _selectedBaseLayer,
-              showFlightCategory: showFlightCategory,
-              interactive: !showOverlay,
-              onAirportTapped: _onAirportTapped,
-              onPirepTapped: _onPirepTapped,
-              onBoundsChanged: _onBoundsChanged,
-              onMapLongPressed: _onMapLongPressed,
-              airports: airports,
-              routeCoordinates: routeCoordinates,
-              controller: _mapController,
-              airspaceGeoJson: airspaceGeoJson,
-              airwayGeoJson: airwayGeoJson,
-              artccGeoJson: artccGeoJson,
-              navaidGeoJson: navaidGeoJson,
-              fixGeoJson: fixGeoJson,
-              overlays: <String, Map<String, dynamic>?>{
-                if (tfrGeoJson != null) 'tfrs': tfrGeoJson,
-                if (advisoryGeoJson != null) 'advisories': advisoryGeoJson,
-                if (pirepGeoJson != null) 'pireps': pirepGeoJson,
-                if (metarOverlayGeoJson != null) 'metar-overlay': metarOverlayGeoJson,
-                if (trafficGeoJson != null) 'traffic': trafficGeoJson,
-                if (windsAloftGeoJson != null) 'winds-aloft': windsAloftGeoJson,
-                if (ownPositionGeoJson != null) 'own-position': ownPositionGeoJson,
-              },
-            ),
-          ),
-
-          // Left sidebar controls
-          Positioned(
-            left: 0,
-            bottom: 80,
-            child: MapSidebar(
-              onZoomIn: _mapController.zoomIn,
-              onZoomOut: _mapController.zoomOut,
-              onAeroSettingsTap: _showAeroSettingsPanel,
-              onTrafficSettingsTap: _showTrafficSettingsPanel,
-              isTrafficActive: showTraffic,
-              isTrafficLoading: trafficLoading,
-              onApproachTap: _onApproachTapped,
-              isApproachActive: _approachController.isActive,
-              onCenterOnMe: () {
-                final pos = ref.read(activePositionProvider);
-                if (pos != null) {
-                  _mapController.flyTo(pos.latitude, pos.longitude);
-                }
-              },
-            ),
-          ),
-
-          // Wind altitude slider (right edge, only when winds aloft active)
-          if (showWindsAloft)
-            Positioned(
-              right: 8,
-              top: MediaQuery.of(context).padding.top + 100,
-              child: WindAltitudeSlider(
-                altitude: _windsAloftAltitude,
-                onChanged: (alt) {
-                  setState(() {
-                    _windsAloftAltitude = alt;
-                  });
-                },
-              ),
-            ),
-
-          // Traffic proximity alert banner
-          if (showTraffic && ref.watch(trafficAlertProvider) != null)
-            Positioned(
-              top: toolbarBottom + 8,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: TrafficAlertBanner(alert: ref.watch(trafficAlertProvider)!),
-              ),
-            ),
-
-          // ADS-B status bar
-          Positioned(
-            bottom: 36,
-            left: 0,
-            right: 0,
-            child: Center(child: AdsbStatusBar()),
-          ),
-
-          // Bottom info bar
-          const Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: MapBottomBar(),
-          ),
-
-          // Layer picker overlay (below toolbar, above map)
-          if (_showLayerPicker)
-            Positioned(
-              top: toolbarBottom,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: PointerInterceptor(
-                child: GestureDetector(
-                  onTap: _toggleLayerPicker,
-                  child: Container(
-                    color: Colors.black38,
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: LayerPicker(
-                        selectedBaseLayer: _selectedBaseLayer,
-                        activeOverlays: _activeOverlays,
-                        onBaseLayerChanged: _onBaseLayerChanged,
-                        onOverlayToggled: _onOverlayToggled,
-                        onClose: _toggleLayerPicker,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // Top toolbar (always on top of overlays)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                MapToolbar(
-                  onLayersTap: _toggleLayerPicker,
-                  onFplTap: _toggleFlightPlan,
-                  isFplOpen: _showFlightPlan,
-                  searchController: _searchController,
-                  searchFocusNode: _searchFocusNode,
-                  onSearchChanged: _onSearchChanged,
-                  onSearchTap: () {
-                    setState(() => _isSearching = true);
-                  },
-                  onSearchClear: _clearSearch,
-                  isSearching: _isSearching,
-                ),
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
-                  alignment: Alignment.topCenter,
-                  child: _showFlightPlan
-                      ? const FlightPlanPanel()
-                      : const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
-
-          // Search results dropdown
-          if (_isSearching && _searchController.text.isNotEmpty)
-            Positioned(
-              top: toolbarBottom,
-              left: 8,
-              right: 8,
-              child: PointerInterceptor(
-                child: Material(
-                  color: Colors.transparent,
-                  child: Container(
-                    constraints: const BoxConstraints(maxHeight: 320),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black45,
-                          blurRadius: 12,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: _buildSearchResults(),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<dynamic>? _extractFeatures(Map<String, dynamic>? geojson) {
-    if (geojson == null) return null;
-    return geojson['features'] as List<dynamic>?;
-  }
-
-  Map<String, dynamic> _enrichAdvisoryGeoJson(Map<String, dynamic> original) {
-    final features = (original['features'] as List<dynamic>?) ?? [];
-    final enrichedFeatures = features.map((f) {
-      final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
-      final props =
-          Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
-      if (props['color'] == null || props['color'] == '') {
-        final hazard = (props['hazard'] as String? ?? '').toUpperCase();
-        props['color'] = _advisoryColorHex(hazard);
-      }
-      feature['properties'] = props;
-      return feature;
-    }).toList();
-    return {'type': 'FeatureCollection', 'features': enrichedFeatures};
-  }
-
-  String _advisoryColorHex(String hazard) {
-    switch (hazard) {
-      case 'IFR': return '#1E90FF';
-      case 'MTN_OBSC': case 'MT_OBSC': return '#8D6E63';
-      case 'TURB': case 'TURB-HI': case 'TURB-LO': return '#FFC107';
-      case 'ICE': return '#00BCD4';
-      case 'FZLVL': case 'M_FZLVL': return '#00BCD4';
-      case 'LLWS': return '#FF5252';
-      case 'SFC_WND': return '#FF9800';
-      case 'CONV': return '#FF5252';
-      default: return '#B0B4BC';
-    }
-  }
-
-  Map<String, dynamic> _enrichPirepGeoJson(Map<String, dynamic> original) {
-    final features = (original['features'] as List<dynamic>?) ?? [];
-    final enrichedFeatures = features.map((f) {
-      final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
-      final props =
-          Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
-      final tbInt = (props['tbInt1'] as String? ?? '').toUpperCase();
-      final icgInt = (props['icgInt1'] as String? ?? '').toUpperCase();
-      final airepType = props['airepType'] as String? ?? '';
-      props['color'] = _pirepColorHex(tbInt, icgInt);
-      props['isUrgent'] = airepType == 'URGENT PIREP';
-      feature['properties'] = props;
-      return feature;
-    }).toList();
-    return {'type': 'FeatureCollection', 'features': enrichedFeatures};
-  }
-
-  String _pirepColorHex(String tbInt, String icgInt) {
-    final primary = tbInt.isNotEmpty ? tbInt : icgInt;
-    if (['LGT', 'LIGHT', 'LGT-MOD'].contains(primary)) return '#29B6F6';
-    if (['MOD', 'MODERATE', 'MOD-SEV'].contains(primary)) return '#FFC107';
-    if (['SEV', 'SEVERE', 'SEV-EXTM', 'EXTM', 'EXTREME'].contains(primary)) {
-      return '#FF5252';
-    }
-    if (['NEG', 'SMTH', 'SMOOTH', 'NONE', 'TRACE'].contains(primary)) {
-      return '#4CAF50';
-    }
-    return '#B0B4BC';
-  }
-
-  Map<String, dynamic> _buildMetarOverlayGeoJson(
-    List<dynamic> metars,
-    String overlayType,
-  ) {
-    final features = <Map<String, dynamic>>[];
-    for (final m in metars) {
-      if (m is! Map) continue;
-      final lat = m['lat'] as num?;
-      final lng = m['lon'] as num?;
-      if (lat == null || lng == null) continue;
-
-      String? color;
-      String? label;
-
-      switch (overlayType) {
-        case 'surface_wind':
-          final rawWspd = m['wspd'];
-          final wspd = (rawWspd is num) ? rawWspd.toDouble()
-              : (rawWspd is String) ? double.tryParse(rawWspd) : null;
-          if (wspd == null) continue;
-          final wdir = m['wdir'];
-          final dirNum = (wdir is num) ? wdir.toDouble() : null;
-          // Unicode arrow showing downwind direction inside the pill
-          var arrow = '';
-          if (dirNum != null && wspd > 0) {
-            const arrows = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
-            final downwind = (dirNum + 180) % 360;
-            arrow = '${arrows[((downwind + 22.5) % 360 ~/ 45)]} ';
-          }
-          label = '$arrow${wspd.toInt()}';
-          if (wspd <= 5) { color = '#4CAF50'; }
-          else if (wspd <= 15) { color = '#FFC107'; }
-          else if (wspd <= 25) { color = '#FF9800'; }
-          else { color = '#FF5252'; }
-          break;
-        case 'temperature':
-          final rawTemp = m['temp'];
-          final temp = (rawTemp is num) ? rawTemp.toDouble()
-              : (rawTemp is String) ? double.tryParse(rawTemp) : null;
-          if (temp == null) continue;
-          label = '${temp.toInt()}°';
-          if (temp <= 0) { color = '#2196F3'; }
-          else if (temp <= 10) { color = '#29B6F6'; }
-          else if (temp <= 20) { color = '#4CAF50'; }
-          else if (temp <= 30) { color = '#FFC107'; }
-          else { color = '#FF5252'; }
-          break;
-        case 'visibility':
-          final rawVisib = m['visib'];
-          final visib = (rawVisib is num) ? rawVisib.toDouble()
-              : (rawVisib is String) ? double.tryParse(rawVisib.replaceAll('+', '')) : null;
-          if (visib == null) continue;
-          label = visib >= 10 ? '10+' : visib.toStringAsFixed(visib < 3 ? 1 : 0);
-          if (visib < 1) { color = '#E040FB'; }
-          else if (visib < 3) { color = '#FF5252'; }
-          else if (visib < 5) { color = '#FFC107'; }
-          else { color = '#4CAF50'; }
-          break;
-        case 'ceiling':
-          final clouds = m['clouds'] as List<dynamic>?;
-          if (clouds == null || clouds.isEmpty) continue;
-          int? cig;
-          for (final c in clouds) {
-            if (c is Map) {
-              final cover = (c['cover'] as String? ?? '').toUpperCase();
-              if (cover == 'BKN' || cover == 'OVC') {
-                final rawBase = c['base'];
-                final base = (rawBase is num) ? rawBase.toInt()
-                    : (rawBase is String) ? int.tryParse(rawBase) : null;
-                if (base != null && (cig == null || base < cig)) {
-                  cig = base.toInt();
-                }
-              }
-            }
-          }
-          if (cig == null) continue;
-          label = '$cig';
-          if (cig < 500) { color = '#E040FB'; }
-          else if (cig < 1000) { color = '#FF5252'; }
-          else if (cig < 3000) { color = '#FFC107'; }
-          else { color = '#4CAF50'; }
-          break;
-      }
-
-      if (color == null) continue;
-      features.add({
-        'type': 'Feature',
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [lng, lat],
-        },
-        'properties': {
-          'color': color,
-          'label': label ?? '',
-        },
-      });
-    }
-    return {'type': 'FeatureCollection', 'features': features};
-  }
-
 }
 
 /// Stateful wrapper so the bottom sheet rebuilds on toggle changes
-/// while also syncing state back to [MapsScreen].
+/// while also syncing state back to the provider.
 class _AeroSettingsSheet extends StatefulWidget {
   final AeroSettings settings;
   final ValueChanged<AeroSettings> onChanged;
@@ -1459,7 +1038,7 @@ class _AeroSettingsSheetState extends State<_AeroSettingsSheet> {
 }
 
 /// Stateful wrapper so the traffic settings bottom sheet rebuilds on toggle
-/// changes while also syncing state back to [MapsScreen].
+/// changes while also syncing state back to the provider.
 class _TrafficSettingsSheet extends StatefulWidget {
   final TrafficSettings settings;
   final ValueChanged<TrafficSettings> onChanged;

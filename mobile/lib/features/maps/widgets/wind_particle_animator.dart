@@ -65,6 +65,7 @@ class WindParticleAnimator {
 
   // Wind field grid for interpolation
   List<WindFieldPoint> _windField = [];
+  // Bounds used for particle spawning & step-size calculation (= current viewport)
   double _minLat = 0, _maxLat = 0, _minLng = 0, _maxLng = 0;
 
   bool get isRunning => _timer != null;
@@ -80,6 +81,19 @@ class WindParticleAnimator {
     required double maxLng,
   }) {
     _windField = field;
+    updateViewport(
+        minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+  }
+
+  /// Update the visible viewport bounds (call on every camera move).
+  /// Keeps step size and particle density proportional to what's on screen,
+  /// even when the wind field data hasn't changed.
+  void updateViewport({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  }) {
     _minLat = minLat;
     _maxLat = maxLat;
     _minLng = minLng;
@@ -174,8 +188,26 @@ class WindParticleAnimator {
       final moveDir = (wind.direction + 180) % 360;
       final moveRad = moveDir * pi / 180;
 
-      // Step size proportional to wind speed (faster winds = longer streaks)
-      final stepDeg = 0.04 + (wind.speed / 60) * 0.12;
+      // Step size scales with viewport² plus extra dampening at tight zooms:
+      //   25° span → 625 * 1.0  → step ≈ 0.019   (brisk at CONUS)
+      //    5° span →  25 * 1.0  → step ≈ 0.00075  (moderate at state)
+      //    1° span →   1 * 0.1  → step ≈ 0.000003 (very gentle at city)
+      final viewSpan = min(_maxLat - _minLat, _maxLng - _minLng).clamp(0.5, 60.0);
+      final scaleFactor = viewSpan * viewSpan;
+      // Ramps from 0.1 at ≤1° to 1.0 at ≥5° — only affects tight zooms
+      final zoomDampen = ((viewSpan - 1) / 4).clamp(0.1, 1.0);
+      // Speed tiers: green 1x, yellow 2x, orange 3x, red 4x
+      final double speedMult;
+      if (wind.speed >= 50) {
+        speedMult = 4.0;
+      } else if (wind.speed >= 30) {
+        speedMult = 3.0;
+      } else if (wind.speed >= 15) {
+        speedMult = 2.0;
+      } else {
+        speedMult = 1.0;
+      }
+      final stepDeg = scaleFactor * zoomDampen * 0.000025 * speedMult;
       final dLat = stepDeg * cos(moveRad);
       final dLng = stepDeg * sin(moveRad) / cos(p.lat * pi / 180);
 

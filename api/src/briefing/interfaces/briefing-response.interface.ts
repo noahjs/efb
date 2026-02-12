@@ -169,6 +169,7 @@ export interface BriefingFlightSummary {
   eta: string | null;
   distanceNm: number | null;
   waypoints: BriefingWaypoint[];
+  phaseProfile: FlightPhaseProfile | null;
 }
 
 export interface AdverseConditions {
@@ -228,11 +229,22 @@ export interface RiskSummary {
   criticalItems: string[];
 }
 
+// Flight Phase Profile
+export interface FlightPhaseProfile {
+  departureElevationFt: number;
+  destinationElevationFt: number;
+  cruiseAltitudeFt: number;
+  tocDistanceNm: number;
+  todDistanceNm: number;
+  totalDistanceNm: number;
+}
+
 // Route Timeline types
 export interface TimelineHazard {
   type: string;
   description: string;
   altitudeRelation: string | null;
+  alertLevel: 'red' | 'yellow' | 'green';
 }
 
 export interface TimelinePoint {
@@ -242,6 +254,8 @@ export interface TimelinePoint {
   distanceFromDep: number;
   etaMinutes: number;
   etaZulu: string | null;
+  flightPhase: 'climb' | 'cruise' | 'descent' | null;
+  estimatedAltitudeFt: number | null;
   nearestStation: string | null;
   flightCategory: string | null;
   ceiling: number | null;

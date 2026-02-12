@@ -88,11 +88,32 @@ final notamsProvider =
   return client.getNotams(icao);
 });
 
-/// Provider for D-ATIS data
-final datisProvider =
-    FutureProvider.family<List<dynamic>?, String>((ref, icao) async {
+/// Provider for D-ATIS data with server-side status.
+/// Returns { status, entries, fetchedAt } — the API never blocks on slow
+/// LiveATC transcription. When status is 'processing', the widget polls.
+final datisProvider = FutureProvider.family<
+    ({String status, List<dynamic>? entries, DateTime? fetchedAt}),
+    String>((ref, icao) async {
+  ref.keepAlive();
   final client = ref.read(apiClientProvider);
-  return client.getDatis(icao);
+  final data = await client.getDatis(icao);
+
+  if (data == null) {
+    return (status: 'error', entries: null, fetchedAt: null);
+  }
+
+  final status = data['status'] as String? ?? 'error';
+  final entries = data['entries'] as List<dynamic>?;
+
+  // Extract fetchedAt from _meta
+  DateTime? fetchedAt;
+  final meta = data['_meta'] as Map<String, dynamic>?;
+  final updatedAtStr = meta?['updatedAt'] as String?;
+  if (updatedAtStr != null) {
+    fetchedAt = DateTime.tryParse(updatedAtStr)?.toUtc();
+  }
+
+  return (status: status, entries: entries, fetchedAt: fetchedAt);
 });
 
 /// Provider for 7-day forecast data

@@ -77,7 +77,12 @@ export function findAffectedSegment(
     if (!wpAffected) {
       for (const ring of rings) {
         for (const coord of ring) {
-          const dist = haversineNm(wp.latitude, wp.longitude, coord[1], coord[0]);
+          const dist = haversineNm(
+            wp.latitude,
+            wp.longitude,
+            coord[1],
+            coord[0],
+          );
           if (dist <= corridorNm) {
             wpAffected = true;
             break;
@@ -183,7 +188,34 @@ export function contextualizeAdvisories(
   }
 }
 
-function extractRings(geometry: any): number[][][] {
+/**
+ * Determine the phase-aware altitude relation at a specific point along the route.
+ * Returns 'climbing_through' / 'descending_through' when the aircraft is in climb/descent
+ * and its estimated altitude falls within the hazard band.
+ */
+export function getPhaseAwareAltitudeRelation(
+  estimatedAltFt: number,
+  phase: 'climb' | 'cruise' | 'descent',
+  baseStr: string | null,
+  topStr: string | null,
+): string | null {
+  const baseFt = parseAltitudeToFeet(baseStr);
+  const topFt = parseAltitudeToFeet(topStr);
+  if (baseFt == null && topFt == null) return null;
+
+  const effectiveBase = baseFt ?? 0;
+  const effectiveTop = topFt ?? 60000;
+
+  if (estimatedAltFt >= effectiveBase && estimatedAltFt <= effectiveTop) {
+    if (phase === 'climb') return 'climbing_through';
+    if (phase === 'descent') return 'descending_through';
+    return 'within';
+  }
+  if (estimatedAltFt > effectiveTop) return 'above';
+  return 'below';
+}
+
+export function extractRings(geometry: any): number[][][] {
   if (!geometry || !geometry.type) return [];
   if (geometry.type === 'Polygon') return geometry.coordinates || [];
   if (geometry.type === 'MultiPolygon') {

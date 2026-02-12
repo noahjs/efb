@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../providers/follow_mode_provider.dart';
 
 class MapSidebar extends StatefulWidget {
   final VoidCallback? onZoomIn;
@@ -10,7 +11,8 @@ class MapSidebar extends StatefulWidget {
   final bool isTrafficLoading;
   final VoidCallback? onApproachTap;
   final bool isApproachActive;
-  final VoidCallback? onCenterOnMe;
+  final FollowMode followMode;
+  final ValueChanged<FollowMode>? onFollowModeChanged;
 
   const MapSidebar({
     super.key,
@@ -22,7 +24,8 @@ class MapSidebar extends StatefulWidget {
     this.isTrafficLoading = false,
     this.onApproachTap,
     this.isApproachActive = false,
-    this.onCenterOnMe,
+    this.followMode = FollowMode.off,
+    this.onFollowModeChanged,
   });
 
   @override
@@ -58,6 +61,15 @@ class _MapSidebarState extends State<MapSidebar>
   void dispose() {
     _spinController.dispose();
     super.dispose();
+  }
+
+  void _cycleFollowMode() {
+    final next = switch (widget.followMode) {
+      FollowMode.off => FollowMode.northUp,
+      FollowMode.northUp => FollowMode.trackUp,
+      FollowMode.trackUp => FollowMode.off,
+    };
+    widget.onFollowModeChanged?.call(next);
   }
 
   @override
@@ -136,11 +148,14 @@ class _MapSidebarState extends State<MapSidebar>
           ),
           const SizedBox(height: 12),
 
-          // Center on me
+          // Follow mode / center on me
           _SidebarButton(
-            icon: Icons.my_location,
+            icon: widget.followMode == FollowMode.trackUp
+                ? Icons.navigation
+                : Icons.my_location,
             size: 18,
-            onTap: () => widget.onCenterOnMe?.call(),
+            active: widget.followMode != FollowMode.off,
+            onTap: _cycleFollowMode,
           ),
         ],
       ),

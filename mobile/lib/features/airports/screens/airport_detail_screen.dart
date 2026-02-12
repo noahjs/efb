@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/solar.dart';
 import '../../../services/api_client.dart';
 import '../../../services/airport_providers.dart';
+import '../../../services/atis_audio_provider.dart';
 import '../widgets/airport_info_tab.dart';
 import '../widgets/airport_weather_tab.dart';
 import '../widgets/airport_runway_tab.dart';
@@ -69,6 +70,17 @@ class AirportDetailScreen extends ConsumerWidget {
                   airport: airport,
                 ),
               ),
+            ),
+
+            // ATIS audio bar (persists across tabs)
+            airportAsync.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+              data: (airport) {
+                final hasLiveatc = airport?['has_liveatc'] == true;
+                if (!hasLiveatc) return const SizedBox.shrink();
+                return _AtisAudioBar(airportId: airportId);
+              },
             ),
 
             // Tab bar
@@ -256,6 +268,7 @@ class _AirportHeader extends ConsumerWidget {
                         pdfUrl: pdfUrl,
                         airportId: airportId,
                         chartCode: 'APD',
+                        procedureId: diagram.id,
                       ),
                     ),
                   );
@@ -338,6 +351,130 @@ class _QuickAction extends StatelessWidget {
         ),
         child: Text(label, style: const TextStyle(fontSize: 12)),
       ),
+    );
+  }
+}
+
+class _AtisAudioBar extends ConsumerWidget {
+  final String airportId;
+  const _AtisAudioBar({required this.airportId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final audioState = ref.watch(atisAudioProvider(airportId));
+
+    // Only show the bar once the user has initiated playback
+    if (!audioState.isPlaying && !audioState.isLoading) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      color: AppColors.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: AppColors.primary.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          children: [
+            _buildPlayButton(ref, audioState),
+            const SizedBox(width: 10),
+            Icon(
+              Icons.cell_tower,
+              size: 16,
+              color: AppColors.primary,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                audioState.error ?? 'ATIS Audio',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: audioState.error != null
+                      ? AppColors.error
+                      : AppColors.primary,
+                ),
+              ),
+            ),
+            if (audioState.isPlaying)
+              _PulsingDot(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayButton(WidgetRef ref, AtisAudioState audioState) {
+    return GestureDetector(
+      onTap: () => ref.read(atisAudioProvider(airportId).notifier).stop(),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (audioState.isLoading)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          if (audioState.isLoading) const SizedBox(width: 6),
+          Icon(
+            Icons.stop_circle,
+            size: 28,
+            color: AppColors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PulsingDot extends StatefulWidget {
+  @override
+  State<_PulsingDot> createState() => _PulsingDotState();
+}
+
+class _PulsingDotState extends State<_PulsingDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Opacity(
+          opacity: 0.3 + 0.7 * _controller.value,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: AppColors.error,
+              shape: BoxShape.circle,
+            ),
+          ),
+        );
+      },
     );
   }
 }

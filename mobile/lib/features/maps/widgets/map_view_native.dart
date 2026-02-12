@@ -17,17 +17,15 @@ class PlatformMapView extends StatefulWidget {
   final bool showFlightCategory;
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
+  final ValueChanged<String>? onNavaidTapped;
+  final ValueChanged<String>? onFixTapped;
   final ValueChanged<Map<String, dynamic>>? onPirepTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
+  final VoidCallback? onMapTapped;
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
-  final Map<String, dynamic>? airspaceGeoJson;
-  final Map<String, dynamic>? airwayGeoJson;
-  final Map<String, dynamic>? artccGeoJson;
-  final Map<String, dynamic>? navaidGeoJson;
-  final Map<String, dynamic>? fixGeoJson;
   final Map<String, Map<String, dynamic>?> overlays;
 
   const PlatformMapView({
@@ -36,17 +34,15 @@ class PlatformMapView extends StatefulWidget {
     this.showFlightCategory = false,
     this.interactive = true,
     this.onAirportTapped,
+    this.onNavaidTapped,
+    this.onFixTapped,
     this.onPirepTapped,
     this.onBoundsChanged,
     this.onMapLongPressed,
+    this.onMapTapped,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
-    this.airspaceGeoJson,
-    this.airwayGeoJson,
-    this.artccGeoJson,
-    this.navaidGeoJson,
-    this.fixGeoJson,
     this.overlays = const {},
   });
 
@@ -58,7 +54,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   MapboxMap? _mapboxMap;
   bool _airportSourceReady = false;
   bool _routeSourceReady = false;
-  bool _aeroSourceReady = false;
   final Set<String> _overlaySourcesReady = {};
   final _particleAnimator = WindParticleAnimator();
 
@@ -107,13 +102,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
     if (oldWidget.routeCoordinates != widget.routeCoordinates) {
       _updateRouteSource();
-    }
-    if (oldWidget.airspaceGeoJson != widget.airspaceGeoJson ||
-        oldWidget.airwayGeoJson != widget.airwayGeoJson ||
-        oldWidget.artccGeoJson != widget.artccGeoJson ||
-        oldWidget.navaidGeoJson != widget.navaidGeoJson ||
-        oldWidget.fixGeoJson != widget.fixGeoJson) {
-      _updateAeronauticalSources();
     }
     // Update any overlay sources that changed
     final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
@@ -245,6 +233,20 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       );
     };
 
+    // Bind follow-mode camera (shorter animation, preserves zoom)
+    widget.controller?.onFollowTo =
+        (double lat, double lng, {double bearing = 0}) async {
+      final cam = await mapboxMap.getCameraState();
+      mapboxMap.flyTo(
+        CameraOptions(
+          center: Point(coordinates: Position(lng, lat)),
+          bearing: bearing,
+          zoom: cam.zoom,
+        ),
+        MapAnimationOptions(duration: 400),
+      );
+    };
+
     // Bind particle animation to controller
     _particleAnimator.attach(mapboxMap);
     widget.controller?.onUpdateParticleField = (windField,
@@ -258,6 +260,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               ))
           .toList();
       _particleAnimator.updateWindField(points,
+          minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+    };
+    widget.controller?.onUpdateParticleViewport =
+        ({required minLat, required maxLat, required minLng, required maxLng}) {
+      _particleAnimator.updateViewport(
           minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
     };
     widget.controller?.onStartParticles = () {
@@ -301,6 +308,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final map = _mapboxMap;
     if (map == null) return;
 
+    // Dismiss any open feature sheet before checking for new features
+    widget.onMapTapped?.call();
+
     final point = context.touchPosition;
     final screenCoord = ScreenCoordinate(x: point.x, y: point.y);
 
@@ -309,7 +319,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       try {
         final pirepFeatures = await map.queryRenderedFeatures(
           RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
-          RenderedQueryOptions(layerIds: ['pirep-dots', 'pirep-urgent-ring']),
+          RenderedQueryOptions(layerIds: ['pirep-symbols', 'pirep-urgent-ring']),
         );
         if (pirepFeatures.isNotEmpty) {
           final feature = pirepFeatures.first;
@@ -347,10 +357,49 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           if (props is Map && props.containsKey('id')) {
             final id = props['id'] as String;
             widget.onAirportTapped?.call(id);
+            return;
           }
         }
       } catch (e) {
         debugPrint('Failed to query airport features: $e');
+      }
+    }
+
+    // Then check navaids
+    if (widget.onNavaidTapped != null) {
+      try {
+        final features = await map.queryRenderedFeatures(
+          RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
+          RenderedQueryOptions(layerIds: ['navaid-symbols']),
+        );
+        if (features.isNotEmpty) {
+          final props = features.first?.queriedFeature.feature['properties'];
+          if (props is Map && props.containsKey('identifier')) {
+            widget.onNavaidTapped?.call(props['identifier'] as String);
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to query navaid features: $e');
+      }
+    }
+
+    // Then check fixes
+    if (widget.onFixTapped != null) {
+      try {
+        final features = await map.queryRenderedFeatures(
+          RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
+          RenderedQueryOptions(layerIds: ['fix-symbols']),
+        );
+        if (features.isNotEmpty) {
+          final props = features.first?.queriedFeature.feature['properties'];
+          if (props is Map && props.containsKey('identifier')) {
+            widget.onFixTapped?.call(props['identifier'] as String);
+            return;
+          }
+        }
+      } catch (e) {
+        debugPrint('Failed to query fix features: $e');
       }
     }
   }
@@ -422,7 +471,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (_mapboxMap == null) return;
     await _addVfrTiles(_mapboxMap!);
     await _addHillshadeLayer(_mapboxMap!);
-    await _addAeronauticalLayers(_mapboxMap!);
     // Register airport symbol images for VFR chart-style markers
     await _registerAirportSymbolImages(_mapboxMap!);
     // Register wind barb images and arrow for the symbol layer
@@ -444,7 +492,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     // Push current data into the fresh sources
     _updateAirportsSource();
     _updateRouteSource();
-    _updateAeronauticalSources();
     for (final key in _overlayRegistry.keys) {
       _updateOverlaySource(key);
     }
@@ -718,85 +765,6 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
   /// Creates aeronautical GeoJSON sources and layers (airspaces, airways, ARTCC).
   /// Added below VFR tiles but above airport dots so airspace fills don't cover airports.
-  Future<void> _addAeronauticalLayers(MapboxMap map) async {
-    const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
-
-    try {
-      // ARTCC boundaries (bottom layer — gray dashed)
-      await map.style
-          .addSource(GeoJsonSource(id: 'artcc', data: emptyGeoJson));
-      await map.style.addLayer(LineLayer(
-        id: 'artcc-lines',
-        sourceId: 'artcc',
-        lineColor: const Color(0xFF999999).toARGB32(),
-        lineWidth: 1.0,
-        lineOpacity: 0.6,
-        lineDasharray: [4.0, 4.0],
-      ));
-
-      // Airways (thin light-blue lines)
-      await map.style
-          .addSource(GeoJsonSource(id: 'airways', data: emptyGeoJson));
-      await map.style.addLayer(LineLayer(
-        id: 'airway-lines',
-        sourceId: 'airways',
-        lineColor: const Color(0xFF64B5F6).toARGB32(),
-        lineWidth: 1.0,
-        lineOpacity: 0.7,
-      ));
-
-      // Airspaces (fill + border)
-      await map.style
-          .addSource(GeoJsonSource(id: 'airspaces', data: emptyGeoJson));
-      await map.style.addLayer(FillLayer(
-        id: 'airspace-fill',
-        sourceId: 'airspaces',
-        fillOpacity: 0.1,
-        fillColor: const Color(0xFF2196F3).toARGB32(),
-      ));
-      await map.style.addLayer(LineLayer(
-        id: 'airspace-border',
-        sourceId: 'airspaces',
-        lineWidth: 2.0,
-        lineColor: const Color(0xFF2196F3).toARGB32(),
-        lineOpacity: 0.8,
-      ));
-
-      _aeroSourceReady = true;
-    } catch (e) {
-      debugPrint('Failed to add aeronautical layers: $e');
-    }
-  }
-
-  Future<void> _updateAeronauticalSources() async {
-    if (!_aeroSourceReady || _mapboxMap == null) return;
-
-    try {
-      // Update airspaces
-      final airspaceData = widget.airspaceGeoJson != null
-          ? jsonEncode(widget.airspaceGeoJson)
-          : '{"type":"FeatureCollection","features":[]}';
-      await _mapboxMap!.style
-          .setStyleSourceProperty('airspaces', 'data', airspaceData);
-
-      // Update airways
-      final airwayData = widget.airwayGeoJson != null
-          ? jsonEncode(widget.airwayGeoJson)
-          : '{"type":"FeatureCollection","features":[]}';
-      await _mapboxMap!.style
-          .setStyleSourceProperty('airways', 'data', airwayData);
-
-      // Update ARTCC
-      final artccData = widget.artccGeoJson != null
-          ? jsonEncode(widget.artccGeoJson)
-          : '{"type":"FeatureCollection","features":[]}';
-      await _mapboxMap!.style
-          .setStyleSourceProperty('artcc', 'data', artccData);
-    } catch (e) {
-      debugPrint('Failed to update aeronautical sources: $e');
-    }
-  }
-
   // ── Generic GeoJSON Overlay System ──
   //
   // To add a new overlay, just add an entry to [_overlayRegistry] with a
@@ -810,6 +778,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   /// `map.style.addLayer(...)` for each layer it needs.
   static final Map<String, Future<void> Function(MapboxMap map, String srcId)>
       _overlayRegistry = {
+    // Aeronautical sub-layers (bottom, so other overlays render on top)
+    'artcc': _setupArtccLayers,
+    'airways': _setupAirwayLayers,
+    'airspaces': _setupAirspaceLayers,
+    'navaids': _setupNavaidLayers,
+    'fixes': _setupFixLayers,
+    // Situational overlays
     'tfrs': _setupTfrLayers,
     'advisories': _setupAdvisoryLayers,
     'pireps': _setupPirepLayers,
@@ -817,6 +792,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     'traffic': _setupTrafficLayers,
     'winds-aloft': _setupWindsAloftLayers,
     'wind-streamlines': _setupStreamlineLayers,
+    'breadcrumb': _setupBreadcrumbLayers,
     'own-position': _setupOwnPositionLayers,
   };
 
@@ -848,6 +824,81 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   // ── Layer setup callbacks (one per overlay type) ──
+
+  // ── Aeronautical layer setup callbacks ──
+
+  static Future<void> _setupArtccLayers(MapboxMap map, String srcId) async {
+    await map.style.addLayer(LineLayer(
+      id: 'artcc-lines',
+      sourceId: srcId,
+      lineColor: const Color(0xFF999999).toARGB32(),
+      lineWidth: 1.0,
+      lineOpacity: 0.6,
+      lineDasharray: [4.0, 4.0],
+    ));
+  }
+
+  static Future<void> _setupAirwayLayers(MapboxMap map, String srcId) async {
+    await map.style.addLayer(LineLayer(
+      id: 'airway-lines',
+      sourceId: srcId,
+      lineColor: const Color(0xFF64B5F6).toARGB32(),
+      lineWidth: 1.0,
+      lineOpacity: 0.7,
+    ));
+  }
+
+  static Future<void> _setupAirspaceLayers(MapboxMap map, String srcId) async {
+    await map.style.addLayer(FillLayer(
+      id: 'airspace-fill',
+      sourceId: srcId,
+      fillOpacity: 0.1,
+      fillColor: const Color(0xFF2196F3).toARGB32(),
+    ));
+    await map.style.addLayer(LineLayer(
+      id: 'airspace-border',
+      sourceId: srcId,
+      lineWidth: 2.0,
+      lineColor: const Color(0xFF2196F3).toARGB32(),
+      lineOpacity: 0.8,
+    ));
+  }
+
+  static Future<void> _setupNavaidLayers(MapboxMap map, String srcId) async {
+    await map.style.addLayer(SymbolLayer(
+      id: 'navaid-symbols',
+      sourceId: srcId,
+      textField: '{identifier}',
+      textSize: 10.0,
+      textColor: const Color(0xFF90CAF9).toARGB32(),
+      textHaloColor: const Color(0xFF000000).toARGB32(),
+      textHaloWidth: 1.0,
+      textOffset: [0.0, 1.2],
+      textOptional: true,
+      iconImage: 'airport-dot', // reuse existing small dot
+      iconSize: 0.5,
+      iconColor: const Color(0xFF90CAF9).toARGB32(),
+    ));
+  }
+
+  static Future<void> _setupFixLayers(MapboxMap map, String srcId) async {
+    await map.style.addLayer(SymbolLayer(
+      id: 'fix-symbols',
+      sourceId: srcId,
+      textField: '{identifier}',
+      textSize: 9.0,
+      textColor: const Color(0xFF80CBC4).toARGB32(),
+      textHaloColor: const Color(0xFF000000).toARGB32(),
+      textHaloWidth: 1.0,
+      textOffset: [0.0, 1.2],
+      textOptional: true,
+      iconImage: 'airport-dot', // reuse existing small dot
+      iconSize: 0.4,
+      iconColor: const Color(0xFF80CBC4).toARGB32(),
+    ));
+  }
+
+  // ── Situational overlay layer setup callbacks ──
 
   static Future<void> _setupTfrLayers(MapboxMap map, String srcId) async {
     await map.style.addLayer(FillLayer(
@@ -899,23 +950,29 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupPirepLayers(MapboxMap map, String srcId) async {
-    await map.style.addLayer(CircleLayer(
-      id: 'pirep-dots',
+    // Symbol layer using Unicode characters (same as imagery PIREP viewer)
+    await map.style.addLayer(SymbolLayer(
+      id: 'pirep-symbols',
       sourceId: srcId,
-      circleRadius: 6.0,
-      circleColor: const Color(0xFFB0B4BC).toARGB32(),
-      circleStrokeWidth: 1.5,
-      circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+      textField: '{symbol}',
+      textSize: 16.0,
+      textAllowOverlap: true,
+      textIgnorePlacement: true,
+      textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
     ));
-    await map.style.setStyleLayerProperty('pirep-dots', 'circle-color', ['get', 'color']);
+    await map.style.setStyleLayerProperty(
+      'pirep-symbols', 'text-color', ['get', 'color'],
+    );
 
+    // Urgent PIREPs get a red outer ring
     await map.style.addLayer(CircleLayer(
       id: 'pirep-urgent-ring',
       sourceId: srcId,
-      circleRadius: 10.0,
+      circleRadius: 12.0,
       circleColor: const Color(0x00000000).toARGB32(),
       circleStrokeWidth: 2.0,
       circleStrokeColor: const Color(0xFFFF5252).toARGB32(),
+      circleOpacity: 0.7,
       filter: ['==', ['get', 'isUrgent'], true],
     ));
   }
@@ -1125,6 +1182,29 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
       textAllowOverlap: true,
       textIgnorePlacement: true,
+    ));
+  }
+
+  static Future<void> _setupBreadcrumbLayers(MapboxMap map, String srcId) async {
+    // Black border line for contrast
+    await map.style.addLayer(LineLayer(
+      id: 'breadcrumb-border',
+      sourceId: srcId,
+      lineWidth: 4.0,
+      lineOpacity: 0.5,
+      lineColor: Colors.black.toARGB32(),
+      lineCap: LineCap.ROUND,
+      lineJoin: LineJoin.ROUND,
+    ));
+    // Cyan trail line
+    await map.style.addLayer(LineLayer(
+      id: 'breadcrumb-line',
+      sourceId: srcId,
+      lineWidth: 2.5,
+      lineOpacity: 0.85,
+      lineColor: const Color(0xFF00E5FF).toARGB32(),
+      lineCap: LineCap.ROUND,
+      lineJoin: LineJoin.ROUND,
     ));
   }
 
@@ -1375,6 +1455,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       onMapCreated: _onMapCreated,
       onStyleLoadedListener: _onStyleLoaded,
       onMapIdleListener: _onMapIdle,
+      onScrollListener: (_) {
+        widget.controller?.onUserPanned?.call();
+      },
     );
   }
 }

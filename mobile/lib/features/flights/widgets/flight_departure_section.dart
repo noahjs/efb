@@ -112,9 +112,9 @@ class FlightDepartureSection extends ConsumerWidget {
             }
           },
         ),
-        FlightFieldRow(
+        _DepartureRow(
           label: 'Alternate',
-          value: flight.alternateIdentifier ?? 'None',
+          airportId: flight.alternateIdentifier,
           onTap: () async {
             final result = await showTextEditSheet(
               context,
@@ -178,6 +178,14 @@ class _DepartureRow extends StatelessWidget {
             if (showLanding)
               _ActionChip(label: 'Landing', onTap: onLanding),
             const Spacer(),
+            if (airportId != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _ActionChip(
+                  label: 'Info',
+                  onTap: () => context.push('/airports/$airportId'),
+                ),
+              ),
             Text(
               airportId ?? 'Select',
               style: TextStyle(

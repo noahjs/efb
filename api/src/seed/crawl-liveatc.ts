@@ -151,8 +151,20 @@ function isAtisOnly(name: string): boolean {
   const lower = name.toLowerCase();
   if (!lower.includes('atis')) return false;
 
-  const mixedIndicators = ['twr', 'tower', 'gnd', 'ground', 'app', 'approach',
-    'dep', 'departure', 'clnc', 'clearance', 'ctr', 'center'];
+  const mixedIndicators = [
+    'twr',
+    'tower',
+    'gnd',
+    'ground',
+    'app',
+    'approach',
+    'dep',
+    'departure',
+    'clnc',
+    'clearance',
+    'ctr',
+    'center',
+  ];
   return !mixedIndicators.some((ind) => lower.includes(ind));
 }
 
@@ -229,8 +241,12 @@ async function main() {
       console.error(`No existing data at ${OUTPUT_PATH}. Run a crawl first.`);
       process.exit(1);
     }
-    const output: OutputJson = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
-    console.log(`Loaded ${Object.keys(output.airports).length} airports from ${OUTPUT_PATH}.`);
+    const output: OutputJson = JSON.parse(
+      fs.readFileSync(OUTPUT_PATH, 'utf-8'),
+    );
+    console.log(
+      `Loaded ${Object.keys(output.airports).length} airports from ${OUTPUT_PATH}.`,
+    );
     await updateDbFromJson(output);
     return;
   }
@@ -311,9 +327,7 @@ async function main() {
 
   // Filter out already-crawled airports if resuming
   if (resume && !singleAirport) {
-    airports = airports.filter(
-      (a) => !output.airports[a.icao_identifier!],
-    );
+    airports = airports.filter((a) => !output.airports[a.icao_identifier]);
     console.log(`${airports.length} airports remaining after resume filter.\n`);
   }
 
@@ -323,7 +337,7 @@ async function main() {
 
   for (let i = 0; i < airports.length; i++) {
     const airport = airports[i];
-    const icao = airport.icao_identifier!;
+    const icao = airport.icao_identifier;
     const progress = `[${i + 1}/${airports.length}]`;
 
     try {

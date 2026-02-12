@@ -102,7 +102,17 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:www.broadcastify.com)",
       "Bash(npx eslint:*)",
-      "Bash(flutter devices:*)"
+      "Bash(flutter devices:*)",
+      "Bash(PGPASSWORD=efb psql:*)",
+      "Bash(docker exec:*)",
+      "WebFetch(domain:timgit.github.io)",
+      "WebFetch(domain:unpkg.com)",
+      "WebFetch(domain:app.unpkg.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:localhost)",
+      "Bash(npx:*)",
+      "Bash(node test-weather.mjs:*)",
+      "Bash(npm run seed:aircraft:*)"
     ]
   }
 }

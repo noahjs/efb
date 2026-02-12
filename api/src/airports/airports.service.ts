@@ -174,13 +174,12 @@ export class AirportsService {
     const hardSet = new Set(hardRows.map((r) => r.airport_identifier));
 
     // Determine which airports have a control tower (TWR frequency)
-    const towerRows: { airport_identifier: string }[] =
-      await this.frequencyRepo
-        .createQueryBuilder('f')
-        .select('DISTINCT f.airport_identifier', 'airport_identifier')
-        .where('f.airport_identifier IN (:...ids)', { ids })
-        .andWhere("f.type = 'TWR'")
-        .getRawMany();
+    const towerRows: { airport_identifier: string }[] = await this.frequencyRepo
+      .createQueryBuilder('f')
+      .select('DISTINCT f.airport_identifier', 'airport_identifier')
+      .where('f.airport_identifier IN (:...ids)', { ids })
+      .andWhere("f.type = 'TWR'")
+      .getRawMany();
     const towerSet = new Set(towerRows.map((r) => r.airport_identifier));
 
     return airports.map((a) => ({

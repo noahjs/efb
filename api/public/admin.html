@@ -220,6 +220,10 @@
       white-space: nowrap;
     }
 
+    /* Data source cards */
+    .ds-card-meta { font-size: 12px; color: #8b949e; margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+    .ds-card-meta .val { color: #c9d1d9; font-weight: 500; font-family: monospace; }
+
     /* Empty state */
     .empty { text-align: center; padding: 32px; color: #484f58; font-size: 14px; }
 
@@ -297,6 +301,22 @@
     <div class="stat-card">
       <div class="label">Charts Installed</div>
       <div class="value amber" id="statCharts">--</div>
+    </div>
+  </div>
+
+  <!-- Data Platform -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Data Sources</h2>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 12px; color: #8b949e;" id="dataSourcesAge"></span>
+        <a href="/api/admin/weather-coverage" class="btn btn-sm">Weather Coverage</a>
+      </div>
+    </div>
+    <div class="section-body">
+      <div class="api-grid" id="dataSourcesGrid">
+        <div class="empty">Loading...</div>
+      </div>
     </div>
   </div>
 
@@ -514,6 +534,79 @@ function renderApiServices(services) {
   }).join('');
 }
 
+function dsStatusDot(status) {
+  if (status === 'running') return 'api-dot-green';
+  if (status === 'failed') return 'api-dot-red';
+  if (status === 'queued') return 'api-dot-yellow';
+  return 'api-dot-green'; // idle
+}
+
+function dsStatusClass(status) {
+  if (status === 'running') return 'job-status-running';
+  if (status === 'failed') return 'job-status-failed';
+  if (status === 'queued') return 'job-status-idle';
+  return 'job-status-completed'; // idle = healthy
+}
+
+function formatInterval(seconds) {
+  if (seconds >= 86400) return `${Math.round(seconds / 86400)}d`;
+  if (seconds >= 3600) return `${Math.round(seconds / 3600)}h`;
+  if (seconds >= 60) return `${Math.round(seconds / 60)}m`;
+  return `${seconds}s`;
+}
+
+function renderDataSources(sources) {
+  const grid = document.getElementById('dataSourcesGrid');
+  if (!sources || sources.length === 0) {
+    grid.innerHTML = '<div class="empty">No data sources configured</div>';
+    return;
+  }
+  grid.innerHTML = sources.map(ds => {
+    const dot = dsStatusDot(ds.status);
+    const statusCls = dsStatusClass(ds.status);
+    const lastCompleted = ds.last_completed_at ? timeAgo(new Date(ds.last_completed_at).getTime()) : 'never';
+    const duration = ds.last_duration_ms != null ? `${(ds.last_duration_ms / 1000).toFixed(1)}s` : '--';
+    const records = ds.records_updated != null ? ds.records_updated.toLocaleString() : '--';
+    const errorCount = ds.last_error_count ?? 0;
+    const recordsHtml = errorCount > 0
+      ? `${records} <span style="color: #f85149; font-size: 11px;">(${errorCount} err)</span>`
+      : records;
+    const errorHtml = ds.last_error
+      ? `<div class="api-card-error" title="${escapeHtml(ds.last_error)}">${escapeHtml(ds.last_error)}</div>`
+      : '';
+    return `
+      <div class="api-card">
+        <div class="api-card-header">
+          <div class="api-dot ${dot}"></div>
+          <span class="api-card-name">${escapeHtml(ds.name)}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="job-status ${statusCls}">${ds.status.toUpperCase()}</span>
+          <span style="font-size: 11px; color: #484f58;">every ${formatInterval(ds.interval_seconds)}</span>
+          <button class="btn btn-sm" onclick="restartDataSource('${ds.key}')" style="margin-left: auto;" title="Cancel and re-enqueue this poller">Restart</button>
+        </div>
+        <div class="ds-card-meta">
+          <div>Last run: <span class="val">${lastCompleted}</span></div>
+          <div>Duration: <span class="val">${duration}</span></div>
+          <div>Records: <span class="val">${recordsHtml}</span></div>
+          <div>Enabled: <span class="val">${ds.enabled ? 'Yes' : 'No'}</span></div>
+        </div>
+        ${errorHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+async function refreshDataSources() {
+  try {
+    const sources = await fetchJSON(`${API}/data-sources`);
+    renderDataSources(sources);
+    document.getElementById('dataSourcesAge').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    // silently fail
+  }
+}
+
 async function refreshApiStatus() {
   try {
     const services = await fetchJSON(`${API}/api-status`);
@@ -527,6 +620,7 @@ async function refreshApiStatus() {
 async function refreshData() {
   try {
     refreshApiStatus();
+    refreshDataSources();
     const data = await fetchJSON(`${API}/overview`);
     document.getElementById('statAirports').textContent = data.database.airports.toLocaleString();
     document.getElementById('statRunways').textContent = data.database.runways.toLocaleString();
@@ -736,6 +830,12 @@ async function updateFuelPrices() {
   await fetchJSON(`${API}/scrape/fuel-prices`, { method: 'POST' });
   setTimeout(refreshData, 500);
   if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function restartDataSource(key) {
+  toast(`Restarting ${key}...`);
+  await fetchJSON(`${API}/data-sources/${key}/restart`, { method: 'POST' });
+  setTimeout(refreshDataSources, 500);
 }
 
 async function clearPdfCache() {

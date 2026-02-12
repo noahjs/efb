@@ -11,9 +11,9 @@ import {
 import type { Response } from 'express';
 import { AdminService, VFR_SECTIONAL_CHARTS } from './admin.service';
 import * as path from 'path';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { Public } from '../auth/guards/public.decorator';
 
-@Roles('admin')
+@Public()
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -25,6 +25,46 @@ export class AdminController {
   serveAdminPage(@Res() res: Response) {
     const htmlPath = path.join(__dirname, '..', '..', 'public', 'admin.html');
     res.sendFile(htmlPath);
+  }
+
+  /**
+   * Serve the weather coverage HTML page at /api/admin/weather-coverage
+   */
+  @Get('weather-coverage')
+  serveWeatherCoveragePage(@Res() res: Response) {
+    const htmlPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'public',
+      'weather-coverage.html',
+    );
+    res.sendFile(htmlPath);
+  }
+
+  /**
+   * JSON API for weather coverage data
+   */
+  @Get('weather-coverage/data')
+  async getWeatherCoverageData() {
+    return this.adminService.getWeatherCoverage();
+  }
+
+  /**
+   * Get data platform polling job status
+   */
+  @Get('data-sources')
+  async getDataSources() {
+    return this.adminService.getDataSources();
+  }
+
+  /**
+   * Restart a data source poller (cancel existing, re-enqueue)
+   */
+  @Post('data-sources/:key/restart')
+  @HttpCode(200)
+  async restartDataSource(@Param('key') key: string) {
+    return this.adminService.restartDataSource(key);
   }
 
   /**

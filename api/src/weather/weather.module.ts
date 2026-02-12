@@ -7,6 +7,12 @@ import { WeatherService } from './weather.service';
 import { AtisTranscriptionService } from './atis-transcription.service';
 import { WeatherStation } from './entities/weather-station.entity';
 import { AtisRecording } from './entities/atis-recording.entity';
+import { Metar } from '../data-platform/entities/metar.entity';
+import { Taf } from '../data-platform/entities/taf.entity';
+import { WindsAloft } from '../data-platform/entities/winds-aloft.entity';
+import { Notam } from '../data-platform/entities/notam.entity';
+import { NwsForecast } from '../data-platform/entities/nws-forecast.entity';
+import { Atis } from '../data-platform/entities/atis.entity';
 
 @Module({
   imports: [
@@ -14,7 +20,16 @@ import { AtisRecording } from './entities/atis-recording.entity';
       timeout: 10000,
       maxRedirects: 3,
     }),
-    TypeOrmModule.forFeature([WeatherStation, AtisRecording]),
+    TypeOrmModule.forFeature([
+      WeatherStation,
+      AtisRecording,
+      Metar,
+      Taf,
+      WindsAloft,
+      Notam,
+      NwsForecast,
+      Atis,
+    ]),
     AirportsModule,
   ],
   controllers: [WeatherController],

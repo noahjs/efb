@@ -14,6 +14,14 @@ export class AtisTranscriptionService {
   // Cache: icao -> { data, expiresAt }
   private cache = new Map<string, { data: any; expiresAt: number }>();
 
+  // Matches ATIS closing phrases like:
+  //   "advise on initial contact you have information zulu"
+  //   "advise you have zulu on initial contact"
+  //   "advise you have information Z"
+  //   "information zulu"
+  private readonly advisePattern =
+    /ADVISE\s+(?:ON\s+INITIAL\s+CONTACT\s+)?YOU\s+HAVE\s+(?:INFORMATION\s+)?([A-Z](?:LPHA|RAVO|HARLIE|ELTA|CHO|OXTROT|OLF|OTEL|NDIA|ULIET|ILO|IMA|IKE|OVEMBER|SCAR|APA|UEBEC|OMEO|IERRA|ANGO|NIFORM|ICTOR|HISKEY|.?RAY|ANKEE|ULU)?)(?:\s+ON\s+INITIAL\s+CONTACT)?/i;
+
   // Dedup concurrent requests for the same ICAO
   private inProgress = new Map<string, Promise<any>>();
 
@@ -92,11 +100,14 @@ export class AtisTranscriptionService {
         return null;
       }
 
+      const letter = this.extractAtisLetter(extracted);
+
       const result = [
         {
           datis: extracted,
           type: 'combined',
           source: 'liveatc',
+          ...(letter && { letter }),
           audioUrl: `/api/weather/atis/${icao}/audio`,
         },
       ];
@@ -104,7 +115,9 @@ export class AtisTranscriptionService {
 
       // Upload audio to GCS and save recording (fire-and-forget)
       this.uploadAndSaveRecording(icao, audio).catch((err) =>
-        this.logger.error(`Failed to save ATIS audio for ${icao}: ${err.message}`),
+        this.logger.error(
+          `Failed to save ATIS audio for ${icao}: ${err.message}`,
+        ),
       );
 
       return result;
@@ -345,9 +358,10 @@ export class AtisTranscriptionService {
     }
 
     // Fallback: check for "ADVISE" ending marker
-    const advisePattern =
-      /ADVISE\s+(?:ON\s+INITIAL\s+CONTACT\s+)?YOU\s+HAVE\s+(?:INFORMATION\s+)?([A-Z])/i;
-    const adviseMatch = text.match(advisePattern);
+    // Handles: "advise on initial contact you have information zulu",
+    //          "advise you have zulu on initial contact",
+    //          "advise you have information Z", etc.
+    const adviseMatch = text.match(this.advisePattern);
 
     if (adviseMatch && matches.length >= 1) {
       // Take from first INFORMATION to end of ADVISE sentence
@@ -391,10 +405,8 @@ export class AtisTranscriptionService {
 
     // No duplicate letters found — take the last INFORMATION block to end
     const lastMatch = matches[matches.length - 1];
-    const advisePattern =
-      /ADVISE\s+(?:ON\s+INITIAL\s+CONTACT\s+)?YOU\s+HAVE\s+(?:INFORMATION\s+)?([A-Z])/i;
     const remaining = text.substring(lastMatch.index);
-    const adviseMatch = remaining.match(advisePattern);
+    const adviseMatch = remaining.match(this.advisePattern);
 
     if (adviseMatch) {
       return remaining
@@ -405,42 +417,78 @@ export class AtisTranscriptionService {
     return null;
   }
 
+  private static readonly PHONETIC_MAP: Record<string, string> = {
+    ALPHA: 'A',
+    BRAVO: 'B',
+    CHARLIE: 'C',
+    DELTA: 'D',
+    ECHO: 'E',
+    FOXTROT: 'F',
+    GOLF: 'G',
+    HOTEL: 'H',
+    INDIA: 'I',
+    JULIET: 'J',
+    KILO: 'K',
+    LIMA: 'L',
+    MIKE: 'M',
+    NOVEMBER: 'N',
+    OSCAR: 'O',
+    PAPA: 'P',
+    QUEBEC: 'Q',
+    ROMEO: 'R',
+    SIERRA: 'S',
+    TANGO: 'T',
+    UNIFORM: 'U',
+    VICTOR: 'V',
+    WHISKEY: 'W',
+    XRAY: 'X',
+    'X-RAY': 'X',
+    YANKEE: 'Y',
+    ZULU: 'Z',
+  };
+
   /**
    * Normalize a phonetic letter word (e.g., "ALPHA", "BRAVO") to its single letter.
    */
   private normalizePhoneticLetter(word: string): string {
     const w = word.toUpperCase().trim();
-    const phonetics: Record<string, string> = {
-      ALPHA: 'A',
-      BRAVO: 'B',
-      CHARLIE: 'C',
-      DELTA: 'D',
-      ECHO: 'E',
-      FOXTROT: 'F',
-      GOLF: 'G',
-      HOTEL: 'H',
-      INDIA: 'I',
-      JULIET: 'J',
-      KILO: 'K',
-      LIMA: 'L',
-      MIKE: 'M',
-      NOVEMBER: 'N',
-      OSCAR: 'O',
-      PAPA: 'P',
-      QUEBEC: 'Q',
-      ROMEO: 'R',
-      SIERRA: 'S',
-      TANGO: 'T',
-      UNIFORM: 'U',
-      VICTOR: 'V',
-      WHISKEY: 'W',
-      XRAY: 'X',
-      'X-RAY': 'X',
-      YANKEE: 'Y',
-      ZULU: 'Z',
-    };
+    return AtisTranscriptionService.PHONETIC_MAP[w] ?? w.charAt(0);
+  }
 
-    return phonetics[w] ?? w.charAt(0);
+  /**
+   * Extract the ATIS identifier letter from text.
+   * Tries structured patterns first, then falls back to scanning for any phonetic word.
+   */
+  private extractAtisLetter(text: string): string | null {
+    // Try "INFORMATION [letter/phonetic]"
+    const infoMatch = text.match(
+      /INFORMATION\s+([A-Z](?:LPHA|RAVO|HARLIE|ELTA|CHO|OXTROT|OLF|OTEL|NDIA|ULIET|ILO|IMA|IKE|OVEMBER|SCAR|APA|UEBEC|OMEO|IERRA|ANGO|NIFORM|ICTOR|HISKEY|.?RAY|ANKEE|ULU)?)\b/i,
+    );
+    if (infoMatch) return this.normalizePhoneticLetter(infoMatch[1]);
+
+    // Try "ADVISE ... YOU HAVE [letter/phonetic]"
+    const adviseMatch = text.match(this.advisePattern);
+    if (adviseMatch) return this.normalizePhoneticLetter(adviseMatch[1]);
+
+    // Last resort: find the last phonetic word anywhere in the text
+    return this.findLastPhoneticLetter(text);
+  }
+
+  /**
+   * Last-resort scan: find the last phonetic alphabet word anywhere in the text.
+   * ATIS broadcasts end with the letter, so the last occurrence is usually correct.
+   */
+  private findLastPhoneticLetter(text: string): string | null {
+    const phoneticWords = Object.keys(AtisTranscriptionService.PHONETIC_MAP);
+    const pattern = new RegExp(
+      `\\b(${phoneticWords.join('|')})\\b`,
+      'gi',
+    );
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length === 0) return null;
+
+    const last = matches[matches.length - 1][1];
+    return this.normalizePhoneticLetter(last);
   }
 
   private async uploadAndSaveRecording(

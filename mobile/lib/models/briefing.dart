@@ -122,6 +122,38 @@ class RouteAirport {
   }
 }
 
+class FlightPhaseProfile {
+  final double departureElevationFt;
+  final double destinationElevationFt;
+  final double cruiseAltitudeFt;
+  final double tocDistanceNm;
+  final double todDistanceNm;
+  final double totalDistanceNm;
+
+  const FlightPhaseProfile({
+    required this.departureElevationFt,
+    required this.destinationElevationFt,
+    required this.cruiseAltitudeFt,
+    required this.tocDistanceNm,
+    required this.todDistanceNm,
+    required this.totalDistanceNm,
+  });
+
+  factory FlightPhaseProfile.fromJson(Map<String, dynamic> json) {
+    return FlightPhaseProfile(
+      departureElevationFt:
+          (json['departureElevationFt'] as num?)?.toDouble() ?? 0,
+      destinationElevationFt:
+          (json['destinationElevationFt'] as num?)?.toDouble() ?? 0,
+      cruiseAltitudeFt:
+          (json['cruiseAltitudeFt'] as num?)?.toDouble() ?? 0,
+      tocDistanceNm: (json['tocDistanceNm'] as num?)?.toDouble() ?? 0,
+      todDistanceNm: (json['todDistanceNm'] as num?)?.toDouble() ?? 0,
+      totalDistanceNm: (json['totalDistanceNm'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class BriefingFlightSummary {
   final int id;
   final String departureIdentifier;
@@ -136,6 +168,7 @@ class BriefingFlightSummary {
   final String? eta;
   final double? distanceNm;
   final List<BriefingWaypoint> waypoints;
+  final FlightPhaseProfile? phaseProfile;
 
   const BriefingFlightSummary({
     required this.id,
@@ -151,6 +184,7 @@ class BriefingFlightSummary {
     this.eta,
     this.distanceNm,
     this.waypoints = const [],
+    this.phaseProfile,
   });
 
   factory BriefingFlightSummary.fromJson(Map<String, dynamic> json) {
@@ -172,6 +206,10 @@ class BriefingFlightSummary {
                   BriefingWaypoint.fromJson(w as Map<String, dynamic>))
               .toList() ??
           [],
+      phaseProfile: json['phaseProfile'] != null
+          ? FlightPhaseProfile.fromJson(
+              json['phaseProfile'] as Map<String, dynamic>)
+          : null,
     );
   }
 }
@@ -944,11 +982,13 @@ class TimelineHazard {
   final String type;
   final String description;
   final String? altitudeRelation;
+  final String alertLevel;
 
   const TimelineHazard({
     required this.type,
     required this.description,
     this.altitudeRelation,
+    this.alertLevel = 'yellow',
   });
 
   factory TimelineHazard.fromJson(Map<String, dynamic> json) {
@@ -956,6 +996,7 @@ class TimelineHazard {
       type: json['type'] as String? ?? '',
       description: json['description'] as String? ?? '',
       altitudeRelation: json['altitudeRelation'] as String?,
+      alertLevel: json['alertLevel'] as String? ?? 'yellow',
     );
   }
 }
@@ -967,6 +1008,8 @@ class TimelinePoint {
   final int distanceFromDep;
   final int etaMinutes;
   final String? etaZulu;
+  final String? flightPhase;
+  final int? estimatedAltitudeFt;
   final String? nearestStation;
   final String? flightCategory;
   final int? ceiling;
@@ -985,6 +1028,8 @@ class TimelinePoint {
     this.distanceFromDep = 0,
     this.etaMinutes = 0,
     this.etaZulu,
+    this.flightPhase,
+    this.estimatedAltitudeFt,
     this.nearestStation,
     this.flightCategory,
     this.ceiling,
@@ -1005,6 +1050,8 @@ class TimelinePoint {
       distanceFromDep: (json['distanceFromDep'] as num?)?.toInt() ?? 0,
       etaMinutes: (json['etaMinutes'] as num?)?.toInt() ?? 0,
       etaZulu: json['etaZulu']?.toString(),
+      flightPhase: json['flightPhase'] as String?,
+      estimatedAltitudeFt: (json['estimatedAltitudeFt'] as num?)?.toInt(),
       nearestStation: json['nearestStation'] as String?,
       flightCategory: json['flightCategory'] as String?,
       ceiling: (json['ceiling'] as num?)?.toInt(),

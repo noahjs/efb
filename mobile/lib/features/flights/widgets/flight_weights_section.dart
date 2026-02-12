@@ -50,6 +50,14 @@ class FlightWeightsSection extends ConsumerWidget {
     // Try to peek at existing scenario data for status display
     final wbAsync = ref.watch(flightWBProvider(flight.id!));
 
+    final noProfile = wbAsync.whenOrNull(
+      error: (e, _) => e.toString().contains('No W&B profile'),
+    ) ?? false;
+
+    if (noProfile) {
+      return _buildNoProfileCard(context);
+    }
+
     final statusIcon = wbAsync.whenOrNull(
       data: (data) => data.scenario.isWithinEnvelope
           ? Icons.check_circle
@@ -63,11 +71,6 @@ class FlightWeightsSection extends ConsumerWidget {
     final statusText = wbAsync.whenOrNull(
       data: (data) =>
           data.scenario.isWithinEnvelope ? 'Within limits' : 'Exceeds limits',
-      error: (e, _) {
-        final msg = e.toString();
-        if (msg.contains('No W&B profile')) return 'Not configured';
-        return null;
-      },
     );
 
     return InkWell(
@@ -109,6 +112,54 @@ class FlightWeightsSection extends ConsumerWidget {
                 size: 18, color: AppColors.textMuted),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildNoProfileCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppColors.divider, width: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  size: 20, color: AppColors.error),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'No W&B profile configured for this aircraft.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: () =>
+                  context.push('/aircraft/${flight.aircraftId}/wb'),
+              child: const Text(
+                'Create W&B Profile',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accent,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
