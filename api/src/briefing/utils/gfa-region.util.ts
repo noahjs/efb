@@ -1,7 +1,13 @@
 // GFA region bounding boxes (approximate lat/lng)
 const GFA_REGIONS: Record<
   string,
-  { name: string; minLat: number; maxLat: number; minLng: number; maxLng: number }
+  {
+    name: string;
+    minLat: number;
+    maxLat: number;
+    minLng: number;
+    maxLng: number;
+  }
 > = {
   ne: { name: 'Northeast', minLat: 39, maxLat: 48, minLng: -80, maxLng: -66 },
   e: { name: 'East', minLat: 34, maxLat: 42, minLng: -84, maxLng: -74 },

@@ -5,9 +5,11 @@ import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/config/app_config.dart';
 import 'map_view.dart' show EfbMapController, MapBounds;
+import 'airport_symbol_renderer.dart';
 import 'wind_barb_renderer.dart';
 import 'wind_arrow_renderer.dart';
 import 'wind_heatmap_controller.dart';
+import 'wind_particle_animator.dart';
 
 /// Native (iOS/Android) implementation using mapbox_maps_flutter SDK.
 class PlatformMapView extends StatefulWidget {
@@ -24,6 +26,8 @@ class PlatformMapView extends StatefulWidget {
   final Map<String, dynamic>? airspaceGeoJson;
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
+  final Map<String, dynamic>? navaidGeoJson;
+  final Map<String, dynamic>? fixGeoJson;
   final Map<String, Map<String, dynamic>?> overlays;
 
   const PlatformMapView({
@@ -41,6 +45,8 @@ class PlatformMapView extends StatefulWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
+    this.navaidGeoJson,
+    this.fixGeoJson,
     this.overlays = const {},
   });
 
@@ -54,6 +60,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   bool _routeSourceReady = false;
   bool _aeroSourceReady = false;
   final Set<String> _overlaySourcesReady = {};
+  final _particleAnimator = WindParticleAnimator();
 
   static const _vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
 
@@ -77,6 +84,12 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   @override
+  void dispose() {
+    _particleAnimator.stop();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant PlatformMapView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_mapboxMap == null) return;
@@ -97,7 +110,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
     if (oldWidget.airspaceGeoJson != widget.airspaceGeoJson ||
         oldWidget.airwayGeoJson != widget.airwayGeoJson ||
-        oldWidget.artccGeoJson != widget.artccGeoJson) {
+        oldWidget.artccGeoJson != widget.artccGeoJson ||
+        oldWidget.navaidGeoJson != widget.navaidGeoJson ||
+        oldWidget.fixGeoJson != widget.fixGeoJson) {
       _updateAeronauticalSources();
     }
     // Update any overlay sources that changed
@@ -178,20 +193,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final catVis = enabled ? 'visible' : 'none';
 
     try {
-      // Toggle colored category layers
+      // Toggle colored category halo circles behind symbols
       for (final cat in _flightCategoryColors.keys) {
         await map.style.setStyleLayerProperty(
           'airport-dots-${cat.toLowerCase()}', 'visibility', catVis,
         );
-      }
-
-      // Adjust base gray layer size
-      if (enabled) {
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-radius', 7.0);
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-stroke-width', 1.5);
-      } else {
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-radius', 5.0);
-        await map.style.setStyleLayerProperty('airport-dots', 'circle-stroke-width', 0.5);
       }
 
       // Toggle labels
@@ -238,6 +244,27 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         MapAnimationOptions(duration: 1000),
       );
     };
+
+    // Bind particle animation to controller
+    _particleAnimator.attach(mapboxMap);
+    widget.controller?.onUpdateParticleField = (windField,
+        {required minLat, required maxLat, required minLng, required maxLng}) {
+      final points = windField
+          .map((wf) => WindFieldPoint(
+                lat: (wf['lat'] as num).toDouble(),
+                lng: (wf['lng'] as num).toDouble(),
+                direction: (wf['direction'] as num).toDouble(),
+                speed: (wf['speed'] as num).toDouble(),
+              ))
+          .toList();
+      _particleAnimator.updateWindField(points,
+          minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+    };
+    widget.controller?.onStartParticles = () {
+      if (!_particleAnimator.isRunning) _particleAnimator.start();
+    };
+    widget.controller?.onStopParticles = () => _particleAnimator.stop();
+    widget.controller?.getParticlesRunning = () => _particleAnimator.isRunning;
 
     // Notify controller that map is ready
     widget.controller?.onMapReady?.call(mapboxMap);
@@ -300,15 +327,18 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     // Then check airports
     if (widget.onAirportTapped != null) {
       try {
+        final airportLayerIds = [
+          // VFR symbol layers (one per airport type)
+          for (final st in AirportSymbolRenderer.symbolTypes) 'airport-sym-$st',
+          // Flight category halo circles
+          'airport-dots-vfr',
+          'airport-dots-mvfr',
+          'airport-dots-ifr',
+          'airport-dots-lifr',
+        ];
         final features = await map.queryRenderedFeatures(
           RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
-          RenderedQueryOptions(layerIds: [
-            'airport-dots',
-            'airport-dots-vfr',
-            'airport-dots-mvfr',
-            'airport-dots-ifr',
-            'airport-dots-lifr',
-          ]),
+          RenderedQueryOptions(layerIds: airportLayerIds),
         );
 
         if (features.isNotEmpty) {
@@ -393,6 +423,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await _addVfrTiles(_mapboxMap!);
     await _addHillshadeLayer(_mapboxMap!);
     await _addAeronauticalLayers(_mapboxMap!);
+    // Register airport symbol images for VFR chart-style markers
+    await _registerAirportSymbolImages(_mapboxMap!);
     // Register wind barb images and arrow for the symbol layer
     await _registerWindBarbImages(_mapboxMap!);
     await _registerWindArrowImage(_mapboxMap!);
@@ -437,6 +469,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       final lng = a['longitude'];
       final lat = a['latitude'];
       final category = a['category'] ?? 'unknown';
+      final isWxStation = a['isWeatherStation'] == true;
+      final symbolType = isWxStation
+          ? 'apt-unknown'
+          : AirportSymbolRenderer.classifyAirport(a);
       return {
         'type': 'Feature',
         'geometry': {
@@ -446,9 +482,20 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         'properties': {
           'id': id,
           'category': category,
+          'symbolType': symbolType,
         },
       };
     }).toList();
+
+    // Debug: log symbol type distribution
+    if (features.isNotEmpty) {
+      final typeCounts = <String, int>{};
+      for (final f in features) {
+        final st = (f['properties'] as Map)['symbolType'] as String;
+        typeCounts[st] = (typeCounts[st] ?? 0) + 1;
+      }
+      debugPrint('[EFB] Airport symbols: ${features.length} total, types: $typeCounts');
+    }
 
     return jsonEncode({
       'type': 'FeatureCollection',
@@ -499,10 +546,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
-  /// Creates the airports GeoJSON source and layered circle dots.
-  /// One base gray layer for all airports, plus a colored layer per flight
-  /// category (VFR/MVFR/IFR/LIFR) filtered by the 'category' property.
-  /// Colored layers sit on top and cover the gray base when visible.
+  /// Creates the airports GeoJSON source and VFR chart-style symbol layers.
+  /// One symbol layer per airport type (filtered by symbolType property).
+  /// Flight category colored circles sit behind the symbols when that mode
+  /// is active.
   Future<void> _addAirportLayers(MapboxMap map) async {
     const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
 
@@ -510,30 +557,36 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       await map.style
           .addSource(GeoJsonSource(id: 'airports', data: emptyGeoJson));
 
-      // Base layer — gray dots for all airports (always visible)
-      await map.style.addLayer(CircleLayer(
-        id: 'airport-dots',
-        sourceId: 'airports',
-        circleRadius: 5.0,
-        circleColor: const Color(0xFF888888).toARGB32(),
-        circleStrokeWidth: 0.5,
-        circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
-      ));
-
-      // One colored layer per flight category, filtered and hidden by default
+      // Flight category halo circles — behind symbols, hidden by default
       for (final entry in _flightCategoryColors.entries) {
         await map.style.addLayer(CircleLayer(
           id: 'airport-dots-${entry.key.toLowerCase()}',
           sourceId: 'airports',
-          circleRadius: 7.0,
+          circleRadius: 12.0,
           circleColor: entry.value.toARGB32(),
-          circleStrokeWidth: 1.5,
-          circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
+          circleOpacity: 0.35,
+          circleStrokeWidth: 2.0,
+          circleStrokeColor: entry.value.toARGB32(),
           filter: ['==', ['get', 'category'], entry.key],
           visibility: Visibility.NONE,
         ));
       }
 
+      // One symbol layer per airport type, filtered by symbolType property
+      debugPrint('[EFB] Adding ${AirportSymbolRenderer.symbolTypes.length} airport symbol layers');
+      for (final symbolType in AirportSymbolRenderer.symbolTypes) {
+        await map.style.addLayer(SymbolLayer(
+          id: 'airport-sym-$symbolType',
+          sourceId: 'airports',
+          iconImage: symbolType,
+          iconSize: 0.55,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          filter: ['==', ['get', 'symbolType'], symbolType],
+        ));
+      }
+
+      // Airport labels (hidden by default, shown in flight category mode)
       await map.style.addLayer(SymbolLayer(
         id: 'airport-labels',
         sourceId: 'airports',
@@ -574,7 +627,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       await map.style.addLayer(LineLayer(
         id: 'route-line',
         sourceId: 'route',
-        lineColor: const Color(0xFF66FFFF).toARGB32(),
+        lineColor: const Color(0xFFFFFFFF).toARGB32(),
         lineWidth: 3.0,
         lineOpacity: 0.85,
         filter: ['!=', ['get', 'leg'], 'first'],
@@ -1051,13 +1104,28 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textColor: Colors.white.toARGB32(),
       textHaloColor: Colors.black.toARGB32(),
       textHaloWidth: 1.0,
-      textOffset: [0.0, 2.0],
+      textOffset: [0.0, 1.8],
       textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
       textAllowOverlap: true,
       textIgnorePlacement: true,
     ));
     await map.style.setStyleLayerProperty(
         'winds-aloft-speed-labels', 'text-color', ['get', 'color']);
+
+    // Temperature labels below speed
+    await map.style.addLayer(SymbolLayer(
+      id: 'winds-aloft-temp-labels',
+      sourceId: srcId,
+      textField: '{tempLabel}',
+      textSize: 10.0,
+      textColor: const Color(0xFFAABBCC).toARGB32(),
+      textHaloColor: Colors.black.toARGB32(),
+      textHaloWidth: 1.0,
+      textOffset: [0.0, 3.0],
+      textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      textAllowOverlap: true,
+      textIgnorePlacement: true,
+    ));
   }
 
   static Future<void> _setupOwnPositionLayers(MapboxMap map, String srcId) async {
@@ -1102,16 +1170,19 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   static Future<void> _setupStreamlineLayers(MapboxMap map, String srcId) async {
-    // White semi-transparent lines for animated particle trails
+    // Color-coded lines for animated particle trails (color driven by speed)
     await map.style.addLayer(LineLayer(
       id: 'wind-streamlines-line',
       sourceId: srcId,
       lineWidth: 1.5,
-      lineOpacity: 0.6,
+      lineOpacity: 0.7,
       lineCap: LineCap.ROUND,
       lineJoin: LineJoin.ROUND,
-      lineColor: const Color(0xFFFFFFFF).toARGB32(),
+      lineColor: const Color(0xFF4CAF50).toARGB32(),
     ));
+    // Data-driven color from feature properties
+    await map.style.setStyleLayerProperty(
+        'wind-streamlines-line', 'line-color', ['get', 'color']);
   }
 
   /// Register the heading cone image for the own-position overlay.
@@ -1174,6 +1245,40 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       );
     } catch (e) {
       debugPrint('[EFB] Failed to register traffic chevron image: $e');
+    }
+  }
+
+  /// Register VFR chart-style airport symbol images for use by SymbolLayer.
+  Future<void> _registerAirportSymbolImages(MapboxMap map) async {
+    try {
+      final symbols = await AirportSymbolRenderer.generateAllSymbols(scale: 2.0);
+      debugPrint('[EFB] Registering ${symbols.length} airport symbol images...');
+      int registered = 0;
+      for (final entry in symbols.entries) {
+        final name = entry.key;
+        final img = entry.value;
+        final expectedSize = img.width * img.height * 4;
+        if (img.data.length != expectedSize) {
+          debugPrint('[EFB] SKIP airport symbol $name: data size ${img.data.length} != expected $expectedSize');
+          continue;
+        }
+        try {
+          final mbxImage = MbxImage(
+            width: img.width,
+            height: img.height,
+            data: Uint8List.fromList(img.data),
+          );
+          await map.style.addStyleImage(
+            name, 2.0, mbxImage, false, <ImageStretches>[], <ImageStretches>[], null,
+          );
+          registered++;
+        } catch (e) {
+          debugPrint('[EFB] Failed to register airport symbol $name: $e');
+        }
+      }
+      debugPrint('[EFB] Successfully registered $registered/${symbols.length} airport symbol images');
+    } catch (e) {
+      debugPrint('[EFB] Failed to generate airport symbol images: $e');
     }
   }
 

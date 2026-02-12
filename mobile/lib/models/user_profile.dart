@@ -8,6 +8,7 @@ class UserProfile {
   final String? pilotCertificateType;
   final String? homeBase;
   final String? leidosUsername;
+  final List<String> fuelPrograms;
 
   const UserProfile({
     this.id,
@@ -19,6 +20,7 @@ class UserProfile {
     this.pilotCertificateType,
     this.homeBase,
     this.leidosUsername,
+    this.fuelPrograms = const [],
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,10 @@ class UserProfile {
       pilotCertificateType: json['pilot_certificate_type'] as String?,
       homeBase: json['home_base'] as String?,
       leidosUsername: json['leidos_username'] as String?,
+      fuelPrograms: (json['fuel_programs'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
     );
   }
 
@@ -46,6 +52,7 @@ class UserProfile {
         'pilot_certificate_type': pilotCertificateType,
       if (homeBase != null) 'home_base': homeBase,
       if (leidosUsername != null) 'leidos_username': leidosUsername,
+      if (fuelPrograms.isNotEmpty) 'fuel_programs': fuelPrograms,
     };
   }
 
@@ -59,6 +66,7 @@ class UserProfile {
     String? pilotCertificateType,
     String? homeBase,
     String? leidosUsername,
+    List<String>? fuelPrograms,
   }) {
     return UserProfile(
       id: id ?? this.id,
@@ -71,6 +79,7 @@ class UserProfile {
       pilotCertificateType: pilotCertificateType ?? this.pilotCertificateType,
       homeBase: homeBase ?? this.homeBase,
       leidosUsername: leidosUsername ?? this.leidosUsername,
+      fuelPrograms: fuelPrograms ?? this.fuelPrograms,
     );
   }
 }

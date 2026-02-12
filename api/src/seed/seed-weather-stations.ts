@@ -67,7 +67,9 @@ async function discoverMetarStations(): Promise<
         stations.set(icao, { lat, lon });
       }
     }
-    console.log(`    ${data.length} METARs, ${stations.size} unique stations so far`);
+    console.log(
+      `    ${data.length} METARs, ${stations.size} unique stations so far`,
+    );
   }
 
   return stations;
@@ -76,9 +78,7 @@ async function discoverMetarStations(): Promise<
 /**
  * Fetch station metadata from AWC stationinfo for a batch of IDs.
  */
-async function fetchStationInfo(
-  ids: string[],
-): Promise<Map<string, any>> {
+async function fetchStationInfo(ids: string[]): Promise<Map<string, any>> {
   const result = new Map<string, any>();
   // AWC limits query string length; batch in groups of 50
   const batchSize = 50;
@@ -127,14 +127,63 @@ async function seedWeatherStations(ds: DataSource): Promise<number> {
   console.log('\nStep 2: Cross-referencing with airports DB...');
   const airportIds = await getAirportIcaoIds(ds);
 
-  // Step 3: Find unmatched stations
+  // Step 2b: Update airports that have METARs
+  const matchedIcaos: string[] = [];
   const unmatchedIds: string[] = [];
   for (const icao of metarStations.keys()) {
-    if (!airportIds.has(icao.toUpperCase())) {
+    if (airportIds.has(icao.toUpperCase())) {
+      matchedIcaos.push(icao.toUpperCase());
+    } else {
       unmatchedIds.push(icao);
     }
   }
+  console.log(`  ${matchedIcaos.length} airports have METARs.`);
   console.log(`  ${unmatchedIds.length} METAR stations not in airports DB.`);
+
+  // Batch update has_metar on matching airports
+  if (matchedIcaos.length > 0) {
+    const airportRepo = ds.getRepository(Airport);
+    const batchSize = 500;
+    for (let i = 0; i < matchedIcaos.length; i += batchSize) {
+      const batch = matchedIcaos.slice(i, i + batchSize);
+      await airportRepo
+        .createQueryBuilder()
+        .update()
+        .set({ has_metar: true })
+        .where('icao_identifier IN (:...ids)', { ids: batch })
+        .execute();
+    }
+    console.log(`  Updated ${matchedIcaos.length} airports with has_metar = true.`);
+  }
+
+  // Step 2c: Determine TAF capability for airport stations
+  console.log('\n  Fetching stationinfo for airport ICAOs to check TAF capability...');
+  const airportStationInfo = await fetchStationInfo(matchedIcaos);
+  const tafIcaos: string[] = [];
+  for (const [icao, info] of airportStationInfo) {
+    const siteTypes: string[] = info?.siteType ?? [];
+    if (siteTypes.includes('TAF')) {
+      tafIcaos.push(icao.toUpperCase());
+    }
+  }
+  console.log(`  ${tafIcaos.length} airports have TAF capability.`);
+
+  if (tafIcaos.length > 0) {
+    const airportRepo = ds.getRepository(Airport);
+    const batchSize = 500;
+    for (let i = 0; i < tafIcaos.length; i += batchSize) {
+      const batch = tafIcaos.slice(i, i + batchSize);
+      await airportRepo
+        .createQueryBuilder()
+        .update()
+        .set({ has_taf: true })
+        .where('icao_identifier IN (:...ids)', { ids: batch })
+        .execute();
+    }
+    console.log(`  Updated ${tafIcaos.length} airports with has_taf = true.`);
+  }
+
+  // Step 3: Find unmatched stations (already computed above)
 
   if (unmatchedIds.length === 0) {
     return 0;
@@ -143,7 +192,9 @@ async function seedWeatherStations(ds: DataSource): Promise<number> {
   // Step 4: Fetch metadata for unmatched stations
   console.log('\nStep 3: Fetching station metadata from AWC...');
   const stationInfo = await fetchStationInfo(unmatchedIds);
-  console.log(`  Got metadata for ${stationInfo.size} of ${unmatchedIds.length} stations.`);
+  console.log(
+    `  Got metadata for ${stationInfo.size} of ${unmatchedIds.length} stations.`,
+  );
 
   // Step 5: Build insert records
   const repo = ds.getRepository(WeatherStation);

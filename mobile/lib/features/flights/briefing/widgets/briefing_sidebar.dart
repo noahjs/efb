@@ -106,14 +106,37 @@ class _SummaryHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Text(
-                'STANDARD BRIEFING',
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                ),
+              Row(
+                children: [
+                  const Text(
+                    'STANDARD BRIEFING',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  if (briefing.riskSummary != null) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _riskColor(briefing.riskSummary!.overallLevel),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        briefing.riskSummary!.overallLevel.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               const Spacer(),
               if (unreadCount > 0)
@@ -246,5 +269,18 @@ class _SectionRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+Color _riskColor(String level) {
+  switch (level) {
+    case 'red':
+      return AppColors.error;
+    case 'yellow':
+      return AppColors.warning;
+    case 'green':
+      return AppColors.success;
+    default:
+      return AppColors.textMuted;
   }
 }

@@ -7,12 +7,14 @@ class AdvisoryDetail extends StatefulWidget {
   final String title;
   final List<BriefingAdvisory> advisories;
   final List<BriefingWaypoint> waypoints;
+  final int? cruiseAltitude;
 
   const AdvisoryDetail({
     super.key,
     required this.title,
     required this.advisories,
     required this.waypoints,
+    this.cruiseAltitude,
   });
 
   @override
@@ -79,6 +81,13 @@ class _AdvisoryDetailState extends State<AdvisoryDetail> {
           ),
           const SizedBox(height: 12),
         ],
+        // Context banner
+        if (advisory.affectedSegment != null ||
+            advisory.altitudeRelation != null)
+          _ContextBanner(
+            advisory: advisory,
+            cruiseAltitude: widget.cruiseAltitude,
+          ),
         // Advisory details
         Container(
           padding: const EdgeInsets.all(12),
@@ -128,6 +137,88 @@ class _AdvisoryDetailState extends State<AdvisoryDetail> {
         ),
       ],
     );
+  }
+}
+
+class _ContextBanner extends StatelessWidget {
+  final BriefingAdvisory advisory;
+  final int? cruiseAltitude;
+
+  const _ContextBanner({required this.advisory, this.cruiseAltitude});
+
+  @override
+  Widget build(BuildContext context) {
+    final isWithin = advisory.altitudeRelation == 'within';
+    final bannerColor =
+        isWithin ? AppColors.error.withAlpha(30) : AppColors.warning.withAlpha(20);
+    final borderColor =
+        isWithin ? AppColors.error : AppColors.warning;
+    final textColor = isWithin ? AppColors.error : AppColors.warning;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: bannerColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor.withAlpha(80)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (advisory.affectedSegment != null) ...[
+            Row(
+              children: [
+                Icon(Icons.route, size: 14, color: textColor),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Affects your route between ${advisory.affectedSegment!.fromWaypoint} and ${advisory.affectedSegment!.toWaypoint} (${advisory.affectedSegment!.fromDistNm.round()}nm - ${advisory.affectedSegment!.toDistNm.round()}nm)',
+                    style: TextStyle(color: textColor, fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (advisory.altitudeRelation != null && cruiseAltitude != null) ...[
+            if (advisory.affectedSegment != null)
+              const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(
+                  isWithin ? Icons.warning_amber : Icons.check_circle_outline,
+                  size: 14,
+                  color: isWithin ? AppColors.error : AppColors.success,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _altitudeText(),
+                    style: TextStyle(
+                      color: isWithin ? AppColors.error : AppColors.success,
+                      fontSize: 12,
+                      fontWeight: isWithin ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _altitudeText() {
+    final altStr = cruiseAltitude != null
+        ? (cruiseAltitude! >= 18000
+            ? 'FL${cruiseAltitude! ~/ 100}'
+            : "$cruiseAltitude'")
+        : '';
+    final base = advisory.base ?? 'SFC';
+    final top = advisory.top ?? '?';
+    final relation = (advisory.altitudeRelation ?? '').toUpperCase();
+    return 'Your altitude $altStr is $relation $base-$top';
   }
 }
 

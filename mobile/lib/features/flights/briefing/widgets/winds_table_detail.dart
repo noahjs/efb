@@ -1,15 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../models/briefing.dart';
+import '../../../../services/api_client.dart';
+import 'winds_map_widget.dart';
 
-class WindsTableDetail extends StatelessWidget {
-  final WindsAloftTable? table;
+/// Provider to fetch wind grid GeoJSON for the briefing map.
+final _briefingWindGridProvider =
+    FutureProvider.family<Map<String, dynamic>?, _WindGridKey>(
+        (ref, key) async {
+  final apiClient = ref.read(apiClientProvider);
+  return apiClient.getWindGrid(
+    minLat: key.minLat,
+    maxLat: key.maxLat,
+    minLng: key.minLng,
+    maxLng: key.maxLng,
+    altitude: key.altitude,
+    spacing: key.spacing,
+  );
+});
 
-  const WindsTableDetail({super.key, this.table});
+class _WindGridKey {
+  final double minLat, maxLat, minLng, maxLng, spacing;
+  final int altitude;
+
+  const _WindGridKey({
+    required this.minLat,
+    required this.maxLat,
+    required this.minLng,
+    required this.maxLng,
+    required this.altitude,
+    required this.spacing,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _WindGridKey &&
+          minLat == other.minLat &&
+          maxLat == other.maxLat &&
+          minLng == other.minLng &&
+          maxLng == other.maxLng &&
+          altitude == other.altitude &&
+          spacing == other.spacing;
+
+  @override
+  int get hashCode => Object.hash(minLat, maxLat, minLng, maxLng, altitude, spacing);
+}
+
+class WindsTableDetail extends ConsumerWidget {
+  final WindsAloftTable? table;
+  final List<BriefingWaypoint> waypoints;
+  final int cruiseAltitude;
+
+  const WindsTableDetail({
+    super.key,
+    this.table,
+    this.waypoints = const [],
+    this.cruiseAltitude = 0,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     if (table == null || table!.data.isEmpty) {
       return const Center(
         child: Text('No winds aloft data available',
@@ -17,9 +70,101 @@ class WindsTableDetail extends StatelessWidget {
       );
     }
 
+    // Use table's filedAltitude (always set correctly by backend),
+    // fall back to the passed cruiseAltitude
+    final altitude = table!.filedAltitude > 0
+        ? table!.filedAltitude
+        : cruiseAltitude;
+
+    // Compute bounds from waypoints for the wind grid request
+    Map<String, dynamic>? windGridGeoJson;
+    if (waypoints.length >= 2) {
+      double minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+      for (final wp in waypoints) {
+        if (wp.latitude < minLat) minLat = wp.latitude;
+        if (wp.latitude > maxLat) maxLat = wp.latitude;
+        if (wp.longitude < minLng) minLng = wp.longitude;
+        if (wp.longitude > maxLng) maxLng = wp.longitude;
+      }
+
+      // Expand bounds to show surrounding area
+      final latPad = (maxLat - minLat) * 0.3 + 0.5;
+      final lngPad = (maxLng - minLng) * 0.3 + 0.5;
+      minLat -= latPad;
+      maxLat += latPad;
+      minLng -= lngPad;
+      maxLng += lngPad;
+
+      // Compute appropriate spacing (~10 points across shorter dimension)
+      final latSpan = maxLat - minLat;
+      final lngSpan = maxLng - minLng;
+      final span = latSpan < lngSpan ? latSpan : lngSpan;
+      final rawSpacing = span / 10;
+      double spacing;
+      if (rawSpacing <= 0.5) {
+        spacing = 0.5;
+      } else if (rawSpacing <= 1.0) {
+        spacing = 1.0;
+      } else if (rawSpacing <= 2.0) {
+        spacing = 2.0;
+      } else {
+        spacing = 3.0;
+      }
+
+      final key = _WindGridKey(
+        minLat: double.parse(minLat.toStringAsFixed(1)),
+        maxLat: double.parse(maxLat.toStringAsFixed(1)),
+        minLng: double.parse(minLng.toStringAsFixed(1)),
+        maxLng: double.parse(maxLng.toStringAsFixed(1)),
+        altitude: altitude,
+        spacing: spacing,
+      );
+
+      final windAsync = ref.watch(_briefingWindGridProvider(key));
+      windGridGeoJson = windAsync.value;
+    }
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Map visualization
+        if (waypoints.length >= 2) ...[
+          Row(
+            children: [
+              const Icon(Icons.map_outlined,
+                  color: AppColors.textSecondary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Winds at ${_formatAltitude(altitude)}',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Text(
+                'NCEP GFS',
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 350,
+            child: WindsMapWidget(
+              waypoints: waypoints,
+              cruiseAltitude: altitude,
+              windGridGeoJson: windGridGeoJson,
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+        // Table
         Row(
           children: [
             const Icon(Icons.trending_up,

@@ -61,11 +61,13 @@ export interface WindGridResult {
     properties: {
       direction: number;
       speed: number;
+      temperature: number;
       rotation: number;
       label: string;
       color: string;
       barbIcon: string;
       speedLabel: string;
+      tempLabel: string;
     };
   }>;
 }
@@ -396,7 +398,7 @@ export class WindyService {
     }
 
     // Limit grid points to avoid excessive API calls
-    const maxPoints = 30;
+    const maxPoints = 120;
     const selectedPoints =
       points.length > maxPoints
         ? this.uniformSample(points, maxPoints)
@@ -419,11 +421,13 @@ export class WindyService {
         properties: {
           direction: wind.direction,
           speed: wind.speed,
+          temperature: wind.temperature,
           rotation: wind.direction, // for icon rotation
           label: `${Math.round(wind.direction)}/${Math.round(wind.speed)}`,
           color: this.windSpeedColor(wind.speed),
           barbIcon: this.barbIconName(wind.speed),
           speedLabel: `${Math.round(wind.speed)}`,
+          tempLabel: `${wind.temperature > 0 ? '+' : ''}${wind.temperature}°`,
         },
       };
     });
@@ -506,10 +510,12 @@ export class WindyService {
       const s01 = speedGrid[Math.max(0, r0) * cols + c1];
       const s10 = speedGrid[r1 * cols + Math.max(0, c0)];
       const s11 = speedGrid[r1 * cols + c1];
-      return s00 * (1 - fr) * (1 - fc) +
+      return (
+        s00 * (1 - fr) * (1 - fc) +
         s01 * (1 - fr) * fc +
         s10 * fr * (1 - fc) +
-        s11 * fr * fc;
+        s11 * fr * fc
+      );
     };
 
     // Render PNG
@@ -517,8 +523,10 @@ export class WindyService {
 
     for (let py = 0; py < height; py++) {
       for (let px = 0; px < width; px++) {
-        const lat = bounds.maxLat - (py / height) * (bounds.maxLat - bounds.minLat);
-        const lng = bounds.minLng + (px / width) * (bounds.maxLng - bounds.minLng);
+        const lat =
+          bounds.maxLat - (py / height) * (bounds.maxLat - bounds.minLat);
+        const lng =
+          bounds.minLng + (px / width) * (bounds.maxLng - bounds.minLng);
         const speed = getSpeed(lat, lng);
         const color = this.heatmapColor(speed);
         const idx = (py * width + px) * 4;
@@ -541,16 +549,16 @@ export class WindyService {
   private heatmapColor(speedKt: number): [number, number, number] {
     // Gradient stops: [speed, R, G, B]
     const stops: [number, number, number, number][] = [
-      [0, 30, 60, 150],    // deep blue
-      [5, 40, 100, 200],   // blue
-      [10, 0, 170, 180],   // teal
-      [15, 50, 190, 80],   // green
-      [20, 140, 210, 50],  // yellow-green
-      [30, 255, 220, 0],   // yellow
-      [40, 255, 165, 0],   // orange
-      [50, 240, 80, 30],   // red
-      [65, 180, 20, 20],   // dark red
-      [80, 150, 0, 150],   // purple
+      [0, 30, 60, 150], // deep blue
+      [5, 40, 100, 200], // blue
+      [10, 0, 170, 180], // teal
+      [15, 50, 190, 80], // green
+      [20, 140, 210, 50], // yellow-green
+      [30, 255, 220, 0], // yellow
+      [40, 255, 165, 0], // orange
+      [50, 240, 80, 30], // red
+      [65, 180, 20, 20], // dark red
+      [80, 150, 0, 150], // purple
     ];
 
     if (speedKt <= stops[0][0]) return [stops[0][1], stops[0][2], stops[0][3]];
@@ -561,8 +569,7 @@ export class WindyService {
 
     for (let i = 0; i < stops.length - 1; i++) {
       if (speedKt >= stops[i][0] && speedKt <= stops[i + 1][0]) {
-        const t =
-          (speedKt - stops[i][0]) / (stops[i + 1][0] - stops[i][0]);
+        const t = (speedKt - stops[i][0]) / (stops[i + 1][0] - stops[i][0]);
         return [
           Math.round(stops[i][1] + (stops[i + 1][1] - stops[i][1]) * t),
           Math.round(stops[i][2] + (stops[i + 1][2] - stops[i][2]) * t),
@@ -583,9 +590,9 @@ export class WindyService {
   getWindAtAltitude(
     forecast: PointForecastResult,
     altitudeFt: number,
-  ): { direction: number; speed: number } {
+  ): { direction: number; speed: number; temperature: number } {
     const levels = forecast.levels;
-    if (levels.length === 0) return { direction: 0, speed: 0 };
+    if (levels.length === 0) return { direction: 0, speed: 0, temperature: 0 };
 
     // Find the two bounding levels for interpolation
     let lower = levels[0];
@@ -605,18 +612,18 @@ export class WindyService {
     // Clamp to boundaries
     if (altitudeFt <= lower.altitudeFt) {
       const w = this.getNearestWind(lower);
-      return w || { direction: 0, speed: 0 };
+      return w || { direction: 0, speed: 0, temperature: 0 };
     }
     if (altitudeFt >= upper.altitudeFt) {
       const w = this.getNearestWind(upper);
-      return w || { direction: 0, speed: 0 };
+      return w || { direction: 0, speed: 0, temperature: 0 };
     }
 
     // Linear interpolation
     const lowerWind = this.getNearestWind(lower);
     const upperWind = this.getNearestWind(upper);
     if (!lowerWind || !upperWind) {
-      return lowerWind || upperWind || { direction: 0, speed: 0 };
+      return lowerWind || upperWind || { direction: 0, speed: 0, temperature: 0 };
     }
 
     const altRange = upper.altitudeFt - lower.altitudeFt;
@@ -634,7 +641,15 @@ export class WindyService {
       fraction,
     );
 
-    return { direction: Math.round(dir), speed: Math.round(speed) };
+    // Interpolate temperature linearly
+    const temperature =
+      lowerWind.temperature + (upperWind.temperature - lowerWind.temperature) * fraction;
+
+    return {
+      direction: Math.round(dir),
+      speed: Math.round(speed),
+      temperature: Math.round(temperature),
+    };
   }
 
   /**
@@ -642,7 +657,7 @@ export class WindyService {
    */
   private getNearestWind(
     level: WindForecastLevel,
-  ): { direction: number; speed: number } | null {
+  ): { direction: number; speed: number; temperature: number } | null {
     if (level.winds.length === 0) return null;
     const now = Date.now();
     let closest = level.winds[0];
@@ -654,7 +669,11 @@ export class WindyService {
         closestDiff = diff;
       }
     }
-    return { direction: closest.direction, speed: closest.speed };
+    return {
+      direction: closest.direction,
+      speed: closest.speed,
+      temperature: closest.temperature,
+    };
   }
 
   /**
@@ -732,12 +751,7 @@ export class WindyService {
   /**
    * Compute great-circle bearing between two points (degrees).
    */
-  bearing(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): number {
+  bearing(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const toRad = Math.PI / 180;
     const dLng = (lng2 - lng1) * toRad;
     const y = Math.sin(dLng) * Math.cos(lat2 * toRad);
@@ -751,12 +765,7 @@ export class WindyService {
   /**
    * Compute great-circle distance between two points (nautical miles).
    */
-  distanceNm(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): number {
+  distanceNm(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const toRad = Math.PI / 180;
     const dLat = (lat2 - lat1) * toRad;
     const dLng = (lng2 - lng1) * toRad;

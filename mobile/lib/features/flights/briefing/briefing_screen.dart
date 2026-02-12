@@ -20,6 +20,7 @@ class BriefingScreen extends ConsumerStatefulWidget {
 class _BriefingScreenState extends ConsumerState<BriefingScreen> {
   BriefingSection? _selectedSection;
   final Set<BriefingSection> _readSections = {};
+  bool _regenerating = false;
 
   int _unreadCount(Briefing briefing) {
     int total = 0;
@@ -71,7 +72,11 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final briefingAsync = ref.watch(briefingProvider(widget.flightId));
+    final request = BriefingRequest(
+      widget.flightId,
+      regenerate: _regenerating,
+    );
+    final briefingAsync = ref.watch(briefingProvider(request));
     final isWide = MediaQuery.of(context).size.width >= 600;
 
     return briefingAsync.when(
@@ -122,8 +127,8 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
                 ),
                 const SizedBox(height: 16),
                 OutlinedButton(
-                  onPressed: () =>
-                      ref.invalidate(briefingProvider(widget.flightId)),
+                  onPressed: () => ref.invalidate(
+                      briefingProvider(request)),
                   child: const Text('Retry'),
                 ),
               ],
@@ -132,12 +137,47 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
         ),
       ),
       data: (briefing) {
+        // Reset regenerating flag once fresh data arrives
+        if (_regenerating) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _regenerating = false);
+          });
+        }
+        // Auto-select risk summary on first load
+        if (_selectedSection == null && briefing.riskSummary != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _selectSection(BriefingSection.riskSummary);
+          });
+        }
         if (isWide) {
           return _buildWideLayout(briefing);
         }
         return _buildNarrowLayout(briefing);
       },
     );
+  }
+
+  void _regenerate() {
+    setState(() {
+      _regenerating = true;
+      _readSections.clear();
+    });
+    // Invalidate any cached provider state so it re-fetches
+    ref.invalidate(briefingProvider(
+        BriefingRequest(widget.flightId, regenerate: true)));
+  }
+
+  String _formatGeneratedAt(String? iso) {
+    if (iso == null) return '';
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    final local = dt.toLocal();
+    final now = DateTime.now();
+    final diff = now.difference(local);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${local.month}/${local.day} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _buildWideLayout(Briefing briefing) {
@@ -147,6 +187,26 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
           '${briefing.flight.departureIdentifier} - ${briefing.flight.destinationIdentifier}  Briefing',
         ),
         centerTitle: true,
+        actions: [
+          if (briefing.generatedAt != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  _formatGeneratedAt(briefing.generatedAt),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Regenerate briefing',
+            onPressed: _regenerate,
+          ),
+        ],
       ),
       body: Row(
         children: [
@@ -167,6 +227,7 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
               selectedSection: _selectedSection,
               onNext: () => _goToNextSection(briefing),
               onPrev: () => _goToPrevSection(briefing),
+              onNavigateToSection: _selectSection,
             ),
           ),
         ],
@@ -189,6 +250,7 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
           selectedSection: _selectedSection,
           onNext: () => _goToNextSection(briefing),
           onPrev: () => _goToPrevSection(briefing),
+          onNavigateToSection: _selectSection,
         ),
       );
     }
@@ -199,6 +261,26 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
           '${briefing.flight.departureIdentifier} - ${briefing.flight.destinationIdentifier}',
         ),
         centerTitle: true,
+        actions: [
+          if (briefing.generatedAt != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Text(
+                  _formatGeneratedAt(briefing.generatedAt),
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Regenerate briefing',
+            onPressed: _regenerate,
+          ),
+        ],
       ),
       body: BriefingSidebar(
         briefing: briefing,

@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { BriefingService } from './briefing.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -16,8 +10,9 @@ export class BriefingController {
   async getBriefing(
     @CurrentUser() user: { id: string },
     @Param('id', ParseIntPipe) id: number,
+    @Query('regenerate') regenerate?: string,
   ) {
-    return this.briefingService.generateBriefing(id, user.id);
+    return this.briefingService.getBriefing(id, user.id, regenerate === 'true');
   }
 
   @Get(':id/route-airports')

@@ -2,8 +2,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/airport_providers.dart';
+import '../../../services/api_client.dart';
 
 class AirportWeatherTab extends ConsumerWidget {
   final String airportId;
@@ -12,23 +14,23 @@ class AirportWeatherTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final airportAsync = ref.watch(airportDetailProvider(airportId));
-    final dbFlag = airportAsync.whenOrNull(
+    final hasDatis = airportAsync.whenOrNull(
           data: (airport) => airport?['has_datis'] == true,
         ) ??
         false;
-
-    // Also check if the D-ATIS API actually returned data (covers airports
-    // not yet seeded with has_datis=true).
-    final datisAsync = ref.watch(datisProvider(airportId));
-    final hasLiveData = datisAsync.whenOrNull(
-          data: (list) => list != null && list.isNotEmpty,
+    final hasLiveatc = airportAsync.whenOrNull(
+          data: (airport) => airport?['has_liveatc'] == true,
         ) ??
         false;
 
-    final showDatis = dbFlag || hasLiveData;
+    final hasAtisCapability = hasDatis || hasLiveatc;
+
+    // Tab name from DB flags — no need to wait for the ATIS data to load.
+    // _DatisView handles fetching; the parent just renders the tab immediately.
+    final atisTabName = hasDatis ? 'D-ATIS' : 'ATIS';
 
     final tabs = <Tab>[
-      if (showDatis) const Tab(text: 'D-ATIS'),
+      if (hasAtisCapability) Tab(text: atisTabName),
       const Tab(text: 'METAR'),
       const Tab(text: 'TAF'),
       const Tab(text: 'Ai-Fcst'),
@@ -37,7 +39,12 @@ class AirportWeatherTab extends ConsumerWidget {
     ];
 
     final views = <Widget>[
-      if (showDatis) _DatisView(airportId: airportId),
+      if (hasAtisCapability)
+        _DatisView(
+          airportId: airportId,
+          hasDatis: hasDatis,
+          hasLiveatc: hasLiveatc,
+        ),
       _MetarView(airportId: airportId),
       _TafView(airportId: airportId),
       _PlaceholderView(label: 'Ai-Fcst data coming soon'),
@@ -73,64 +80,197 @@ class AirportWeatherTab extends ConsumerWidget {
 
 class _DatisView extends ConsumerWidget {
   final String airportId;
-  const _DatisView({required this.airportId});
+  final bool hasDatis;
+  final bool hasLiveatc;
+  const _DatisView({
+    required this.airportId,
+    required this.hasDatis,
+    required this.hasLiveatc,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final datisAsync = ref.watch(datisProvider(airportId));
 
     return datisAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => const Center(
+      loading: () => _buildLoadingState(),
+      error: (error, _) => Center(
         child: Text(
-          'Failed to load D-ATIS',
-          style: TextStyle(color: AppColors.textMuted),
+          hasDatis ? 'Failed to load D-ATIS' : 'Failed to load ATIS',
+          style: const TextStyle(color: AppColors.textMuted),
         ),
       ),
       data: (atisList) {
         if (atisList == null || atisList.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.speaker_notes_off,
-                      size: 48, color: AppColors.textMuted),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No D-ATIS Available',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'This airport does not have Digital ATIS. Listen on the published ATIS frequency.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
+          return _buildEmptyState();
         }
+
+        final source =
+            (atisList[0] as Map<String, dynamic>)['source'] as String?;
+        final isLiveAtc = source == 'liveatc';
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: atisList.length,
+          itemCount: atisList.length + (isLiveAtc ? 1 : 0),
           itemBuilder: (context, index) {
-            final atis = atisList[index] as Map<String, dynamic>;
+            if (isLiveAtc && index == 0) {
+              return _LiveAtcBanner(airportId: airportId);
+            }
+            final atisIndex = isLiveAtc ? index - 1 : index;
+            final atis = atisList[atisIndex] as Map<String, dynamic>;
             return _DatisCard(atis: atis);
           },
         );
       },
     );
+  }
+
+  Widget _buildLoadingState() {
+    // LiveATC transcription takes ~90s — show an informative loading state
+    if (!hasDatis && hasLiveatc) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 32,
+                height: 32,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Transcribing ATIS',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Listening to LiveATC audio and transcribing with AI. This usually takes about 90 seconds.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildEmptyState() {
+    // Tailor the message to the airport's known capabilities
+    final String title;
+    final String subtitle;
+    final IconData icon;
+
+    if (hasDatis) {
+      title = 'D-ATIS Temporarily Unavailable';
+      subtitle =
+          'This airport has Digital ATIS but the service is not responding. Try again shortly.';
+      icon = Icons.cloud_off;
+    } else if (hasLiveatc) {
+      title = 'ATIS Unavailable';
+      subtitle =
+          'Could not transcribe ATIS from LiveATC. The feed may be offline or the audio was unclear.';
+      icon = Icons.mic_off;
+    } else {
+      title = 'No ATIS Available';
+      subtitle =
+          'This airport does not have Digital ATIS. Listen on the published ATIS frequency.';
+      icon = Icons.speaker_notes_off;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: AppColors.textMuted),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveAtcBanner extends ConsumerWidget {
+  final String airportId;
+  const _LiveAtcBanner({required this.airportId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.info.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.info.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.auto_awesome, size: 16, color: AppColors.info),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Transcribed from LiveATC audio by AI',
+              style: TextStyle(
+                color: AppColors.info,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _playAudio(ref),
+            child: Icon(
+              Icons.play_circle_outline,
+              size: 24,
+              color: AppColors.info,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _playAudio(WidgetRef ref) async {
+    final api = ref.read(apiClientProvider);
+    final url = await api.getAtisAudioUrl(airportId);
+    if (url != null) {
+      final uri = Uri.parse(url);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }
 
@@ -156,6 +296,8 @@ class _DatisCard extends StatelessWidget {
       default:
         typeLabel = 'ATIS';
     }
+
+    final parsed = _parseAtisFields(datisText);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -216,6 +358,13 @@ class _DatisCard extends StatelessWidget {
             ),
           ),
 
+          // Parsed fields
+          if (parsed.isNotEmpty) ...[
+            for (final field in parsed)
+              _WeatherField(label: field.label, value: field.value),
+            const Divider(height: 1, color: AppColors.divider),
+          ],
+
           // ATIS text
           Padding(
             padding: const EdgeInsets.all(12),
@@ -233,6 +382,86 @@ class _DatisCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  static List<_ParsedField> _parseAtisFields(String text) {
+    final fields = <_ParsedField>[];
+    final upper = text.toUpperCase();
+
+    // Wind: "WND 18007KT" or "WIND 180 AT 7" or "180 AT 7 KNOTS" etc.
+    final windMatch = RegExp(
+      r'(?:WND|WIND)\s*(\d{3})\s*(?:AT\s*)?(\d+)\s*(?:G(?:UST(?:ING)?)?\s*(\d+))?\s*(?:KT|KTS|KNOTS?)?',
+      caseSensitive: false,
+    ).firstMatch(upper);
+    if (windMatch != null) {
+      final dir = windMatch.group(1)!;
+      final spd = windMatch.group(2)!;
+      final gust = windMatch.group(3);
+      var windStr = '$dir\u00B0 at $spd kts';
+      if (gust != null) windStr += ' G$gust';
+      fields.add(_ParsedField('Wind', windStr));
+    }
+
+    // Visibility
+    final visMatch = RegExp(
+      r'(?:VIS(?:IBILITY)?)\s+([\d]+(?:\s*\/\s*\d+)?(?:\s+\d+\/\d+)?)',
+      caseSensitive: false,
+    ).firstMatch(upper);
+    if (visMatch != null) {
+      fields.add(_ParsedField('Visibility', '${visMatch.group(1)!.trim()} sm'));
+    }
+
+    // Ceiling / Sky condition
+    final skyMatch = RegExp(
+      r'(?:CEILING|SKY\s*CONDITION|CIG)\s+(.+?)(?:[,.]|\bTEMP|\bVIS|\bWIND|\bALT)',
+      caseSensitive: false,
+    ).firstMatch(upper);
+    if (skyMatch != null) {
+      fields.add(_ParsedField('Ceiling', skyMatch.group(1)!.trim()));
+    }
+
+    // Temperature
+    final tempMatch = RegExp(
+      r'TEMP(?:ERATURE)?\s+([\w\s\-]+?)(?:[,]|\bDEW|\bALT|\bWIND)',
+      caseSensitive: false,
+    ).firstMatch(upper);
+    if (tempMatch != null) {
+      fields.add(_ParsedField('Temperature', tempMatch.group(1)!.trim()));
+    }
+
+    // Dewpoint
+    final dewMatch = RegExp(
+      r'DEW\s*POINT\s+([\w\s\-]+?)(?:[,.]|\bALT|\bREM|\bWIND|\bVIS)',
+      caseSensitive: false,
+    ).firstMatch(upper);
+    if (dewMatch != null) {
+      fields.add(_ParsedField('Dewpoint', dewMatch.group(1)!.trim()));
+    }
+
+    // Altimeter
+    final altMatch = RegExp(
+      r'ALT(?:IMETER)?\s+([\d]{4}|[\d]{2}[\.\s][\d]{2})',
+      caseSensitive: false,
+    ).firstMatch(upper);
+    if (altMatch != null) {
+      var alt = altMatch.group(1)!.trim().replaceAll(' ', '');
+      if (alt.length == 4 && !alt.contains('.')) {
+        alt = '${alt.substring(0, 2)}.${alt.substring(2)}';
+      }
+      fields.add(_ParsedField('Altimeter', '$alt inHg'));
+    }
+
+    // Runways in use
+    final rwyMatches = RegExp(
+      r'(?:LANDING|DEPARTING|ARRIV(?:AL|ING))\s+(?:AND\s+DEPARTING\s+)?RUNWAY[S]?\s+([\w\s,/]+?)(?:[,.]|\bEXP|\bNOT|\bBIRD)',
+      caseSensitive: false,
+    ).allMatches(upper);
+    if (rwyMatches.isNotEmpty) {
+      final rwys = rwyMatches.map((m) => m.group(1)!.trim()).join(', ');
+      fields.add(_ParsedField('Runway(s)', rwys));
+    }
+
+    return fields;
   }
 
   static String? _extractAtisLetter(String text) {
@@ -994,6 +1223,12 @@ class _AwosInfoBanner extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ParsedField {
+  final String label;
+  final String value;
+  const _ParsedField(this.label, this.value);
 }
 
 class _WeatherField extends StatelessWidget {

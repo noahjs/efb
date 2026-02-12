@@ -253,10 +253,7 @@ export class FilingService {
 
   // --- File ---
 
-  async fileFlight(
-    flightId: number,
-    userId: string,
-  ): Promise<FilingResponse> {
+  async fileFlight(flightId: number, userId: string): Promise<FilingResponse> {
     const flight = await this.flightsService.findById(flightId, userId);
 
     // Validate state
@@ -318,13 +315,17 @@ export class FilingService {
     }
 
     // Update flight record
-    await this.flightsService.update(flightId, {
-      filing_status: 'filed',
-      filing_reference: result.flightIdentifier,
-      filing_version_stamp: result.versionStamp,
-      filed_at: new Date().toISOString(),
-      filing_format: 'icao',
-    }, userId);
+    await this.flightsService.update(
+      flightId,
+      {
+        filing_status: 'filed',
+        filing_reference: result.flightIdentifier,
+        filing_version_stamp: result.versionStamp,
+        filed_at: new Date().toISOString(),
+        filing_format: 'icao',
+      },
+      userId,
+    );
 
     return {
       success: true,
@@ -338,10 +339,7 @@ export class FilingService {
 
   // --- Amend ---
 
-  async amendFlight(
-    flightId: number,
-    userId: string,
-  ): Promise<FilingResponse> {
+  async amendFlight(flightId: number, userId: string): Promise<FilingResponse> {
     const flight = await this.flightsService.findById(flightId, userId);
 
     if (!['filed', 'accepted'].includes(flight.filing_status)) {
@@ -396,11 +394,15 @@ export class FilingService {
       };
     }
 
-    await this.flightsService.update(flightId, {
-      filing_status: 'filed',
-      filing_version_stamp: result.versionStamp,
-      filed_at: new Date().toISOString(),
-    }, userId);
+    await this.flightsService.update(
+      flightId,
+      {
+        filing_status: 'filed',
+        filing_version_stamp: result.versionStamp,
+        filed_at: new Date().toISOString(),
+      },
+      userId,
+    );
 
     return {
       success: true,
@@ -448,12 +450,16 @@ export class FilingService {
 
     // Clear filing fields — use 'as any' because we need to set null
     // to clear the DB columns, but the DTO types are string | undefined
-    await this.flightsService.update(flightId, {
-      filing_status: 'not_filed',
-      filing_reference: null as any,
-      filing_version_stamp: null as any,
-      filed_at: null as any,
-    }, userId);
+    await this.flightsService.update(
+      flightId,
+      {
+        filing_status: 'not_filed',
+        filing_reference: null as any,
+        filing_version_stamp: null as any,
+        filed_at: null as any,
+      },
+      userId,
+    );
 
     return {
       success: true,
@@ -464,10 +470,7 @@ export class FilingService {
 
   // --- Close ---
 
-  async closeFiling(
-    flightId: number,
-    userId: string,
-  ): Promise<FilingResponse> {
+  async closeFiling(flightId: number, userId: string): Promise<FilingResponse> {
     const flight = await this.flightsService.findById(flightId, userId);
 
     if (!['filed', 'accepted'].includes(flight.filing_status)) {
@@ -496,9 +499,13 @@ export class FilingService {
       };
     }
 
-    await this.flightsService.update(flightId, {
-      filing_status: 'closed',
-    }, userId);
+    await this.flightsService.update(
+      flightId,
+      {
+        filing_status: 'closed',
+      },
+      userId,
+    );
 
     return {
       success: true,

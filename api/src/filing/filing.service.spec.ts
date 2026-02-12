@@ -434,10 +434,13 @@ describe('FilingService', () => {
     });
 
     it('should map VFR flight_rules to V', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        flight_rules: 'VFR',
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          flight_rules: 'VFR',
+        } as any,
+        userId,
+      );
       expect(plan.flightRules).toBe('V');
     });
 
@@ -446,26 +449,35 @@ describe('FilingService', () => {
         new Error('Not found'),
       );
 
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        aircraft_id: null,
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          aircraft_id: null,
+        } as any,
+        userId,
+      );
       expect(plan.aircraftType).toBe('ZZZZ');
     });
 
     it('should use DCT when route_string is empty', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        route_string: null,
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          route_string: null,
+        } as any,
+        userId,
+      );
       expect(plan.route).toBe('DCT');
     });
 
     it('should not include alternate when not set', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        alternate_identifier: null,
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          alternate_identifier: null,
+        } as any,
+        userId,
+      );
       expect(plan.alternateIcao).toBeUndefined();
     });
 
@@ -476,31 +488,40 @@ describe('FilingService', () => {
     });
 
     it('should fall back to ETE + 1hr when no fuel data', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        fuel_burn_rate: null,
-        start_fuel_gallons: null,
-        ete_minutes: 90,
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          fuel_burn_rate: null,
+          start_fuel_gallons: null,
+          ete_minutes: 90,
+        } as any,
+        userId,
+      );
       // 1.5h + 1h = 2.5h → 0230
       expect(plan.endurance).toBe('0230');
     });
 
     it('should truncate aircraft identifier to 7 chars', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        aircraft_identifier: 'N1234567890',
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          aircraft_identifier: 'N1234567890',
+        } as any,
+        userId,
+      );
       expect(plan.aircraftId).toBe('N123456');
     });
 
     it('should prepend K for unknown US airports', async () => {
       (mockAirportsService.findById as jest.Mock).mockResolvedValue(null);
 
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        departure_identifier: 'XYZ',
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          departure_identifier: 'XYZ',
+        } as any,
+        userId,
+      );
       expect(plan.departureIcao).toBe('KXYZ');
     });
 
@@ -510,26 +531,35 @@ describe('FilingService', () => {
     });
 
     it('should return 0000 for invalid ETD', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        etd: '',
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          etd: '',
+        } as any,
+        userId,
+      );
       expect(plan.departureTime).toBe('0000');
     });
 
     it('should include remarks when present', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        remarks: '/v/ VFR ON TOP',
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          remarks: '/v/ VFR ON TOP',
+        } as any,
+        userId,
+      );
       expect(plan.otherInfo).toBe('/v/ VFR ON TOP');
     });
 
     it('should default personsOnBoard to 1 when people_count is 0', async () => {
-      const plan = await service.buildIcaoFlightPlan({
-        ...mockFlight,
-        people_count: 0,
-      } as any, userId);
+      const plan = await service.buildIcaoFlightPlan(
+        {
+          ...mockFlight,
+          people_count: 0,
+        } as any,
+        userId,
+      );
       expect(plan.personsOnBoard).toBe(1);
     });
   });
@@ -560,7 +590,9 @@ describe('FilingService', () => {
         filing_status: 'filed',
       });
 
-      await expect(service.fileFlight(1, userId)).rejects.toThrow('Cannot file');
+      await expect(service.fileFlight(1, userId)).rejects.toThrow(
+        'Cannot file',
+      );
     });
 
     it('should reject filing if status is accepted', async () => {
@@ -569,7 +601,9 @@ describe('FilingService', () => {
         filing_status: 'accepted',
       });
 
-      await expect(service.fileFlight(1, userId)).rejects.toThrow('Cannot file');
+      await expect(service.fileFlight(1, userId)).rejects.toThrow(
+        'Cannot file',
+      );
     });
 
     it('should reject filing if status is closed', async () => {
@@ -578,7 +612,9 @@ describe('FilingService', () => {
         filing_status: 'closed',
       });
 
-      await expect(service.fileFlight(1, userId)).rejects.toThrow('Cannot file');
+      await expect(service.fileFlight(1, userId)).rejects.toThrow(
+        'Cannot file',
+      );
     });
 
     it('should reject filing when validation fails', async () => {
@@ -684,7 +720,9 @@ describe('FilingService', () => {
     });
 
     it('should reject amend if not filed', async () => {
-      await expect(service.amendFlight(1, userId)).rejects.toThrow('Cannot amend');
+      await expect(service.amendFlight(1, userId)).rejects.toThrow(
+        'Cannot amend',
+      );
     });
 
     it('should reject amend if no filing reference', async () => {
@@ -785,7 +823,9 @@ describe('FilingService', () => {
     });
 
     it('should reject cancel if not filed', async () => {
-      await expect(service.cancelFiling(1, userId)).rejects.toThrow('Cannot cancel');
+      await expect(service.cancelFiling(1, userId)).rejects.toThrow(
+        'Cannot cancel',
+      );
     });
 
     it('should reject cancel if no filing reference', async () => {
@@ -869,7 +909,9 @@ describe('FilingService', () => {
     });
 
     it('should reject close if not filed', async () => {
-      await expect(service.closeFiling(1, userId)).rejects.toThrow('Cannot close');
+      await expect(service.closeFiling(1, userId)).rejects.toThrow(
+        'Cannot close',
+      );
     });
 
     it('should reject close if no filing reference', async () => {

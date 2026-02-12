@@ -33,6 +33,14 @@ export class WeatherController {
     return this.weatherService.getNotams(icao.toUpperCase());
   }
 
+  @Get('atis/:icao/audio')
+  async atisAudio(@Param('icao') icao: string) {
+    const result = await this.weatherService.getAtisAudioUrl(
+      icao.toUpperCase(),
+    );
+    return result ?? { error: 'No ATIS audio available', icao };
+  }
+
   @Get('datis/:icao')
   async datis(@Param('icao') icao: string) {
     const data = await this.weatherService.getDatis(icao.toUpperCase());

@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
+import * as jose from 'jose';
 import * as crypto from 'crypto';
 import { User } from '../users/entities/user.entity';
 import { authConfig } from './auth.config';
@@ -19,6 +20,9 @@ import { RefreshDto } from './dto/refresh.dto';
 @Injectable()
 export class AuthService {
   private googleClient: OAuth2Client;
+  private appleJWKS = jose.createRemoteJWKSet(
+    new URL('https://appleid.apple.com/auth/keys'),
+  );
 
   constructor(
     @InjectRepository(User)
@@ -36,7 +40,10 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
-    const password_hash = await bcrypt.hash(dto.password, authConfig.bcryptRounds);
+    const password_hash = await bcrypt.hash(
+      dto.password,
+      authConfig.bcryptRounds,
+    );
 
     const user = this.userRepo.create({
       name: dto.name,
@@ -110,16 +117,27 @@ export class AuthService {
   }
 
   async loginWithApple(dto: AppleAuthDto) {
-    // Decode the Apple identity token (JWT) to extract claims
-    const decoded = this.jwtService.decode(dto.identity_token) as any;
-    if (!decoded || !decoded.sub) {
+    let payload: jose.JWTPayload;
+    try {
+      const { payload: verified } = await jose.jwtVerify(
+        dto.identity_token,
+        this.appleJWKS,
+        {
+          issuer: 'https://appleid.apple.com',
+          audience: authConfig.appleBundleId,
+        },
+      );
+      payload = verified;
+    } catch {
       throw new UnauthorizedException('Invalid Apple token');
     }
 
-    // In production, you'd verify the token signature against Apple's JWKS
-    // For now we trust the token content (Apple tokens are hard to forge)
-    const appleUserId = decoded.sub as string;
-    const email = (decoded.email as string)?.toLowerCase();
+    if (!payload.sub) {
+      throw new UnauthorizedException('Invalid Apple token');
+    }
+
+    const appleUserId = payload.sub;
+    const email = (payload.email as string)?.toLowerCase();
 
     let user = await this.userRepo.findOne({
       where: { provider_id: appleUserId, auth_provider: 'apple' },
@@ -192,7 +210,11 @@ export class AuthService {
   }
 
   private async generateTokenResponse(user: User) {
-    const tokenPayload = { sub: user.id, email: user.email };
+    const tokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role || 'user',
+    };
 
     const access_token = this.jwtService.sign(tokenPayload, {
       expiresIn: '15m',
@@ -219,6 +241,7 @@ export class AuthService {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role || 'user',
       },
     };
   }

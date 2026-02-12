@@ -156,6 +156,13 @@ export class Flight {
   @Column({ type: 'varchar', nullable: true })
   calculated_at: string;
 
+  // Briefing cache
+  @Column({ type: 'jsonb', nullable: true })
+  briefing_data: Record<string, any>;
+
+  @Column({ type: 'timestamp', nullable: true })
+  briefing_generated_at: Date;
+
   // Metadata
   @CreateDateColumn()
   created_at: Date;

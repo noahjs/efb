@@ -5,5 +5,5 @@ export const dbConfig = {
   username: process.env.DB_USER || 'efb',
   password: process.env.DB_PASS || 'efb',
   database: process.env.DB_NAME || 'efb',
-  synchronize: true,
+  synchronize: process.env.NODE_ENV !== 'production',
 };

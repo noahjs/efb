@@ -4,6 +4,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 import '../../../core/config/app_config.dart';
+import 'airport_symbol_renderer.dart';
 import 'map_view.dart' show EfbMapController, MapBounds;
 
 /// Web implementation using Mapbox GL JS directly via HtmlElementView.
@@ -21,6 +22,8 @@ class PlatformMapView extends StatefulWidget {
   final Map<String, dynamic>? airspaceGeoJson;
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
+  final Map<String, dynamic>? navaidGeoJson;
+  final Map<String, dynamic>? fixGeoJson;
 
   /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'advisories', 'pireps').
   final Map<String, Map<String, dynamic>?> overlays;
@@ -40,6 +43,8 @@ class PlatformMapView extends StatefulWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
+    this.navaidGeoJson,
+    this.fixGeoJson,
     this.overlays = const {},
   });
 
@@ -64,6 +69,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       'efb-mapbox-${DateTime.now().millisecondsSinceEpoch}';
   late final String _mapVar;
   bool _mapReady = false;
+  bool _particlesRunning = false;
   final List<web.HTMLScriptElement> _injectedScripts = [];
 
   static String _styleForLayer(String layer) {
@@ -128,6 +134,39 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         })();
       ''');
     };
+
+    // Particle animation via JS
+    widget.controller?.onUpdateParticleField = (windField,
+        {required minLat, required maxLat, required minLng, required maxLng}) {
+      final fieldJson = jsonEncode(windField);
+      final escaped = fieldJson.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+      _evalJs('''
+        (function() {
+          if (!window._efbParticles) return;
+          var field = JSON.parse('$escaped');
+          window._efbParticles.updateWindField(field, $minLat, $maxLat, $minLng, $maxLng);
+        })();
+      ''');
+    };
+    widget.controller?.onStartParticles = () {
+      _particlesRunning = true;
+      _evalJs('''
+        (function() {
+          if (window._efbParticles && !window._efbParticles.running) {
+            window._efbParticles.start('$_mapVar');
+          }
+        })();
+      ''');
+    };
+    widget.controller?.onStopParticles = () {
+      _particlesRunning = false;
+      _evalJs('''
+        (function() {
+          if (window._efbParticles) window._efbParticles.stop();
+        })();
+      ''');
+    };
+    widget.controller?.getParticlesRunning = () => _particlesRunning;
   }
 
   @override
@@ -138,6 +177,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     _onAirportTapJs = null;
     _onBoundsChangedJs = null;
     _onMapLongPressJs = null;
+    // Stop particle animation
+    if (_particlesRunning) {
+      _evalJs('if (window._efbParticles) window._efbParticles.stop();');
+      _particlesRunning = false;
+    }
     // Remove the Mapbox map instance
     _evalJs('''
       (function() {
@@ -233,6 +277,12 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (oldWidget.artccGeoJson != widget.artccGeoJson) {
       _updateAeroSource('artcc', widget.artccGeoJson);
     }
+    if (oldWidget.navaidGeoJson != widget.navaidGeoJson) {
+      _updateAeroSource('navaids', widget.navaidGeoJson);
+    }
+    if (oldWidget.fixGeoJson != widget.fixGeoJson) {
+      _updateAeroSource('fixes', widget.fixGeoJson);
+    }
     // Update generic overlays
     final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
     for (final key in allKeys) {
@@ -274,20 +324,16 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   void _setFlightCategoryMode(bool enabled) {
-    final circleRadius = enabled ? 7 : 5;
-    final circleColor = enabled
-        ? "['match', ['get', 'category'], 'VFR', '#00C853', 'MVFR', '#2196F3', 'IFR', '#FF1744', 'LIFR', '#E040FB', '#888888']"
-        : "'#888888'";
-    final strokeWidth = enabled ? 1.5 : 0.5;
+    final haloVisibility = enabled ? 'visible' : 'none';
     final labelsVisibility = enabled ? 'visible' : 'none';
 
     _evalJs('''
       (function() {
         var map = window.$_mapVar;
-        if (!map || !map.getLayer('airport-dots')) return;
-        map.setPaintProperty('airport-dots', 'circle-radius', $circleRadius);
-        map.setPaintProperty('airport-dots', 'circle-color', $circleColor);
-        map.setPaintProperty('airport-dots', 'circle-stroke-width', $strokeWidth);
+        if (!map) return;
+        if (map.getLayer('airport-cat-halos')) {
+          map.setLayoutProperty('airport-cat-halos', 'visibility', '$haloVisibility');
+        }
         if (map.getLayer('airport-labels')) {
           map.setLayoutProperty('airport-labels', 'visibility', '$labelsVisibility');
         }
@@ -320,6 +366,10 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       final lng = a['longitude'];
       final lat = a['latitude'];
       final category = a['category'] ?? 'unknown';
+      final isWxStation = a['isWeatherStation'] == true;
+      final symbolType = isWxStation
+          ? 'apt-unknown'
+          : AirportSymbolRenderer.classifyAirport(a);
       return {
         'type': 'Feature',
         'geometry': {
@@ -329,6 +379,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         'properties': {
           'id': id,
           'category': category,
+          'symbolType': symbolType,
         },
       };
     }).toList();
@@ -370,6 +421,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         _updateAeroSource('airspaces', widget.airspaceGeoJson);
         _updateAeroSource('airways', widget.airwayGeoJson);
         _updateAeroSource('artcc', widget.artccGeoJson);
+        _updateAeroSource('navaids', widget.navaidGeoJson);
+        _updateAeroSource('fixes', widget.fixGeoJson);
         for (final key in widget.overlays.keys) {
           _updateOverlaySource(key, widget.overlays[key]);
         }
@@ -469,32 +522,217 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     ''';
   }
 
-  /// Creates the airports GeoJSON source (empty initially) and the dot/label layers.
-  /// When [showFlightCategory] is true, dots are colored by METAR category and labels shown.
-  /// When false, dots are small gray circles with no labels.
+  /// Creates VFR chart-style airport symbol images, the airports GeoJSON
+  /// source, and symbol/circle layers for rendering.
   static String _airportLayersJs(bool showFlightCategory) {
-    final circleRadius = showFlightCategory ? 7 : 5;
-    final circleColor = showFlightCategory
-        ? "['match', ['get', 'category'], 'VFR', '#00C853', 'MVFR', '#2196F3', 'IFR', '#FF1744', 'LIFR', '#E040FB', '#888888']"
-        : "'#888888'";
-    final strokeWidth = showFlightCategory ? 1.5 : 0.5;
     final labelsVisibility = showFlightCategory ? 'visible' : 'none';
+    final haloVisibility = showFlightCategory ? 'visible' : 'none';
 
     return '''
+          // ── Generate VFR chart-style airport symbol images ──
+          (function() {
+            var size = 80;
+            var magenta = 'rgb(200,50,220)';
+            var blue = 'rgb(50,100,235)';
+            var red = 'rgb(220,70,70)';
+            var gray = 'rgb(150,150,150)';
+
+            function drawHardSurface(color, filled, serviced) {
+              var canvas = document.createElement('canvas');
+              canvas.width = size; canvas.height = size;
+              var ctx = canvas.getContext('2d');
+              var cx = size/2, cy = size/2;
+              var radius = size * 0.30;
+              var barHalf = size * 0.42;
+              var lw = Math.max(2, Math.round(size * 0.06));
+              var tickLen = Math.round(size * 0.12);
+
+              // White fill for readability
+              ctx.fillStyle = filled ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.7)';
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius - lw, 0, Math.PI * 2);
+              ctx.fill();
+
+              // Circle outline
+              ctx.strokeStyle = color;
+              ctx.lineWidth = lw;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius - lw/2, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Runway bar
+              ctx.fillStyle = color;
+              ctx.fillRect(cx - barHalf, cy - lw/2, barHalf * 2, lw);
+
+              // Tick marks at N/S/E/W
+              if (serviced) {
+                ctx.fillRect(cx - lw/2, cy - radius - tickLen, lw, tickLen);
+                ctx.fillRect(cx - lw/2, cy + radius + 1, lw, tickLen);
+                ctx.fillRect(cx + radius + 1, cy - lw/2, tickLen, lw);
+                ctx.fillRect(cx - radius - tickLen, cy - lw/2, tickLen, lw);
+              }
+
+              return ctx.getImageData(0, 0, size, size);
+            }
+
+            function drawSoftSurface(color, serviced) {
+              var canvas = document.createElement('canvas');
+              canvas.width = size; canvas.height = size;
+              var ctx = canvas.getContext('2d');
+              var cx = size/2, cy = size/2;
+              var radius = size * 0.22;
+              var lw = Math.max(2, Math.round(size * 0.06));
+              var tickLen = Math.round(size * 0.12);
+
+              ctx.fillStyle = color;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+              ctx.fill();
+
+              if (serviced) {
+                ctx.fillRect(cx - lw/2, cy - radius - tickLen, lw, tickLen);
+                ctx.fillRect(cx - lw/2, cy + radius + 1, lw, tickLen);
+                ctx.fillRect(cx + radius + 1, cy - lw/2, tickLen, lw);
+                ctx.fillRect(cx - radius - tickLen, cy - lw/2, tickLen, lw);
+              }
+
+              return ctx.getImageData(0, 0, size, size);
+            }
+
+            function drawLetterSymbol(color, letter) {
+              var canvas = document.createElement('canvas');
+              canvas.width = size; canvas.height = size;
+              var ctx = canvas.getContext('2d');
+              var cx = size/2, cy = size/2;
+              var radius = size * 0.30;
+              var lw = Math.max(2, Math.round(size * 0.06));
+
+              ctx.fillStyle = 'rgba(255,255,255,0.8)';
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius - lw, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.strokeStyle = color;
+              ctx.lineWidth = lw;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius - lw/2, 0, Math.PI * 2);
+              ctx.stroke();
+
+              ctx.fillStyle = color;
+              ctx.font = 'bold ' + Math.round(radius * 1.1) + 'px sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(letter, cx, cy + 1);
+
+              return ctx.getImageData(0, 0, size, size);
+            }
+
+            function drawSeaplane(color) {
+              var canvas = document.createElement('canvas');
+              canvas.width = size; canvas.height = size;
+              var ctx = canvas.getContext('2d');
+              var cx = size/2, cy = size/2;
+              var radius = size * 0.30;
+              var lw = Math.max(2, Math.round(size * 0.06));
+
+              ctx.fillStyle = 'rgba(255,255,255,0.8)';
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius - lw, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.strokeStyle = color;
+              ctx.lineWidth = lw;
+              ctx.beginPath();
+              ctx.arc(cx, cy, radius - lw/2, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Anchor: vertical stem + crossbar + ring + flukes
+              var stemH = radius * 0.6;
+              ctx.strokeStyle = color;
+              ctx.lineWidth = lw;
+              ctx.beginPath();
+              ctx.moveTo(cx, cy - stemH);
+              ctx.lineTo(cx, cy + stemH);
+              ctx.stroke();
+
+              var crossW = stemH * 0.5;
+              var crossY = cy - stemH * 0.4;
+              ctx.beginPath();
+              ctx.moveTo(cx - crossW, crossY);
+              ctx.lineTo(cx + crossW, crossY);
+              ctx.stroke();
+
+              // Ring at top
+              ctx.beginPath();
+              ctx.arc(cx, cy - stemH - 3, 3, 0, Math.PI * 2);
+              ctx.stroke();
+
+              // Flukes at bottom
+              ctx.beginPath();
+              ctx.arc(cx, cy + stemH + crossW * 0.6, crossW, Math.PI, 0);
+              ctx.stroke();
+
+              return ctx.getImageData(0, 0, size, size);
+            }
+
+            var symbols = {
+              'apt-hard-t-s':    drawHardSurface(blue, true, true),
+              'apt-hard-t-ns':   drawHardSurface(blue, true, false),
+              'apt-hard-nt-s':   drawHardSurface(magenta, false, true),
+              'apt-hard-nt-ns':  drawHardSurface(magenta, false, false),
+              'apt-soft-s':      drawSoftSurface(magenta, true),
+              'apt-soft-ns':     drawSoftSurface(magenta, false),
+              'apt-private':     drawLetterSymbol(magenta, 'R'),
+              'apt-heliport':    drawLetterSymbol(magenta, 'H'),
+              'apt-seaplane':    drawSeaplane(magenta),
+              'apt-military-s':  drawHardSurface(red, true, true),
+              'apt-military-ns': drawHardSurface(red, true, false),
+              'apt-unknown':     drawSoftSurface(gray, false)
+            };
+
+            Object.keys(symbols).forEach(function(name) {
+              var img = symbols[name];
+              map.addImage(name, {width: img.width, height: img.height, data: img.data});
+            });
+            console.log('[EFB] Registered ' + Object.keys(symbols).length + ' airport symbol images');
+          })();
+
           map.addSource('airports', {
             type: 'geojson',
             data: { type: 'FeatureCollection', features: [] }
           });
 
+          // Flight category halo circles — behind symbols, hidden by default
           map.addLayer({
-            id: 'airport-dots',
+            id: 'airport-cat-halos',
             type: 'circle',
             source: 'airports',
+            layout: { 'visibility': '$haloVisibility' },
             paint: {
-              'circle-radius': $circleRadius,
-              'circle-color': $circleColor,
-              'circle-stroke-width': $strokeWidth,
-              'circle-stroke-color': 'rgba(255,255,255,0.5)'
+              'circle-radius': 12,
+              'circle-color': ['match', ['get', 'category'],
+                'VFR', '#00C853', 'MVFR', '#2196F3',
+                'IFR', '#FF1744', 'LIFR', '#E040FB',
+                'rgba(0,0,0,0)'],
+              'circle-opacity': 0.35,
+              'circle-stroke-width': 2,
+              'circle-stroke-color': ['match', ['get', 'category'],
+                'VFR', '#00C853', 'MVFR', '#2196F3',
+                'IFR', '#FF1744', 'LIFR', '#E040FB',
+                'rgba(0,0,0,0)']
+            }
+          });
+
+          // VFR chart-style airport symbols — data-driven icon-image
+          map.addLayer({
+            id: 'airport-dots',
+            type: 'symbol',
+            source: 'airports',
+            layout: {
+              'icon-image': ['get', 'symbolType'],
+              'icon-size': 0.55,
+              'icon-allow-overlap': true,
+              'icon-ignore-placement': true
             }
           });
 
@@ -542,7 +780,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             source: 'route',
             filter: ['!=', ['get', 'leg'], 'first'],
             paint: {
-              'line-color': '#66FFFF',
+              'line-color': '#FFFFFF',
               'line-width': 3,
               'line-opacity': 0.85
             }
@@ -664,6 +902,157 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'line-color': '#2196F3',
               'line-width': 2,
               'line-opacity': 0.8
+            }
+          });
+
+          // ── Navaids (VOR/VORTAC/NDB/DME/TACAN) ──
+          map.addSource('navaids', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+
+          // Generate VOR symbol image using Canvas
+          (function() {
+            var vorSize = 32;
+            var vorCanvas = document.createElement('canvas');
+            vorCanvas.width = vorSize;
+            vorCanvas.height = vorSize;
+            var ctx = vorCanvas.getContext('2d');
+            var cx = vorSize / 2;
+            var cy = vorSize / 2;
+            var r = 10;
+
+            // VOR compass rose: hexagonal shape with tick marks
+            ctx.strokeStyle = '#3366FF';
+            ctx.fillStyle = 'rgba(50, 100, 235, 0.15)';
+            ctx.lineWidth = 2;
+
+            // Draw hexagon
+            ctx.beginPath();
+            for (var i = 0; i < 6; i++) {
+              var angle = (Math.PI / 3) * i - Math.PI / 2;
+              var px = cx + r * Math.cos(angle);
+              var py = cy + r * Math.sin(angle);
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Center dot
+            ctx.fillStyle = '#3366FF';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Tick marks at cardinal directions
+            var tickLen = 4;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy - r - tickLen);
+            ctx.moveTo(cx, cy + r); ctx.lineTo(cx, cy + r + tickLen);
+            ctx.moveTo(cx - r, cy); ctx.lineTo(cx - r - tickLen, cy);
+            ctx.moveTo(cx + r, cy); ctx.lineTo(cx + r + tickLen, cy);
+            ctx.stroke();
+
+            map.addImage('navaid-vor', { width: vorSize, height: vorSize, data: ctx.getImageData(0, 0, vorSize, vorSize).data }, { pixelRatio: 2 });
+
+            // NDB symbol: filled circle with dots radiating outward
+            var ndbCanvas = document.createElement('canvas');
+            ndbCanvas.width = vorSize;
+            ndbCanvas.height = vorSize;
+            var nctx = ndbCanvas.getContext('2d');
+            // Center filled circle
+            nctx.fillStyle = '#9933CC';
+            nctx.beginPath();
+            nctx.arc(cx, cy, 5, 0, Math.PI * 2);
+            nctx.fill();
+            // Radiating dots
+            nctx.fillStyle = '#9933CC';
+            for (var d = 0; d < 12; d++) {
+              var da = (Math.PI / 6) * d;
+              var dotR = 11;
+              nctx.beginPath();
+              nctx.arc(cx + dotR * Math.cos(da), cy + dotR * Math.sin(da), 1.2, 0, Math.PI * 2);
+              nctx.fill();
+            }
+            map.addImage('navaid-ndb', { width: vorSize, height: vorSize, data: nctx.getImageData(0, 0, vorSize, vorSize).data }, { pixelRatio: 2 });
+          })();
+
+          map.addLayer({
+            id: 'navaid-symbols',
+            type: 'symbol',
+            source: 'navaids',
+            layout: {
+              'icon-image': ['match', ['get', 'navType'],
+                'NDB', 'navaid-ndb',
+                'NDB/DME', 'navaid-ndb',
+                'MARINE NDB', 'navaid-ndb',
+                'navaid-vor'
+              ],
+              'icon-size': 1,
+              'icon-allow-overlap': true,
+              'text-field': ['get', 'identifier'],
+              'text-size': 10,
+              'text-offset': [0, 1.4],
+              'text-anchor': 'top',
+              'text-optional': true
+            },
+            paint: {
+              'text-color': '#CCCCCC',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
+            }
+          });
+
+          // ── Fixes / Waypoints ──
+          map.addSource('fixes', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+
+          // Generate cyan triangle fix symbol
+          (function() {
+            var fixSize = 24;
+            var fixCanvas = document.createElement('canvas');
+            fixCanvas.width = fixSize;
+            fixCanvas.height = fixSize;
+            var fctx = fixCanvas.getContext('2d');
+            var fcx = fixSize / 2;
+
+            // Equilateral triangle pointing up
+            var triH = 10;
+            var triW = 11;
+            fctx.strokeStyle = '#00E5FF';
+            fctx.lineWidth = 1.5;
+            fctx.beginPath();
+            fctx.moveTo(fcx, fixSize / 2 - triH / 2 - 1);
+            fctx.lineTo(fcx - triW / 2, fixSize / 2 + triH / 2 - 1);
+            fctx.lineTo(fcx + triW / 2, fixSize / 2 + triH / 2 - 1);
+            fctx.closePath();
+            fctx.stroke();
+
+            map.addImage('fix-triangle', { width: fixSize, height: fixSize, data: fctx.getImageData(0, 0, fixSize, fixSize).data }, { pixelRatio: 2 });
+          })();
+
+          map.addLayer({
+            id: 'fix-symbols',
+            type: 'symbol',
+            source: 'fixes',
+            layout: {
+              'icon-image': 'fix-triangle',
+              'icon-size': 1,
+              'icon-allow-overlap': true,
+              'text-field': ['get', 'identifier'],
+              'text-size': 9,
+              'text-offset': [0, 1.2],
+              'text-anchor': 'top',
+              'text-optional': true
+            },
+            paint: {
+              'text-color': '#AAAAAA',
+              'text-halo-color': '#000000',
+              'text-halo-width': 1
             }
           });
     ''';
@@ -1162,7 +1551,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             source: 'wind-streamlines',
             paint: {
               'line-color': ['coalesce', ['get', 'color'], '#4CAF50'],
-              'line-width': 2,
+              'line-width': 1.5,
               'line-opacity': 0.7
             },
             layout: {
@@ -1170,6 +1559,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'line-join': 'round'
             }
           });
+
+          // ── Particle animation system ──
+          ${_particleSystemJs()}
     ''';
   }
 
@@ -1288,6 +1680,161 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
             }
           });
+    ''';
+  }
+
+  static String _particleSystemJs() {
+    return '''
+          (function() {
+            if (window._efbParticles) return; // already initialized
+            window._efbParticles = {
+              windField: [],
+              particles: [],
+              running: false,
+              bounds: {minLat: 0, maxLat: 0, minLng: 0, maxLng: 0},
+              mapVar: null,
+              timer: null,
+              tickCount: 0,
+              PARTICLE_COUNT: 200,
+              MIN_TRAIL: 6,
+              MAX_TRAIL: 20,
+              FPS: 12,
+              MAX_AGE: 100,
+
+              colorForSpeed: function(speed) {
+                if (speed < 15) return '#4CAF50';
+                if (speed < 30) return '#FFC107';
+                if (speed < 50) return '#FF9800';
+                return '#F44336';
+              },
+
+              trailLenForSpeed: function(speed) {
+                var len = Math.round(this.MIN_TRAIL + (speed / 60) * (this.MAX_TRAIL - this.MIN_TRAIL));
+                return Math.max(this.MIN_TRAIL, Math.min(this.MAX_TRAIL, len));
+              },
+
+              updateWindField: function(field, minLat, maxLat, minLng, maxLng) {
+                this.windField = field;
+                this.bounds = {minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng};
+              },
+
+              start: function(mapVar) {
+                if (this.timer) return;
+                if (this.windField.length === 0) { console.log('[EFB] Particles: no wind field'); return; }
+                this.mapVar = mapVar;
+                this.tickCount = 0;
+                this.initParticles();
+                var self = this;
+                this.timer = setInterval(function() { self.tick(); }, 1000 / self.FPS);
+                this.running = true;
+                console.log('[EFB] Particle animation started: ' + this.windField.length + ' field points');
+              },
+
+              stop: function() {
+                if (this.timer) { clearInterval(this.timer); this.timer = null; }
+                this.running = false;
+                this.particles = [];
+                var map = window[this.mapVar];
+                if (map) {
+                  var src = map.getSource('wind-streamlines');
+                  if (src) src.setData({type: 'FeatureCollection', features: []});
+                }
+                console.log('[EFB] Particle animation stopped');
+              },
+
+              initParticles: function() {
+                this.particles = [];
+                for (var i = 0; i < this.PARTICLE_COUNT; i++) {
+                  this.particles.push(this.spawnParticle());
+                }
+              },
+
+              spawnParticle: function() {
+                var b = this.bounds;
+                var lat = b.minLat + Math.random() * (b.maxLat - b.minLat);
+                var lng = b.minLng + Math.random() * (b.maxLng - b.minLng);
+                return {
+                  lat: lat, lng: lng,
+                  trail: [[lng, lat]],
+                  age: 0,
+                  speed: 0,
+                  maxAge: Math.floor(this.MAX_AGE * 0.6 + Math.random() * this.MAX_AGE * 0.4)
+                };
+              },
+
+              tick: function() {
+                if (this.windField.length === 0) return;
+                var map = window[this.mapVar];
+                if (!map) return;
+                this.tickCount++;
+                var b = this.bounds;
+
+                for (var i = 0; i < this.particles.length; i++) {
+                  var p = this.particles[i];
+                  p.age++;
+                  if (p.age >= p.maxAge || p.lat < b.minLat || p.lat > b.maxLat || p.lng < b.minLng || p.lng > b.maxLng) {
+                    this.particles[i] = this.spawnParticle();
+                    continue;
+                  }
+                  var wind = this.interpolateWind(p.lat, p.lng);
+                  if (!wind || wind.speed < 1) { p.age = p.maxAge; continue; }
+
+                  p.speed = wind.speed;
+                  var moveDir = (wind.direction + 180) % 360;
+                  var moveRad = moveDir * Math.PI / 180;
+                  var stepDeg = 0.04 + (wind.speed / 60) * 0.12;
+                  var dLat = stepDeg * Math.cos(moveRad);
+                  var dLng = stepDeg * Math.sin(moveRad) / Math.cos(p.lat * Math.PI / 180);
+
+                  p.lat += dLat;
+                  p.lng += dLng;
+                  p.trail.push([p.lng, p.lat]);
+                  var maxLen = this.trailLenForSpeed(p.speed);
+                  while (p.trail.length > maxLen) p.trail.shift();
+                }
+
+                var features = [];
+                for (var i = 0; i < this.particles.length; i++) {
+                  var p = this.particles[i];
+                  if (p.trail.length < 2) continue;
+                  features.push({
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: p.trail.slice() },
+                    properties: { color: this.colorForSpeed(p.speed) }
+                  });
+                }
+
+                var src = map.getSource('wind-streamlines');
+                if (src) {
+                  src.setData({ type: 'FeatureCollection', features: features });
+                }
+              },
+
+              interpolateWind: function(lat, lng) {
+                if (this.windField.length === 0) return null;
+                var totalWeight = 0, weightedSpeed = 0, weightedSinDir = 0, weightedCosDir = 0;
+
+                for (var i = 0; i < this.windField.length; i++) {
+                  var pt = this.windField[i];
+                  var dLat = pt.lat - lat, dLng = pt.lng - lng;
+                  var dist = dLat * dLat + dLng * dLng;
+                  if (dist < 0.0001) return pt;
+                  var w = 1.0 / dist;
+                  totalWeight += w;
+                  weightedSpeed += pt.speed * w;
+                  weightedSinDir += Math.sin(pt.direction * Math.PI / 180) * w;
+                  weightedCosDir += Math.cos(pt.direction * Math.PI / 180) * w;
+                }
+
+                if (totalWeight === 0) return null;
+                return {
+                  speed: weightedSpeed / totalWeight,
+                  direction: (Math.atan2(weightedSinDir / totalWeight, weightedCosDir / totalWeight) * 180 / Math.PI + 360) % 360
+                };
+              }
+            };
+            console.log('[EFB] Particle animation system initialized');
+          })();
     ''';
   }
 

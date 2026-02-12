@@ -47,7 +47,8 @@ class AirportRunwayTab extends ConsumerWidget {
         // Get wind from METAR if available (including nearby station data)
         final metarEnvelope = metarAsync.whenData((d) => d).value;
         final metarData = metarEnvelope?['metar'] as Map<String, dynamic>?;
-        final windDir = metarData?['wdir'] as num?;
+        final wdirRaw = metarData?['wdir'];
+        final windDir = wdirRaw is num ? wdirRaw : null;
         final windSpd = metarData?['wspd'] as num?;
         final windGust = metarData?['wgst'] as num?;
         final isNearby = metarEnvelope?['isNearby'] as bool? ?? false;

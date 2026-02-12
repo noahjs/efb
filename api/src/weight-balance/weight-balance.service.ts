@@ -34,16 +34,23 @@ export class WeightBalanceService {
 
   // --- Profiles ---
 
-  async findProfiles(aircraftId: number): Promise<WBProfile[]> {
-    await this.aircraftService.findOne(aircraftId);
+  async findProfiles(
+    aircraftId: number,
+    userId?: string,
+  ): Promise<WBProfile[]> {
+    await this.aircraftService.findOne(aircraftId, userId);
     return this.profileRepo.find({
       where: { aircraft_id: aircraftId },
       order: { is_default: 'DESC', name: 'ASC' },
     });
   }
 
-  async findProfile(aircraftId: number, profileId: number): Promise<WBProfile> {
-    await this.aircraftService.findOne(aircraftId);
+  async findProfile(
+    aircraftId: number,
+    profileId: number,
+    userId?: string,
+  ): Promise<WBProfile> {
+    await this.aircraftService.findOne(aircraftId, userId);
     const profile = await this.profileRepo.findOne({
       where: { id: profileId, aircraft_id: aircraftId },
       relations: ['stations', 'envelopes'],
@@ -57,8 +64,9 @@ export class WeightBalanceService {
   async createProfile(
     aircraftId: number,
     dto: CreateWBProfileDto,
+    userId?: string,
   ): Promise<WBProfile> {
-    await this.aircraftService.findOne(aircraftId);
+    await this.aircraftService.findOne(aircraftId, userId);
     const moment =
       dto.empty_weight_moment ?? dto.empty_weight * dto.empty_weight_arm;
     const profile = this.profileRepo.create(
@@ -79,8 +87,9 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     dto: UpdateWBProfileDto,
+    userId?: string,
   ): Promise<WBProfile> {
-    const profile = await this.findProfile(aircraftId, profileId);
+    const profile = await this.findProfile(aircraftId, profileId, userId);
     Object.assign(profile, dto);
     // Recompute moment if weight or arm changed
     if (dto.empty_weight !== undefined || dto.empty_weight_arm !== undefined) {
@@ -99,8 +108,12 @@ export class WeightBalanceService {
     return this.profileRepo.save(profile);
   }
 
-  async removeProfile(aircraftId: number, profileId: number): Promise<void> {
-    const profile = await this.findProfile(aircraftId, profileId);
+  async removeProfile(
+    aircraftId: number,
+    profileId: number,
+    userId?: string,
+  ): Promise<void> {
+    const profile = await this.findProfile(aircraftId, profileId, userId);
     await this.profileRepo.remove(profile);
   }
 
@@ -110,8 +123,9 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     dto: CreateWBStationDto,
+    userId?: string,
   ): Promise<WBStation> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     const station = this.stationRepo.create({
       ...dto,
       wb_profile_id: profileId,
@@ -124,8 +138,9 @@ export class WeightBalanceService {
     profileId: number,
     stationId: number,
     dto: UpdateWBStationDto,
+    userId?: string,
   ): Promise<WBStation> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     const station = await this.stationRepo.findOne({
       where: { id: stationId, wb_profile_id: profileId },
     });
@@ -139,8 +154,9 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     stationId: number,
+    userId?: string,
   ): Promise<void> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     const station = await this.stationRepo.findOne({
       where: { id: stationId, wb_profile_id: profileId },
     });
@@ -153,8 +169,9 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     stationIds: number[],
+    userId?: string,
   ): Promise<WBStation[]> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     for (let i = 0; i < stationIds.length; i++) {
       await this.stationRepo.update(
         { id: stationIds[i], wb_profile_id: profileId },
@@ -173,8 +190,9 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     dto: UpsertWBEnvelopeDto,
+    userId?: string,
   ): Promise<WBEnvelope> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     let envelope = await this.envelopeRepo.findOne({
       where: {
         wb_profile_id: profileId,
@@ -198,8 +216,9 @@ export class WeightBalanceService {
   async findScenarios(
     aircraftId: number,
     profileId: number,
+    userId?: string,
   ): Promise<WBScenario[]> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     return this.scenarioRepo.find({
       where: { wb_profile_id: profileId },
       order: { updated_at: 'DESC' },
@@ -210,8 +229,9 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     scenarioId: number,
+    userId?: string,
   ): Promise<WBScenario> {
-    await this.findProfile(aircraftId, profileId);
+    await this.findProfile(aircraftId, profileId, userId);
     const scenario = await this.scenarioRepo.findOne({
       where: { id: scenarioId, wb_profile_id: profileId },
     });
@@ -224,9 +244,10 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     dto: CreateWBScenarioDto,
+    userId?: string,
   ): Promise<WBScenario> {
-    const profile = await this.findProfile(aircraftId, profileId);
-    const aircraft = await this.aircraftService.findOne(aircraftId);
+    const profile = await this.findProfile(aircraftId, profileId, userId);
+    const aircraft = await this.aircraftService.findOne(aircraftId, userId);
     const result = this.computeWB(
       profile,
       dto.station_loads,
@@ -252,9 +273,15 @@ export class WeightBalanceService {
     profileId: number,
     scenarioId: number,
     dto: UpdateWBScenarioDto,
+    userId?: string,
   ): Promise<WBScenario> {
-    const profile = await this.findProfile(aircraftId, profileId);
-    const scenario = await this.findScenario(aircraftId, profileId, scenarioId);
+    const profile = await this.findProfile(aircraftId, profileId, userId);
+    const scenario = await this.findScenario(
+      aircraftId,
+      profileId,
+      scenarioId,
+      userId,
+    );
     Object.assign(scenario, dto);
     // Recompute if loads changed
     if (
@@ -262,7 +289,7 @@ export class WeightBalanceService {
       dto.starting_fuel_gallons !== undefined ||
       dto.ending_fuel_gallons !== undefined
     ) {
-      const aircraft = await this.aircraftService.findOne(aircraftId);
+      const aircraft = await this.aircraftService.findOne(aircraftId, userId);
       const result = this.computeWB(
         profile,
         scenario.station_loads,
@@ -279,16 +306,27 @@ export class WeightBalanceService {
     aircraftId: number,
     profileId: number,
     scenarioId: number,
+    userId?: string,
   ): Promise<void> {
-    const scenario = await this.findScenario(aircraftId, profileId, scenarioId);
+    const scenario = await this.findScenario(
+      aircraftId,
+      profileId,
+      scenarioId,
+      userId,
+    );
     await this.scenarioRepo.remove(scenario);
   }
 
   // --- Calculate (stateless) ---
 
-  async calculate(aircraftId: number, profileId: number, dto: CalculateWBDto) {
-    const profile = await this.findProfile(aircraftId, profileId);
-    const aircraft = await this.aircraftService.findOne(aircraftId);
+  async calculate(
+    aircraftId: number,
+    profileId: number,
+    dto: CalculateWBDto,
+    userId?: string,
+  ) {
+    const profile = await this.findProfile(aircraftId, profileId, userId);
+    const aircraft = await this.aircraftService.findOne(aircraftId, userId);
     return this.computeWB(
       profile,
       dto.station_loads,
@@ -300,7 +338,7 @@ export class WeightBalanceService {
 
   // --- Flight W&B Integration ---
 
-  async findOrCreateScenarioForFlight(flightId: number) {
+  async findOrCreateScenarioForFlight(flightId: number, userId?: string) {
     // 1. Check for existing scenario linked to this flight
     const existing = await this.scenarioRepo.findOne({
       where: { flight_id: flightId },
@@ -321,9 +359,9 @@ export class WeightBalanceService {
     }
 
     // 2. Look up the flight
-    const flight = await this.flightRepo.findOne({
-      where: { id: flightId },
-    });
+    const where: Record<string, any> = { id: flightId };
+    if (userId) where.user_id = userId;
+    const flight = await this.flightRepo.findOne({ where });
     if (!flight) {
       throw new NotFoundException(`Flight #${flightId} not found`);
     }
@@ -363,7 +401,10 @@ export class WeightBalanceService {
     const endingFuelGallons = flight.fuel_at_shutdown_gallons ?? 0;
 
     // 6. Compute W&B
-    const aircraft = await this.aircraftService.findOne(flight.aircraft_id);
+    const aircraft = await this.aircraftService.findOne(
+      flight.aircraft_id,
+      userId,
+    );
     const fuelWpg = aircraft.fuel_weight_per_gallon ?? 6.7;
     const result = this.computeWB(
       profile,

@@ -62,3 +62,33 @@ final mapArtccProvider = FutureProvider.family<Map<String, dynamic>,
     );
   },
 );
+
+/// Provider for navaids (VOR, VORTAC, NDB, etc.) within map bounds.
+final mapNavaidsProvider = FutureProvider.family<
+    List<dynamic>,
+    ({double minLat, double maxLat, double minLng, double maxLng})>(
+  (ref, bounds) async {
+    final client = ref.read(apiClientProvider);
+    return client.getNavaidsInBounds(
+      minLat: bounds.minLat,
+      maxLat: bounds.maxLat,
+      minLng: bounds.minLng,
+      maxLng: bounds.maxLng,
+    );
+  },
+);
+
+/// Provider for fixes/waypoints within map bounds.
+final mapFixesProvider = FutureProvider.family<
+    List<dynamic>,
+    ({double minLat, double maxLat, double minLng, double maxLng})>(
+  (ref, bounds) async {
+    final client = ref.read(apiClientProvider);
+    return client.getFixesInBounds(
+      minLat: bounds.minLat,
+      maxLat: bounds.maxLat,
+      minLng: bounds.minLng,
+      maxLng: bounds.maxLng,
+    );
+  },
+);

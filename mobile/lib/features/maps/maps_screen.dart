@@ -27,7 +27,6 @@ import 'widgets/pirep_bottom_sheet.dart';
 import 'widgets/flight_plan_panel.dart';
 import 'widgets/approach_overlay.dart';
 import 'widgets/wind_heatmap_controller.dart';
-import 'widgets/wind_particle_animator.dart';
 import 'widgets/wind_altitude_slider.dart';
 import '../../services/windy_providers.dart';
 import '../adsb/providers/adsb_providers.dart';
@@ -58,7 +57,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   final _mapController = EfbMapController();
   final _approachController = ApproachOverlayController();
   final _heatmapController = WindHeatmapController();
-  final _particleAnimator = WindParticleAnimator();
 
   MapBounds? _currentBounds;
   Timer? _boundsDebounce;
@@ -83,7 +81,6 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     _mapController.onMapReady = (map) {
       _approachController.attach(map);
       _heatmapController.attach(map);
-      _particleAnimator.attach(map);
     };
     _mapController.onStyleReloaded = () {
       _approachController.reapply();
@@ -97,7 +94,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
-    _particleAnimator.stop();
+    _mapController.stopParticles();
     super.dispose();
   }
 
@@ -309,6 +306,43 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       isScrollControlled: true,
       builder: (_) => PirepBottomSheet(properties: properties),
     );
+  }
+
+  static Map<String, dynamic> _navaidsToGeoJson(List<dynamic> navaids) {
+    final features = navaids
+        .where((n) => n['latitude'] != null && n['longitude'] != null)
+        .map((n) => {
+              'type': 'Feature',
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [n['longitude'], n['latitude']],
+              },
+              'properties': {
+                'identifier': n['identifier'] ?? '',
+                'name': n['name'] ?? '',
+                'navType': n['type'] ?? '',
+                'frequency': n['frequency'] ?? '',
+              },
+            })
+        .toList();
+    return {'type': 'FeatureCollection', 'features': features};
+  }
+
+  static Map<String, dynamic> _fixesToGeoJson(List<dynamic> fixes) {
+    final features = fixes
+        .where((f) => f['latitude'] != null && f['longitude'] != null)
+        .map((f) => {
+              'type': 'Feature',
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [f['longitude'], f['latitude']],
+              },
+              'properties': {
+                'identifier': f['identifier'] ?? '',
+              },
+            })
+        .toList();
+    return {'type': 'FeatureCollection', 'features': features};
   }
 
   void _onBoundsChanged(MapBounds bounds) {
@@ -784,6 +818,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     Map<String, dynamic>? airspaceGeoJson;
     Map<String, dynamic>? airwayGeoJson;
     Map<String, dynamic>? artccGeoJson;
+    Map<String, dynamic>? navaidGeoJson;
+    Map<String, dynamic>? fixGeoJson;
     if (showAeronautical && _currentBounds != null) {
       if (_aero.showAirspaces) {
         // Build airspace class filter from sub-toggles
@@ -821,6 +857,22 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       if (_aero.showArtcc) {
         artccGeoJson =
             ref.watch(mapArtccProvider(_currentBounds!)).value;
+      }
+      if (_aero.showNavaids) {
+        final navaids = ref
+            .watch(mapNavaidsProvider(_currentBounds!))
+            .value;
+        if (navaids != null) {
+          navaidGeoJson = _navaidsToGeoJson(navaids);
+        }
+      }
+      if (_aero.showFixes) {
+        final fixes = ref
+            .watch(mapFixesProvider(_currentBounds!))
+            .value;
+        if (fixes != null) {
+          fixGeoJson = _fixesToGeoJson(fixes);
+        }
       }
     }
 
@@ -917,23 +969,30 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
         );
       });
 
-      // Particle animation — fetch wind field data and feed to animator
+      // Particle animation — fetch wind field data and feed to platform animator
       final windFieldAsync = ref.watch(windFieldProvider(windParams));
       final windField = windFieldAsync.value;
       if (windField != null && windField.isNotEmpty) {
         final pBounds = _currentBounds!;
-        final pWindField = windField;
+        final pWindField = windField
+            .map((wf) => <String, dynamic>{
+                  'lat': wf.lat,
+                  'lng': wf.lng,
+                  'direction': wf.direction,
+                  'speed': wf.speed,
+                })
+            .toList();
         SchedulerBinding.instance.addPostFrameCallback((_) {
-          _particleAnimator.updateWindField(
+          _mapController.updateParticleField(
             pWindField,
             minLat: pBounds.minLat,
             maxLat: pBounds.maxLat,
             minLng: pBounds.minLng,
             maxLng: pBounds.maxLng,
           );
-          if (!_particleAnimator.isRunning) {
-            debugPrint('[EFB] Starting particle animator with ${pWindField.length} wind field points');
-            _particleAnimator.start();
+          if (!_mapController.particlesRunning) {
+            debugPrint('[EFB] Starting particle animation with ${pWindField.length} wind field points');
+            _mapController.startParticles();
           }
         });
       }
@@ -942,8 +1001,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
       if (_heatmapController.isActive) {
         _heatmapController.hide();
       }
-      if (_particleAnimator.isRunning) {
-        _particleAnimator.stop();
+      if (_mapController.particlesRunning) {
+        _mapController.stopParticles();
       }
     }
 
@@ -1023,6 +1082,8 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               airspaceGeoJson: airspaceGeoJson,
               airwayGeoJson: airwayGeoJson,
               artccGeoJson: artccGeoJson,
+              navaidGeoJson: navaidGeoJson,
+              fixGeoJson: fixGeoJson,
               overlays: <String, Map<String, dynamic>?>{
                 if (tfrGeoJson != null) 'tfrs': tfrGeoJson,
                 if (advisoryGeoJson != null) 'advisories': advisoryGeoJson,

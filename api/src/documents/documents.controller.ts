@@ -30,28 +30,39 @@ export class DocumentsController {
   // ── Folders (defined BEFORE /:id to avoid param collision) ──
 
   @Get('folders')
-  findFolders(@Query('aircraft_id') aircraftId?: string) {
+  findFolders(
+    @CurrentUser() user: { id: string },
+    @Query('aircraft_id') aircraftId?: string,
+  ) {
     return this.documentsService.findFolders(
+      user.id,
       aircraftId ? parseInt(aircraftId, 10) : undefined,
     );
   }
 
   @Post('folders')
-  createFolder(@Body() dto: CreateDocumentFolderDto) {
-    return this.documentsService.createFolder(dto);
+  createFolder(
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateDocumentFolderDto,
+  ) {
+    return this.documentsService.createFolder(dto, user.id);
   }
 
   @Patch('folders/:id')
   updateFolder(
+    @CurrentUser() user: { id: string },
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDocumentFolderDto,
   ) {
-    return this.documentsService.updateFolder(id, dto);
+    return this.documentsService.updateFolder(id, dto, user.id);
   }
 
   @Delete('folders/:id')
-  removeFolder(@Param('id', ParseIntPipe) id: number) {
-    return this.documentsService.removeFolder(id);
+  removeFolder(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.documentsService.removeFolder(id, user.id);
   }
 
   // ── Documents ──
@@ -84,27 +95,32 @@ export class DocumentsController {
 
   @Get()
   findDocuments(
+    @CurrentUser() user: { id: string },
     @Query('folder_id') folderId?: string,
     @Query('aircraft_id') aircraftId?: string,
   ) {
-    return this.documentsService.findDocuments({
+    return this.documentsService.findDocuments(user.id, {
       folder_id: folderId ? parseInt(folderId, 10) : undefined,
       aircraft_id: aircraftId ? parseInt(aircraftId, 10) : undefined,
     });
   }
 
   @Get(':id')
-  getDocument(@Param('id', ParseIntPipe) id: number) {
-    return this.documentsService.getDocument(id);
+  getDocument(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.documentsService.getDocument(id, user.id);
   }
 
   @Get(':id/download')
   async downloadFile(
+    @CurrentUser() user: { id: string },
     @Param('id', ParseIntPipe) id: number,
     @Res() res: Response,
   ) {
     const { buffer, mimeType, filename } =
-      await this.documentsService.downloadFile(id);
+      await this.documentsService.downloadFile(id, user.id);
     res.set({
       'Content-Type': mimeType,
       'Content-Disposition': `inline; filename="${filename}"`,
@@ -115,14 +131,18 @@ export class DocumentsController {
 
   @Patch(':id')
   updateDocument(
+    @CurrentUser() user: { id: string },
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateDocumentDto,
   ) {
-    return this.documentsService.updateDocument(id, dto);
+    return this.documentsService.updateDocument(id, dto, user.id);
   }
 
   @Delete(':id')
-  removeDocument(@Param('id', ParseIntPipe) id: number) {
-    return this.documentsService.removeDocument(id);
+  removeDocument(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.documentsService.removeDocument(id, user.id);
   }
 }

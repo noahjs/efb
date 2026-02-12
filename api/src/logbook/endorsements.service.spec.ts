@@ -119,7 +119,9 @@ describe('EndorsementsService', () => {
 
     it('should throw NotFoundException when not found', async () => {
       mockEndorsementRepo.findOne.mockResolvedValue(null);
-      await expect(service.findOne('test-user', 999)).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('test-user', 999)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -191,7 +193,9 @@ describe('EndorsementsService', () => {
 
     it('should throw NotFoundException when removing non-existent endorsement', async () => {
       mockEndorsementRepo.findOne.mockResolvedValue(null);
-      await expect(service.remove('test-user', 999)).rejects.toThrow(NotFoundException);
+      await expect(service.remove('test-user', 999)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

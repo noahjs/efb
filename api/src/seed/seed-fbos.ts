@@ -72,9 +72,7 @@ async function main() {
       where: { fbo_scraped_at: IsNull() },
       order: { identifier: 'ASC' },
     });
-    console.log(
-      `Full crawl mode: ${airports.length} airports to scrape.\n`,
-    );
+    console.log(`Full crawl mode: ${airports.length} airports to scrape.\n`);
   }
 
   let scraped = 0;

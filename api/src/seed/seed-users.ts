@@ -44,6 +44,7 @@ async function seed() {
       password_hash,
       auth_provider: 'email',
       email_verified: true,
+      role: 'user',
     });
     console.log('Demo user created.');
   }

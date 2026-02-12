@@ -8,6 +8,7 @@ class NotamDetail extends StatelessWidget {
   final List<BriefingNotam>? notams;
   final CategorizedNotams? categorized;
   final List<CategorizedNotams>? artccNotams;
+  final EnrouteNotams? enrouteNotams;
 
   const NotamDetail({
     super.key,
@@ -15,6 +16,7 @@ class NotamDetail extends StatelessWidget {
     this.notams,
     this.categorized,
     this.artccNotams,
+    this.enrouteNotams,
   });
 
   @override
@@ -22,6 +24,9 @@ class NotamDetail extends StatelessWidget {
     // Determine which NOTAMs to show
     if (categorized != null) {
       return _buildCategorizedView(categorized!);
+    }
+    if (enrouteNotams != null) {
+      return _buildEnrouteView(enrouteNotams!);
     }
     if (artccNotams != null) {
       return _buildArtccView();
@@ -92,6 +97,58 @@ class NotamDetail extends StatelessWidget {
           _CategoryHeader(
               label: 'OBSTRUCTION', count: cat.obstruction.length),
           for (final n in cat.obstruction) _NotamCard(notam: n),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildEnrouteView(EnrouteNotams en) {
+    if (en.totalCount == 0) {
+      return Center(
+        child: Text('No $title',
+            style: const TextStyle(color: AppColors.textMuted)),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (en.navigation.isNotEmpty) ...[
+          _CategoryHeader(label: 'NAVIGATION', count: en.navigation.length),
+          for (final n in en.navigation) _NotamCard(notam: n),
+        ],
+        if (en.communication.isNotEmpty) ...[
+          _CategoryHeader(label: 'COMMUNICATION', count: en.communication.length),
+          for (final n in en.communication) _NotamCard(notam: n),
+        ],
+        if (en.svc.isNotEmpty) ...[
+          _CategoryHeader(label: 'SERVICE', count: en.svc.length),
+          for (final n in en.svc) _NotamCard(notam: n),
+        ],
+        if (en.airspace.isNotEmpty) ...[
+          _CategoryHeader(label: 'AIRSPACE', count: en.airspace.length),
+          for (final n in en.airspace) _NotamCard(notam: n),
+        ],
+        if (en.specialUseAirspace.isNotEmpty) ...[
+          _CategoryHeader(label: 'SPECIAL USE AIRSPACE', count: en.specialUseAirspace.length),
+          for (final n in en.specialUseAirspace) _NotamCard(notam: n),
+        ],
+        if (en.rwyTwyApronAdFdc.isNotEmpty) ...[
+          _CategoryHeader(label: 'RWY/TWY/FDC', count: en.rwyTwyApronAdFdc.length),
+          for (final n in en.rwyTwyApronAdFdc) _NotamCard(notam: n),
+        ],
+        if (en.otherUnverified.isNotEmpty) ...[
+          _CategoryHeader(label: 'OTHER', count: en.otherUnverified.length),
+          for (final n in en.otherUnverified) _NotamCard(notam: n),
         ],
       ],
     );

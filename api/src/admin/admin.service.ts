@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Airport } from '../airports/entities/airport.entity';
@@ -421,6 +421,9 @@ export class AdminService {
   // --- Process VFR charts ---
 
   async runProcessChart(chartName: string): Promise<JobStatus> {
+    if (!VFR_SECTIONAL_CHARTS.includes(chartName)) {
+      throw new NotFoundException(`Invalid chart name: ${chartName}`);
+    }
     const jobId = `chart-${chartName}-${Date.now()}`;
     const job: JobStatus = {
       id: jobId,
@@ -441,6 +444,9 @@ export class AdminService {
   // --- Delete chart tiles ---
 
   async deleteChart(chartName: string): Promise<{ deleted: boolean }> {
+    if (!VFR_SECTIONAL_CHARTS.includes(chartName)) {
+      throw new NotFoundException(`Invalid chart name: ${chartName}`);
+    }
     const tilesDir = path.join(
       this.dataDir,
       'charts',
@@ -484,7 +490,6 @@ export class AdminService {
     const proc = spawn(command, args, {
       cwd,
       env: { ...process.env },
-      shell: true,
     });
 
     proc.stdout.on('data', (data: Buffer) => {

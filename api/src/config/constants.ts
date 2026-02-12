@@ -41,6 +41,18 @@ export const DATIS = {
   TIMEOUT_MS: 10_000,
 };
 
+// --- LiveATC ATIS Transcription ---
+export const LIVEATC_ATIS = {
+  BASE_URL: 'http://d.liveatc.net',
+  RECORD_DURATION_MS: 90_000,
+  CONNECTION_TIMEOUT_MS: 10_000,
+  CACHE_TTL_MS: 10 * 60 * 1000, // 10 minutes
+  CACHE_TTL_FAILURE_MS: 2 * 60 * 1000, // 2 minutes
+  WHISPER_MODEL: 'whisper-1',
+  WHISPER_TIMEOUT_MS: 30_000,
+  MAX_AUDIO_BYTES: 500_000,
+};
+
 // --- Imagery ---
 export const IMAGERY = {
   AWC_BASE_URL: 'https://aviationweather.gov',

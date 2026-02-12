@@ -90,7 +90,12 @@ describe('WeightBalanceService — computeWB', () => {
       notes: null as any,
       stations: stationOverrides.length
         ? (stationOverrides as WBStation[])
-        : ([pilotStation, rearStation, baggageStation, fuelStation] as WBStation[]),
+        : ([
+            pilotStation,
+            rearStation,
+            baggageStation,
+            fuelStation,
+          ] as WBStation[]),
       envelopes: envelopeOverrides.length
         ? (envelopeOverrides as WBEnvelope[])
         : ([normalEnvelope] as WBEnvelope[]),
@@ -222,7 +227,10 @@ describe('WeightBalanceService — computeWB', () => {
       20,
     );
 
-    expect(withZero.computed_zfw_cg).toBeCloseTo(withoutZero.computed_zfw_cg, 2);
+    expect(withZero.computed_zfw_cg).toBeCloseTo(
+      withoutZero.computed_zfw_cg,
+      2,
+    );
     expect(withZero.computed_ramp_cg).toBeCloseTo(
       withoutZero.computed_ramp_cg,
       2,

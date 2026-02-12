@@ -770,7 +770,9 @@ async function seedDatisCapability(ds: DataSource): Promise<number> {
     // Progress
     const checked = Math.min(i + batchSize, toweredAirports.length);
     if (checked % 100 === 0 || checked === toweredAirports.length) {
-      console.log(`  Checked ${checked}/${toweredAirports.length} (${count} with D-ATIS so far)`);
+      console.log(
+        `  Checked ${checked}/${toweredAirports.length} (${count} with D-ATIS so far)`,
+      );
     }
   }
 
@@ -818,6 +820,17 @@ async function main() {
   const freqCount = await seedFrequencies(ds);
   console.log(`  Imported ${freqCount} frequencies.\n`);
 
+  // Flag airports with AWOS/ASOS (must be after frequencies)
+  console.log('Flagging airports with AWOS/ASOS...');
+  const awosResult = await ds.query(`
+    UPDATE a_airports SET has_awos = true
+    WHERE identifier IN (
+      SELECT DISTINCT airport_identifier FROM a_frequencies WHERE type IN ('AWOS', 'ASOS')
+    )
+  `);
+  const awosCount = awosResult[1] ?? 0;
+  console.log(`  Marked ${awosCount} airports with AWOS/ASOS.\n`);
+
   // Seed D-ATIS capability (must be after airports + tower hours)
   console.log('Seeding D-ATIS capability...');
   const datisCount = await seedDatisCapability(ds);
@@ -831,6 +844,7 @@ async function main() {
   console.log(`  Runways:      ${rwyCount}`);
   console.log(`  Runway Ends:  ${endCount}`);
   console.log(`  Frequencies:  ${freqCount}`);
+  console.log(`  AWOS/ASOS:    ${awosCount}`);
   console.log(`  D-ATIS:       ${datisCount}`);
 
   await ds.destroy();

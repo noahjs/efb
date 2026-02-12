@@ -165,8 +165,8 @@ class ToldStateNotifier extends ChangeNotifier {
 
   void _applyMetarWeather(Map<String, dynamic> metar) {
     _setState(_state.copyWith(
-      windDir: (metar['wdir'] as num?)?.toDouble(),
-      windSpeed: (metar['wspd'] as num?)?.toDouble(),
+      windDir: metar['wdir'] is num ? (metar['wdir'] as num).toDouble() : null,
+      windSpeed: metar['wspd'] is num ? (metar['wspd'] as num).toDouble() : null,
       tempC: (metar['temp'] as num?)?.toDouble(),
       altimeter: (metar['altim'] as num?)?.toDouble(),
       metarRaw: metar['rawOb'] as String?,

@@ -14,6 +14,27 @@ export interface BriefingMetar {
   rawOb: string | null;
   obsTime: string | null;
   section: 'departure' | 'route' | 'destination';
+  temp: number | null;
+  dewp: number | null;
+  wdir: number | null;
+  wspd: number | null;
+  wgst: number | null;
+  visib: number | null;
+  altim: number | null;
+  clouds: Array<{ cover: string; base: number | null }>;
+  ceiling: number | null;
+}
+
+export interface TafForecastPeriod {
+  timeFrom: string;
+  timeTo: string;
+  changeType: string;
+  wdir: number | null;
+  wspd: number | null;
+  wgst: number | null;
+  visib: number | null;
+  clouds: Array<{ cover: string; base: number | null }>;
+  fltCat: string | null;
 }
 
 export interface BriefingTaf {
@@ -21,6 +42,7 @@ export interface BriefingTaf {
   icaoId: string;
   rawTaf: string | null;
   section: 'departure' | 'route' | 'destination';
+  fcsts: TafForecastPeriod[];
 }
 
 export interface BriefingNotam {
@@ -51,6 +73,15 @@ export interface EnrouteNotams {
   otherUnverified: BriefingNotam[];
 }
 
+export interface AffectedSegment {
+  fromWaypoint: string;
+  toWaypoint: string;
+  fromDistNm: number;
+  toDistNm: number;
+  fromEtaMin: number;
+  toEtaMin: number;
+}
+
 export interface BriefingAdvisory {
   hazardType: string;
   rawText: string;
@@ -61,6 +92,11 @@ export interface BriefingAdvisory {
   base: string | null;
   dueTo: string | null;
   geometry: any | null;
+  topFt: number | null;
+  baseFt: number | null;
+  altitudeRelation: 'within' | 'above' | 'below' | null;
+  affectedSegment: AffectedSegment | null;
+  plainEnglish: string | null;
 }
 
 export interface BriefingTfr {
@@ -177,6 +213,47 @@ export interface BriefingNotams {
   artcc: CategorizedNotams[];
 }
 
+// Risk Assessment types
+export type RiskLevel = 'green' | 'yellow' | 'red';
+
+export interface RiskCategory {
+  category: string;
+  level: RiskLevel;
+  alerts: string[];
+}
+
+export interface RiskSummary {
+  overallLevel: RiskLevel;
+  categories: RiskCategory[];
+  criticalItems: string[];
+}
+
+// Route Timeline types
+export interface TimelineHazard {
+  type: string;
+  description: string;
+  altitudeRelation: string | null;
+}
+
+export interface TimelinePoint {
+  waypoint: string;
+  latitude: number;
+  longitude: number;
+  distanceFromDep: number;
+  etaMinutes: number;
+  etaZulu: string | null;
+  nearestStation: string | null;
+  flightCategory: string | null;
+  ceiling: number | null;
+  visibility: number | null;
+  windDir: number | null;
+  windSpd: number | null;
+  forecastAtEta: TafForecastPeriod | null;
+  headwindComponent: number | null;
+  crosswindComponent: number | null;
+  activeHazards: TimelineHazard[];
+}
+
 export interface BriefingResponse {
   flight: BriefingFlightSummary;
   routeAirports: RouteAirport[];
@@ -185,4 +262,6 @@ export interface BriefingResponse {
   currentWeather: CurrentWeather;
   forecasts: Forecasts;
   notams: BriefingNotams;
+  riskSummary: RiskSummary;
+  routeTimeline: TimelinePoint[];
 }

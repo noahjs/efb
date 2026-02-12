@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/flight.dart';
@@ -367,6 +368,32 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
 
   void _clearFlight() {
     ref.read(activeFlightProvider.notifier).clear();
+  }
+
+  Future<void> _sendToFlights() async {
+    final flight = _flight;
+    if (flight == null) return;
+
+    setState(() => _saving = true);
+    try {
+      final service = ref.read(flightServiceProvider);
+      final saved = await service.createFlight(flight.toJson());
+      // Update active flight with server-assigned ID
+      ref.read(activeFlightProvider.notifier).set(saved);
+      // Invalidate flights list so it shows the new flight
+      ref.invalidate(flightsListProvider);
+      if (mounted) {
+        context.go('/flights/${saved.id}');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save flight: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _openRouteFinder(Flight? flight, List<String> waypoints) async {
@@ -895,10 +922,32 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             child: Row(
               children: [
-                _ActionIcon(icon: Icons.settings, onTap: () {}),
-                _ActionIcon(icon: Icons.flag, onTap: () {}),
-                _ActionIcon(icon: Icons.star_border, onTap: () {}),
-                _ActionIcon(icon: Icons.share, onTap: () {}),
+                GestureDetector(
+                  onTap: _sendToFlights,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.send, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          'Send to Flights',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 _TabButton(
                   label: 'Edit',
@@ -1002,24 +1051,6 @@ class _StatItem extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ActionIcon extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _ActionIcon({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(icon, size: 20, color: AppColors.textSecondary),
       ),
     );
   }

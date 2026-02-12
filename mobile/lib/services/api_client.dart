@@ -164,10 +164,27 @@ class ApiClient {
 
   Future<List<dynamic>?> getDatis(String icao) async {
     try {
-      final response = await _dio.get('/weather/datis/$icao');
+      // LiveATC fallback captures ~90s of audio + transcription, so allow extra time
+      final response = await _dio.get(
+        '/weather/datis/$icao',
+        options: Options(receiveTimeout: const Duration(seconds: 120)),
+      );
       final data = response.data;
       if (data is List) return data;
       // API returns error object when no D-ATIS available
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> getAtisAudioUrl(String icao) async {
+    try {
+      final response = await _dio.get('/weather/atis/$icao/audio');
+      final data = response.data;
+      if (data is Map && data['url'] != null) {
+        return data['url'] as String;
+      }
       return null;
     } catch (_) {
       return null;
@@ -430,9 +447,13 @@ class ApiClient {
     await _dio.delete('/flights/$id');
   }
 
-  Future<Map<String, dynamic>> getFlightBriefing(int flightId) async {
+  Future<Map<String, dynamic>> getFlightBriefing(
+    int flightId, {
+    bool regenerate = false,
+  }) async {
     final response = await _dio.get(
       '/flights/$flightId/briefing',
+      queryParameters: {if (regenerate) 'regenerate': 'true'},
       options: Options(receiveTimeout: const Duration(seconds: 120)),
     );
     return response.data;
@@ -703,6 +724,40 @@ class ApiClient {
   }) async {
     final response = await _dio.get('/fixes/search', queryParameters: {
       if (query != null) 'q': query,
+      'limit': limit,
+    });
+    return response.data;
+  }
+
+  Future<List<dynamic>> getNavaidsInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    int limit = 200,
+  }) async {
+    final response = await _dio.get('/navaids/bounds', queryParameters: {
+      'minLat': minLat,
+      'maxLat': maxLat,
+      'minLng': minLng,
+      'maxLng': maxLng,
+      'limit': limit,
+    });
+    return response.data;
+  }
+
+  Future<List<dynamic>> getFixesInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    int limit = 200,
+  }) async {
+    final response = await _dio.get('/fixes/bounds', queryParameters: {
+      'minLat': minLat,
+      'maxLat': maxLat,
+      'minLng': minLng,
+      'maxLng': maxLng,
       'limit': limit,
     });
     return response.data;

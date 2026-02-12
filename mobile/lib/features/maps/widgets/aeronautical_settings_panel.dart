@@ -23,6 +23,10 @@ class AeroSettings {
   final bool showLowAirways;
   final bool showHighAirways;
 
+  // Navaids & Fixes
+  final bool showNavaids;
+  final bool showFixes;
+
   // ATC boundaries
   final bool showAtcBoundaries;
   final bool showArtcc;
@@ -38,6 +42,8 @@ class AeroSettings {
     this.showAirways = false,
     this.showLowAirways = true,
     this.showHighAirways = true,
+    this.showNavaids = false,
+    this.showFixes = false,
     this.showAtcBoundaries = true,
     this.showArtcc = true,
   });
@@ -53,6 +59,8 @@ class AeroSettings {
     bool? showAirways,
     bool? showLowAirways,
     bool? showHighAirways,
+    bool? showNavaids,
+    bool? showFixes,
     bool? showAtcBoundaries,
     bool? showArtcc,
   }) {
@@ -67,6 +75,8 @@ class AeroSettings {
       showAirways: showAirways ?? this.showAirways,
       showLowAirways: showLowAirways ?? this.showLowAirways,
       showHighAirways: showHighAirways ?? this.showHighAirways,
+      showNavaids: showNavaids ?? this.showNavaids,
+      showFixes: showFixes ?? this.showFixes,
       showAtcBoundaries: showAtcBoundaries ?? this.showAtcBoundaries,
       showArtcc: showArtcc ?? this.showArtcc,
     );
@@ -83,6 +93,8 @@ class AeroSettings {
         'showAirways': showAirways,
         'showLowAirways': showLowAirways,
         'showHighAirways': showHighAirways,
+        'showNavaids': showNavaids,
+        'showFixes': showFixes,
         'showAtcBoundaries': showAtcBoundaries,
         'showArtcc': showArtcc,
       };
@@ -101,6 +113,8 @@ class AeroSettings {
       showAirways: b('showAirways', d.showAirways),
       showLowAirways: b('showLowAirways', d.showLowAirways),
       showHighAirways: b('showHighAirways', d.showHighAirways),
+      showNavaids: b('showNavaids', d.showNavaids),
+      showFixes: b('showFixes', d.showFixes),
       showAtcBoundaries: b('showAtcBoundaries', d.showAtcBoundaries),
       showArtcc: b('showArtcc', d.showArtcc),
     );
@@ -260,6 +274,23 @@ class AeronauticalSettingsPanel extends StatelessWidget {
                       indent: true,
                     ),
                   ],
+                  const _SectionDivider(),
+
+                  // ── NAVAID & FIX SETTINGS ──
+                  const _SectionHeader('NAVAIDS & FIXES'),
+                  _ToggleRow(
+                    label: 'Navaids (VOR/NDB)',
+                    value: s.showNavaids,
+                    onChanged: (v) =>
+                        _set((s) => s.copyWith(showNavaids: v)),
+                  ),
+                  const _Divider(),
+                  _ToggleRow(
+                    label: 'Fixes / Waypoints',
+                    value: s.showFixes,
+                    onChanged: (v) =>
+                        _set((s) => s.copyWith(showFixes: v)),
+                  ),
                   const _SectionDivider(),
 
                   // ── ATC BOUNDARY SETTINGS ──

@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Query,
-  BadRequestException,
-} from '@nestjs/common';
+import { Controller, Get, Query, BadRequestException } from '@nestjs/common';
 import { TrafficService } from './traffic.service';
 import { TRAFFIC } from '../config/constants';
 import { Public } from '../auth/guards/public.decorator';

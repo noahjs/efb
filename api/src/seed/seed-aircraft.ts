@@ -15,6 +15,8 @@ import { User } from '../users/entities/user.entity';
 import { StarredAirport } from '../users/entities/starred-airport.entity';
 import { dbConfig } from '../db.config';
 
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
+
 async function main() {
   console.log('=== EFB Aircraft Seed ===\n');
 
@@ -50,6 +52,7 @@ async function main() {
   // Create aircraft
   console.log('Seeding TBM 960...');
   const aircraft = await aircraftRepo.save({
+    user_id: DEMO_USER_ID,
     tail_number: 'N977CA',
     aircraft_type: 'TBM 960',
     icao_type_code: 'TBM9',

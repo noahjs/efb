@@ -32,6 +32,9 @@ export class User {
   @Column({ type: 'boolean', default: false })
   email_verified: boolean;
 
+  @Column({ type: 'varchar', default: 'user' })
+  role: string;
+
   @Column({ type: 'varchar', nullable: true, select: false })
   refresh_token_hash: string;
 
@@ -52,6 +55,9 @@ export class User {
 
   @Column({ type: 'varchar', nullable: true })
   leidos_username: string;
+
+  @Column({ type: 'simple-array', nullable: true })
+  fuel_programs: string[];
 
   @CreateDateColumn()
   created_at: Date;

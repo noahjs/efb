@@ -85,7 +85,8 @@ class _WxStationSheetContent extends ConsumerWidget {
     final rawOb = metarData?['rawOb'] as String? ?? '';
     final temp = metarData?['temp'] as num?;
     final dewp = metarData?['dewp'] as num?;
-    final wdir = metarData?['wdir'] as num?;
+    final wdirRaw = metarData?['wdir'];
+    final wdir = wdirRaw is num ? wdirRaw : null;
     final wspd = metarData?['wspd'] as num?;
     final wgst = metarData?['wgst'] as num?;
     final visib = metarData?['visib'];

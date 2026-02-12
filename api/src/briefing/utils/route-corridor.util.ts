@@ -184,9 +184,8 @@ function crossTrackDistanceNm(
   const theta13 = bearingRad(startLat, startLng, pointLat, pointLng);
   const theta12 = bearingRad(startLat, startLng, endLat, endLng);
   return Math.abs(
-    Math.asin(
-      Math.sin(d13 / EARTH_RADIUS_NM) * Math.sin(theta13 - theta12),
-    ) * EARTH_RADIUS_NM,
+    Math.asin(Math.sin(d13 / EARTH_RADIUS_NM) * Math.sin(theta13 - theta12)) *
+      EARTH_RADIUS_NM,
   );
 }
 
@@ -201,8 +200,7 @@ function bearingRad(
   const Δλ = (lng2 - lng1) * DEG_TO_RAD;
   const y = Math.sin(Δλ) * Math.cos(φ2);
   const x =
-    Math.cos(φ1) * Math.sin(φ2) -
-    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
   return Math.atan2(y, x);
 }
 

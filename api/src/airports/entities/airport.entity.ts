@@ -118,6 +118,18 @@ export class Airport {
   @Column({ type: 'boolean', default: false })
   has_cpdlc: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  has_metar: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  has_taf: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  has_liveatc: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  has_awos: boolean;
+
   @OneToMany(() => Runway, (runway) => runway.airport, { cascade: true })
   runways: Runway[];
 

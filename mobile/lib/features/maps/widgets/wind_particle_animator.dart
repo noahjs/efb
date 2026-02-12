@@ -12,6 +12,7 @@ class _Particle {
   List<List<double>> trail; // [[lng, lat], ...]
   int age;
   int maxAge;
+  double speed; // current wind speed (knots) — drives color & trail length
 
   _Particle({
     required this.lat,
@@ -20,7 +21,8 @@ class _Particle {
   })  : trail = [
           [lng, lat]
         ],
-        age = 0;
+        age = 0,
+        speed = 0;
 }
 
 /// Wind field data point for interpolation.
@@ -38,15 +40,22 @@ class WindFieldPoint {
   });
 }
 
-/// Animates ~150 white particle streaks flowing along wind vectors.
+/// Animates ~150 color-coded particle streaks flowing along wind vectors.
 ///
 /// Writes GeoJSON directly to the `wind-streamlines` Mapbox source.
 /// Runs at ~12fps via a periodic timer.
+///
+/// Trail length and color scale with wind speed:
+///   < 15 kt → green, short trails
+///   15–30 kt → yellow, medium trails
+///   30–50 kt → orange, long trails
+///   ≥ 50 kt → red, longest trails
 class WindParticleAnimator {
-  static const int _particleCount = 150;
-  static const int _trailLength = 5;
+  static const int _particleCount = 200;
   static const int _fps = 12;
-  static const int _maxAge = 80;
+  static const int _maxAge = 100;
+  static const int _minTrail = 6;
+  static const int _maxTrail = 20;
 
   MapboxMap? _map;
   Timer? _timer;
@@ -84,7 +93,7 @@ class WindParticleAnimator {
       debugPrint('[EFB] WindParticleAnimator.start() called but wind field is empty');
       return;
     }
-    debugPrint('[EFB] WindParticleAnimator starting: ${_windField.length} field points, bounds: $_minLat,$_maxLat,$_minLng,$_maxLng');
+    debugPrint('[EFB] WindParticleAnimator starting: ${_windField.length} field points');
     _tickCount = 0;
     _initParticles();
     _timer = Timer.periodic(
@@ -119,13 +128,24 @@ class WindParticleAnimator {
     );
   }
 
+  /// Trail length scales with wind speed: calm → short, strong → long.
+  static int _trailLengthForSpeed(double speed) {
+    return (_minTrail + (speed / 60) * (_maxTrail - _minTrail))
+        .round()
+        .clamp(_minTrail, _maxTrail);
+  }
+
+  /// Color hex by wind speed bracket (matches wind barb palette).
+  static String _colorForSpeed(double speed) {
+    if (speed < 15) return '#4CAF50';
+    if (speed < 30) return '#FFC107';
+    if (speed < 50) return '#FF9800';
+    return '#F44336';
+  }
+
   void _tick() {
     if (_windField.isEmpty || _map == null) return;
     _tickCount++;
-    if (_tickCount == 1 || _tickCount % 60 == 0) {
-      debugPrint('[EFB] Particle tick #$_tickCount: ${_particles.length} particles, '
-          '${_particles.where((p) => p.trail.length >= 2).length} with trails');
-    }
 
     for (int i = 0; i < _particles.length; i++) {
       final p = _particles[i];
@@ -148,21 +168,24 @@ class WindParticleAnimator {
         continue;
       }
 
+      p.speed = wind.speed;
+
       // Advance along wind vector (wind direction is FROM, so add 180 for movement)
       final moveDir = (wind.direction + 180) % 360;
       final moveRad = moveDir * pi / 180;
 
       // Step size proportional to wind speed (faster winds = longer streaks)
-      final stepDeg = 0.02 + (wind.speed / 100) * 0.08;
+      final stepDeg = 0.04 + (wind.speed / 60) * 0.12;
       final dLat = stepDeg * cos(moveRad);
       final dLng = stepDeg * sin(moveRad) / cos(p.lat * pi / 180);
 
       p.lat += dLat;
       p.lng += dLng;
 
-      // Add to trail, keep limited length
+      // Add to trail, keep length proportional to speed
       p.trail.add([p.lng, p.lat]);
-      if (p.trail.length > _trailLength) {
+      final maxLen = _trailLengthForSpeed(p.speed);
+      while (p.trail.length > maxLen) {
         p.trail.removeAt(0);
       }
     }
@@ -174,7 +197,6 @@ class WindParticleAnimator {
   WindFieldPoint? _interpolateWind(double lat, double lng) {
     if (_windField.isEmpty) return null;
 
-    // Find 4 nearest points by distance
     double bestDist = double.infinity;
     WindFieldPoint? best;
     double totalWeight = 0;
@@ -187,7 +209,6 @@ class WindParticleAnimator {
       final dLng = pt.lng - lng;
       final dist = dLat * dLat + dLng * dLng;
       if (dist < 0.0001) {
-        // Very close — just return this point
         return pt;
       }
       final w = 1.0 / dist;
@@ -227,8 +248,6 @@ class WindParticleAnimator {
     final features = <Map<String, dynamic>>[];
     for (final p in _particles) {
       if (p.trail.length < 2) continue;
-      // Fade opacity based on age
-      final opacity = 1.0 - (p.age / p.maxAge) * 0.6;
       features.add({
         'type': 'Feature',
         'geometry': {
@@ -236,7 +255,7 @@ class WindParticleAnimator {
           'coordinates': p.trail,
         },
         'properties': {
-          'opacity': opacity,
+          'color': _colorForSpeed(p.speed),
         },
       });
     }
@@ -246,11 +265,17 @@ class WindParticleAnimator {
       'features': features,
     });
 
-    try {
-      map.style.setStyleSourceProperty('wind-streamlines', 'data', geojson);
-    } catch (e) {
-      debugPrint('[EFB] Failed to update particle source: $e');
-    }
+    map.style
+        .setStyleSourceProperty('wind-streamlines', 'data', geojson)
+        .then((_) {
+      if (_tickCount == 1) {
+        debugPrint('[EFB] Particle source updated: ${features.length} trails');
+      }
+    }).catchError((e) {
+      if (_tickCount <= 3) {
+        debugPrint('[EFB] Failed to update particle source: $e');
+      }
+    });
   }
 
   void _clearSource() {

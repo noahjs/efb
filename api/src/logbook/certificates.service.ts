@@ -54,7 +54,10 @@ export class CertificatesService {
     return cert;
   }
 
-  async create(userId: string, dto: CreateCertificateDto): Promise<Certificate> {
+  async create(
+    userId: string,
+    dto: CreateCertificateDto,
+  ): Promise<Certificate> {
     const cert = this.certRepo.create({ ...dto, user_id: userId });
     return this.certRepo.save(cert);
   }

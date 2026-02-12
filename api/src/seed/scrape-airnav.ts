@@ -281,9 +281,7 @@ function parseContact(
   if (webLink) {
     // The actual URL is in the onMouseover attribute
     const mouseover = webLink.getAttribute('onMouseover') || '';
-    const urlMatch = mouseover.match(
-      /window\.status='([^']+)'/,
-    );
+    const urlMatch = mouseover.match(/window\.status='([^']+)'/);
     if (urlMatch) result.website = urlMatch[1];
   }
 
@@ -402,8 +400,7 @@ function parseFuelPrices(td: HTMLElement): FuelParseResult {
 
     if (
       rowTexts.some(
-        (t) =>
-          t === '100LL' || t === 'Jet A' || t === 'UL94' || t === 'MOGAS',
+        (t) => t === '100LL' || t === 'Jet A' || t === 'UL94' || t === 'MOGAS',
       )
     ) {
       fuelTypes = rowTexts.filter(
@@ -424,7 +421,11 @@ function parseFuelPrices(td: HTMLElement): FuelParseResult {
       // Extract all prices from this row
       const priceMatches = row.innerHTML.match(/\$(\d+\.\d{2})/g) || [];
 
-      for (let i = 0; i < Math.min(priceMatches.length, fuelTypes.length); i++) {
+      for (
+        let i = 0;
+        i < Math.min(priceMatches.length, fuelTypes.length);
+        i++
+      ) {
         const priceStr = priceMatches[i].replace('$', '');
         const price = parseFloat(priceStr);
         if (!isNaN(price) && price > 0) {

@@ -67,12 +67,8 @@ describe('WindyService — pure functions', () => {
   // ─── bearing (private — access via prototype) ───
 
   describe('bearing', () => {
-    const bearing = (
-      lat1: number,
-      lng1: number,
-      lat2: number,
-      lng2: number,
-    ) => (service as any).bearing(lat1, lng1, lat2, lng2);
+    const bearing = (lat1: number, lng1: number, lat2: number, lng2: number) =>
+      (service as any).bearing(lat1, lng1, lat2, lng2);
 
     it('should return ~0° for due north', () => {
       const brg = bearing(39.0, -104.0, 40.0, -104.0);

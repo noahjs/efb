@@ -22,41 +22,57 @@ export class DocumentsService {
 
   // ── Folders ──
 
-  async findFolders(aircraftId?: number): Promise<DocumentFolder[]> {
+  async findFolders(
+    userId: string,
+    aircraftId?: number,
+  ): Promise<DocumentFolder[]> {
+    const where: Record<string, any> = { user_id: userId };
+    if (aircraftId) where.aircraft_id = aircraftId;
     return this.folderRepo.find({
-      where: aircraftId ? { aircraft_id: aircraftId } : {},
+      where,
       order: { name: 'ASC' },
     });
   }
 
-  async createFolder(dto: CreateDocumentFolderDto): Promise<DocumentFolder> {
-    const folder = this.folderRepo.create(dto);
+  async createFolder(
+    dto: CreateDocumentFolderDto,
+    userId: string,
+  ): Promise<DocumentFolder> {
+    const folder = this.folderRepo.create({ ...dto, user_id: userId });
     return this.folderRepo.save(folder);
   }
 
   async updateFolder(
     id: number,
     dto: UpdateDocumentFolderDto,
+    userId: string,
   ): Promise<DocumentFolder> {
-    const folder = await this.folderRepo.findOne({ where: { id } });
+    const folder = await this.folderRepo.findOne({
+      where: { id, user_id: userId },
+    });
     if (!folder) throw new NotFoundException(`Folder #${id} not found`);
     Object.assign(folder, dto);
     return this.folderRepo.save(folder);
   }
 
-  async removeFolder(id: number): Promise<void> {
-    const folder = await this.folderRepo.findOne({ where: { id } });
+  async removeFolder(id: number, userId: string): Promise<void> {
+    const folder = await this.folderRepo.findOne({
+      where: { id, user_id: userId },
+    });
     if (!folder) throw new NotFoundException(`Folder #${id} not found`);
     await this.folderRepo.remove(folder);
   }
 
   // ── Documents ──
 
-  async findDocuments(filters: {
-    folder_id?: number;
-    aircraft_id?: number;
-  }): Promise<Document[]> {
-    const where: Record<string, number> = {};
+  async findDocuments(
+    userId: string,
+    filters: {
+      folder_id?: number;
+      aircraft_id?: number;
+    },
+  ): Promise<Document[]> {
+    const where: Record<string, any> = { user_id: userId };
     if (filters.folder_id) where.folder_id = filters.folder_id;
     if (filters.aircraft_id) where.aircraft_id = filters.aircraft_id;
     return this.documentRepo.find({
@@ -93,25 +109,28 @@ export class DocumentsService {
     return this.documentRepo.save(doc);
   }
 
-  async getDocument(id: number): Promise<Document> {
+  async getDocument(id: number, userId?: string): Promise<Document> {
+    const where: Record<string, any> = { id };
+    if (userId) where.user_id = userId;
     const doc = await this.documentRepo.findOne({
-      where: { id },
+      where,
       relations: ['folder'],
     });
     if (!doc) throw new NotFoundException(`Document #${id} not found`);
     return doc;
   }
 
-  async getDownloadUrl(id: number): Promise<{ url: string }> {
-    const doc = await this.getDocument(id);
+  async getDownloadUrl(id: number, userId?: string): Promise<{ url: string }> {
+    const doc = await this.getDocument(id, userId);
     const url = await this.storageService.getPresignedUrl(doc.s3_key);
     return { url };
   }
 
   async downloadFile(
     id: number,
+    userId?: string,
   ): Promise<{ buffer: Buffer; mimeType: string; filename: string }> {
-    const doc = await this.getDocument(id);
+    const doc = await this.getDocument(id, userId);
     const buffer = await this.storageService.download(doc.s3_key);
     return {
       buffer,
@@ -120,8 +139,12 @@ export class DocumentsService {
     };
   }
 
-  async updateDocument(id: number, dto: UpdateDocumentDto): Promise<Document> {
-    await this.getDocument(id); // throws NotFoundException if missing
+  async updateDocument(
+    id: number,
+    dto: UpdateDocumentDto,
+    userId?: string,
+  ): Promise<Document> {
+    await this.getDocument(id, userId); // throws NotFoundException if missing
     const updates: Record<string, any> = {};
     for (const [key, value] of Object.entries(dto)) {
       if (value !== undefined) updates[key] = value;
@@ -129,11 +152,11 @@ export class DocumentsService {
     if (Object.keys(updates).length > 0) {
       await this.documentRepo.update(id, updates);
     }
-    return this.getDocument(id);
+    return this.getDocument(id, userId);
   }
 
-  async removeDocument(id: number): Promise<void> {
-    const doc = await this.getDocument(id);
+  async removeDocument(id: number, userId?: string): Promise<void> {
+    const doc = await this.getDocument(id, userId);
     await this.storageService.delete(doc.s3_key);
     await this.documentRepo.remove(doc);
   }

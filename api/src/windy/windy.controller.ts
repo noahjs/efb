@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Query, Body, Res, Header } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Query,
+  Body,
+  Res,
+  Header,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { WindyService } from './windy.service';
 import { ElevationService } from './elevation.service';

@@ -104,7 +104,8 @@ export function categorizeEnrouteNotams(
     else if (cat === 'communication') result.communication.push(notam);
     else if (cat === 'svc') result.svc.push(notam);
     else if (cat === 'airspace') result.airspace.push(notam);
-    else if (cat === 'specialUseAirspace') result.specialUseAirspace.push(notam);
+    else if (cat === 'specialUseAirspace')
+      result.specialUseAirspace.push(notam);
     else if (cat === 'rwyTwyApronAdFdc') result.rwyTwyApronAdFdc.push(notam);
     else result.otherUnverified.push(notam);
   }

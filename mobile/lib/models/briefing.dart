@@ -1,24 +1,59 @@
+/// Parse a numeric value that may arrive as a string (e.g. "10+" for visibility).
+double? _parseNum(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) {
+    // Strip non-numeric trailing chars like "+" (e.g. "10+")
+    final cleaned = v.replaceAll(RegExp(r'[^0-9.\-]'), '');
+    if (cleaned.isEmpty) return null;
+    return double.tryParse(cleaned);
+  }
+  return null;
+}
+
+/// Parse an integer that may arrive as a string (e.g. "VRB" for wind direction).
+/// Returns null for non-numeric strings like "VRB".
+int? _parseIntOrNull(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+
 class Briefing {
   final BriefingFlightSummary flight;
+  final List<RouteAirport> routeAirports;
   final AdverseConditions adverseConditions;
   final Synopsis synopsis;
   final CurrentWeather currentWeather;
   final Forecasts forecasts;
   final BriefingNotams notams;
+  final RiskSummary? riskSummary;
+  final List<TimelinePoint> routeTimeline;
+  final String? generatedAt;
 
   const Briefing({
     required this.flight,
+    required this.routeAirports,
     required this.adverseConditions,
     required this.synopsis,
     required this.currentWeather,
     required this.forecasts,
     required this.notams,
+    this.riskSummary,
+    this.routeTimeline = const [],
+    this.generatedAt,
   });
 
   factory Briefing.fromJson(Map<String, dynamic> json) {
     return Briefing(
       flight: BriefingFlightSummary.fromJson(
           json['flight'] as Map<String, dynamic>),
+      routeAirports: (json['routeAirports'] as List<dynamic>?)
+              ?.map(
+                  (e) => RouteAirport.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          [],
       adverseConditions: AdverseConditions.fromJson(
           json['adverseConditions'] as Map<String, dynamic>),
       synopsis: Synopsis.fromJson(json['synopsis'] as Map<String, dynamic>),
@@ -28,6 +63,61 @@ class Briefing {
           Forecasts.fromJson(json['forecasts'] as Map<String, dynamic>),
       notams:
           BriefingNotams.fromJson(json['notams'] as Map<String, dynamic>),
+      riskSummary: json['riskSummary'] != null
+          ? RiskSummary.fromJson(
+              json['riskSummary'] as Map<String, dynamic>)
+          : null,
+      routeTimeline: (json['routeTimeline'] as List<dynamic>?)
+              ?.map((t) =>
+                  TimelinePoint.fromJson(t as Map<String, dynamic>))
+              .toList() ??
+          [],
+      generatedAt: json['generatedAt']?.toString(),
+    );
+  }
+}
+
+class RouteAirport {
+  final String identifier;
+  final String? icaoIdentifier;
+  final String name;
+  final String? city;
+  final String? state;
+  final double latitude;
+  final double longitude;
+  final double? elevation;
+  final String? facilityType;
+  final int distanceAlongRoute;
+  final double distanceFromRoute;
+
+  const RouteAirport({
+    required this.identifier,
+    this.icaoIdentifier,
+    required this.name,
+    this.city,
+    this.state,
+    required this.latitude,
+    required this.longitude,
+    this.elevation,
+    this.facilityType,
+    required this.distanceAlongRoute,
+    required this.distanceFromRoute,
+  });
+
+  factory RouteAirport.fromJson(Map<String, dynamic> json) {
+    return RouteAirport(
+      identifier: json['identifier'] as String,
+      icaoIdentifier: json['icaoIdentifier'] as String?,
+      name: json['name'] as String? ?? '',
+      city: json['city'] as String?,
+      state: json['state'] as String?,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      elevation: (json['elevation'] as num?)?.toDouble(),
+      facilityType: json['facilityType'] as String?,
+      distanceAlongRoute: json['distanceAlongRoute'] as int? ?? 0,
+      distanceFromRoute:
+          (json['distanceFromRoute'] as num?)?.toDouble() ?? 0,
     );
   }
 }
@@ -73,9 +163,9 @@ class BriefingFlightSummary {
       cruiseAltitude: json['cruiseAltitude'] as int?,
       aircraftIdentifier: json['aircraftIdentifier'] as String?,
       aircraftType: json['aircraftType'] as String?,
-      etd: json['etd'] as String?,
+      etd: json['etd']?.toString(),
       eteMinutes: json['eteMinutes'] as int?,
-      eta: json['eta'] as String?,
+      eta: json['eta']?.toString(),
       distanceNm: (json['distanceNm'] as num?)?.toDouble(),
       waypoints: (json['waypoints'] as List<dynamic>?)
               ?.map((w) =>
@@ -115,6 +205,20 @@ class BriefingWaypoint {
   }
 }
 
+class CloudLayer {
+  final String cover;
+  final int? base;
+
+  const CloudLayer({required this.cover, this.base});
+
+  factory CloudLayer.fromJson(Map<String, dynamic> json) {
+    return CloudLayer(
+      cover: json['cover'] as String? ?? '',
+      base: json['base'] as int?,
+    );
+  }
+}
+
 class BriefingMetar {
   final String station;
   final String icaoId;
@@ -122,6 +226,15 @@ class BriefingMetar {
   final String? rawOb;
   final String? obsTime;
   final String section;
+  final double? temp;
+  final double? dewp;
+  final int? wdir;
+  final int? wspd;
+  final int? wgst;
+  final double? visib;
+  final double? altim;
+  final List<CloudLayer> clouds;
+  final int? ceiling;
 
   const BriefingMetar({
     required this.station,
@@ -130,6 +243,15 @@ class BriefingMetar {
     this.rawOb,
     this.obsTime,
     required this.section,
+    this.temp,
+    this.dewp,
+    this.wdir,
+    this.wspd,
+    this.wgst,
+    this.visib,
+    this.altim,
+    this.clouds = const [],
+    this.ceiling,
   });
 
   factory BriefingMetar.fromJson(Map<String, dynamic> json) {
@@ -138,8 +260,61 @@ class BriefingMetar {
       icaoId: json['icaoId'] as String,
       flightCategory: json['flightCategory'] as String?,
       rawOb: json['rawOb'] as String?,
-      obsTime: json['obsTime'] as String?,
+      obsTime: json['obsTime']?.toString(),
       section: json['section'] as String,
+      temp: (json['temp'] as num?)?.toDouble(),
+      dewp: (json['dewp'] as num?)?.toDouble(),
+      wdir: _parseIntOrNull(json['wdir']),
+      wspd: _parseIntOrNull(json['wspd']),
+      wgst: _parseIntOrNull(json['wgst']),
+      visib: _parseNum(json['visib']),
+      altim: (json['altim'] as num?)?.toDouble(),
+      clouds: (json['clouds'] as List<dynamic>?)
+              ?.map((c) => CloudLayer.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          [],
+      ceiling: (json['ceiling'] as num?)?.toInt(),
+    );
+  }
+}
+
+class TafForecastPeriod {
+  final String timeFrom;
+  final String timeTo;
+  final String changeType;
+  final int? wdir;
+  final int? wspd;
+  final int? wgst;
+  final double? visib;
+  final List<CloudLayer> clouds;
+  final String? fltCat;
+
+  const TafForecastPeriod({
+    required this.timeFrom,
+    required this.timeTo,
+    required this.changeType,
+    this.wdir,
+    this.wspd,
+    this.wgst,
+    this.visib,
+    this.clouds = const [],
+    this.fltCat,
+  });
+
+  factory TafForecastPeriod.fromJson(Map<String, dynamic> json) {
+    return TafForecastPeriod(
+      timeFrom: json['timeFrom']?.toString() ?? '',
+      timeTo: json['timeTo']?.toString() ?? '',
+      changeType: json['changeType'] as String? ?? 'initial',
+      wdir: _parseIntOrNull(json['wdir']),
+      wspd: _parseIntOrNull(json['wspd']),
+      wgst: _parseIntOrNull(json['wgst']),
+      visib: _parseNum(json['visib']),
+      clouds: (json['clouds'] as List<dynamic>?)
+              ?.map((c) => CloudLayer.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          [],
+      fltCat: json['fltCat'] as String?,
     );
   }
 }
@@ -149,12 +324,14 @@ class BriefingTaf {
   final String icaoId;
   final String? rawTaf;
   final String section;
+  final List<TafForecastPeriod> fcsts;
 
   const BriefingTaf({
     required this.station,
     required this.icaoId,
     this.rawTaf,
     required this.section,
+    this.fcsts = const [],
   });
 
   factory BriefingTaf.fromJson(Map<String, dynamic> json) {
@@ -163,6 +340,11 @@ class BriefingTaf {
       icaoId: json['icaoId'] as String,
       rawTaf: json['rawTaf'] as String?,
       section: json['section'] as String,
+      fcsts: (json['fcsts'] as List<dynamic>?)
+              ?.map((f) =>
+                  TafForecastPeriod.fromJson(f as Map<String, dynamic>))
+              .toList() ??
+          [],
     );
   }
 }
@@ -195,8 +377,8 @@ class BriefingNotam {
       icaoId: json['icaoId'] as String? ?? '',
       text: json['text'] as String? ?? '',
       fullText: json['fullText'] as String? ?? '',
-      effectiveStart: json['effectiveStart'] as String?,
-      effectiveEnd: json['effectiveEnd'] as String?,
+      effectiveStart: json['effectiveStart']?.toString(),
+      effectiveEnd: json['effectiveEnd']?.toString(),
       category: json['category'] as String? ?? '',
     );
   }
@@ -272,6 +454,35 @@ class EnrouteNotams {
   }
 }
 
+class AffectedSegment {
+  final String fromWaypoint;
+  final String toWaypoint;
+  final double fromDistNm;
+  final double toDistNm;
+  final double fromEtaMin;
+  final double toEtaMin;
+
+  const AffectedSegment({
+    required this.fromWaypoint,
+    required this.toWaypoint,
+    required this.fromDistNm,
+    required this.toDistNm,
+    required this.fromEtaMin,
+    required this.toEtaMin,
+  });
+
+  factory AffectedSegment.fromJson(Map<String, dynamic> json) {
+    return AffectedSegment(
+      fromWaypoint: json['fromWaypoint'] as String? ?? '',
+      toWaypoint: json['toWaypoint'] as String? ?? '',
+      fromDistNm: (json['fromDistNm'] as num?)?.toDouble() ?? 0,
+      toDistNm: (json['toDistNm'] as num?)?.toDouble() ?? 0,
+      fromEtaMin: (json['fromEtaMin'] as num?)?.toDouble() ?? 0,
+      toEtaMin: (json['toEtaMin'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
 class BriefingAdvisory {
   final String hazardType;
   final String rawText;
@@ -282,6 +493,11 @@ class BriefingAdvisory {
   final String? base;
   final String? dueTo;
   final Map<String, dynamic>? geometry;
+  final int? topFt;
+  final int? baseFt;
+  final String? altitudeRelation;
+  final AffectedSegment? affectedSegment;
+  final String? plainEnglish;
 
   const BriefingAdvisory({
     required this.hazardType,
@@ -293,19 +509,32 @@ class BriefingAdvisory {
     this.base,
     this.dueTo,
     this.geometry,
+    this.topFt,
+    this.baseFt,
+    this.altitudeRelation,
+    this.affectedSegment,
+    this.plainEnglish,
   });
 
   factory BriefingAdvisory.fromJson(Map<String, dynamic> json) {
     return BriefingAdvisory(
       hazardType: json['hazardType'] as String? ?? 'Unknown',
       rawText: json['rawText'] as String? ?? '',
-      validStart: json['validStart'] as String?,
-      validEnd: json['validEnd'] as String?,
+      validStart: json['validStart']?.toString(),
+      validEnd: json['validEnd']?.toString(),
       severity: json['severity'] as String?,
-      top: json['top'] as String?,
-      base: json['base'] as String?,
+      top: json['top']?.toString(),
+      base: json['base']?.toString(),
       dueTo: json['dueTo'] as String?,
       geometry: json['geometry'] as Map<String, dynamic>?,
+      topFt: (json['topFt'] as num?)?.toInt(),
+      baseFt: (json['baseFt'] as num?)?.toInt(),
+      altitudeRelation: json['altitudeRelation'] as String?,
+      affectedSegment: json['affectedSegment'] != null
+          ? AffectedSegment.fromJson(
+              json['affectedSegment'] as Map<String, dynamic>)
+          : null,
+      plainEnglish: json['plainEnglish'] as String?,
     );
   }
 }
@@ -331,9 +560,9 @@ class BriefingTfr {
     return BriefingTfr(
       notamNumber: json['notamNumber'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      effectiveStart: json['effectiveStart'] as String?,
-      effectiveEnd: json['effectiveEnd'] as String?,
-      notamText: json['notamText'] as String?,
+      effectiveStart: json['effectiveStart']?.toString(),
+      effectiveEnd: json['effectiveEnd']?.toString(),
+      notamText: json['notamText']?.toString(),
       geometry: json['geometry'] as Map<String, dynamic>?,
     );
   }
@@ -368,8 +597,8 @@ class BriefingPirep {
     return BriefingPirep(
       raw: json['raw'] as String? ?? '',
       location: json['location'] as String?,
-      time: json['time'] as String?,
-      altitude: json['altitude'] as String?,
+      time: json['time']?.toString(),
+      altitude: json['altitude']?.toString(),
       aircraftType: json['aircraftType'] as String?,
       turbulence: json['turbulence'] as String?,
       icing: json['icing'] as String?,
@@ -416,7 +645,7 @@ class WindsAloftTable {
               .toList() ??
           [],
       altitudes: (json['altitudes'] as List<dynamic>?)
-              ?.map((a) => a as int)
+              ?.map((a) => (a as num).toInt())
               .toList() ??
           [],
       filedAltitude: json['filedAltitude'] as int? ?? 0,
@@ -653,6 +882,144 @@ class BriefingNotams {
       artcc: (json['artcc'] as List<dynamic>?)
               ?.map((a) => CategorizedNotams.fromJson(
                   a as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+// Risk Assessment types
+class RiskSummary {
+  final String overallLevel;
+  final List<RiskCategory> categories;
+  final List<String> criticalItems;
+
+  const RiskSummary({
+    required this.overallLevel,
+    this.categories = const [],
+    this.criticalItems = const [],
+  });
+
+  factory RiskSummary.fromJson(Map<String, dynamic> json) {
+    return RiskSummary(
+      overallLevel: json['overallLevel'] as String? ?? 'green',
+      categories: (json['categories'] as List<dynamic>?)
+              ?.map((c) =>
+                  RiskCategory.fromJson(c as Map<String, dynamic>))
+              .toList() ??
+          [],
+      criticalItems: (json['criticalItems'] as List<dynamic>?)
+              ?.map((i) => i as String)
+              .toList() ??
+          [],
+    );
+  }
+}
+
+class RiskCategory {
+  final String category;
+  final String level;
+  final List<String> alerts;
+
+  const RiskCategory({
+    required this.category,
+    required this.level,
+    this.alerts = const [],
+  });
+
+  factory RiskCategory.fromJson(Map<String, dynamic> json) {
+    return RiskCategory(
+      category: json['category'] as String? ?? '',
+      level: json['level'] as String? ?? 'green',
+      alerts: (json['alerts'] as List<dynamic>?)
+              ?.map((a) => a as String)
+              .toList() ??
+          [],
+    );
+  }
+}
+
+// Route Timeline types
+class TimelineHazard {
+  final String type;
+  final String description;
+  final String? altitudeRelation;
+
+  const TimelineHazard({
+    required this.type,
+    required this.description,
+    this.altitudeRelation,
+  });
+
+  factory TimelineHazard.fromJson(Map<String, dynamic> json) {
+    return TimelineHazard(
+      type: json['type'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      altitudeRelation: json['altitudeRelation'] as String?,
+    );
+  }
+}
+
+class TimelinePoint {
+  final String waypoint;
+  final double latitude;
+  final double longitude;
+  final int distanceFromDep;
+  final int etaMinutes;
+  final String? etaZulu;
+  final String? nearestStation;
+  final String? flightCategory;
+  final int? ceiling;
+  final double? visibility;
+  final int? windDir;
+  final int? windSpd;
+  final TafForecastPeriod? forecastAtEta;
+  final int? headwindComponent;
+  final int? crosswindComponent;
+  final List<TimelineHazard> activeHazards;
+
+  const TimelinePoint({
+    required this.waypoint,
+    required this.latitude,
+    required this.longitude,
+    this.distanceFromDep = 0,
+    this.etaMinutes = 0,
+    this.etaZulu,
+    this.nearestStation,
+    this.flightCategory,
+    this.ceiling,
+    this.visibility,
+    this.windDir,
+    this.windSpd,
+    this.forecastAtEta,
+    this.headwindComponent,
+    this.crosswindComponent,
+    this.activeHazards = const [],
+  });
+
+  factory TimelinePoint.fromJson(Map<String, dynamic> json) {
+    return TimelinePoint(
+      waypoint: json['waypoint'] as String? ?? '',
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 0,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 0,
+      distanceFromDep: (json['distanceFromDep'] as num?)?.toInt() ?? 0,
+      etaMinutes: (json['etaMinutes'] as num?)?.toInt() ?? 0,
+      etaZulu: json['etaZulu']?.toString(),
+      nearestStation: json['nearestStation'] as String?,
+      flightCategory: json['flightCategory'] as String?,
+      ceiling: (json['ceiling'] as num?)?.toInt(),
+      visibility: _parseNum(json['visibility']),
+      windDir: _parseIntOrNull(json['windDir']),
+      windSpd: _parseIntOrNull(json['windSpd']),
+      forecastAtEta: json['forecastAtEta'] != null
+          ? TafForecastPeriod.fromJson(
+              json['forecastAtEta'] as Map<String, dynamic>)
+          : null,
+      headwindComponent: (json['headwindComponent'] as num?)?.toInt(),
+      crosswindComponent: (json['crosswindComponent'] as num?)?.toInt(),
+      activeHazards: (json['activeHazards'] as List<dynamic>?)
+              ?.map((h) =>
+                  TimelineHazard.fromJson(h as Map<String, dynamic>))
               .toList() ??
           [],
     );

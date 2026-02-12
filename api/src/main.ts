@@ -1,9 +1,22 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Security headers
+  app.use(
+    helmet({
+      // Disable HSTS in development — it causes Chrome to cache an HSTS policy
+      // for localhost and silently upgrade HTTP→HTTPS, breaking connections.
+      hsts: false,
+      // Allow cross-origin resource loading (Flutter web loads from a different port)
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // Global prefix for all routes
   app.setGlobalPrefix('api');

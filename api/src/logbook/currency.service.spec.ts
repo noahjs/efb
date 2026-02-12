@@ -101,8 +101,16 @@ describe('CurrencyService', () => {
     it('should be current with 3+ takeoffs and 3+ landings in 90 days', () => {
       const now = new Date('2025-03-15');
       const entries = [
-        entry({ date: daysAgo(10, now), day_takeoffs: 2, day_landings_full_stop: 2 }),
-        entry({ date: daysAgo(30, now), day_takeoffs: 1, day_landings_full_stop: 1 }),
+        entry({
+          date: daysAgo(10, now),
+          day_takeoffs: 2,
+          day_landings_full_stop: 2,
+        }),
+        entry({
+          date: daysAgo(30, now),
+          day_takeoffs: 1,
+          day_landings_full_stop: 1,
+        }),
       ];
       const result = calc(entries, now);
       expect(result.status).toBe('current');
@@ -111,7 +119,11 @@ describe('CurrencyService', () => {
     it('should be expired with fewer than 3 takeoffs/landings', () => {
       const now = new Date('2025-03-15');
       const entries = [
-        entry({ date: daysAgo(10, now), day_takeoffs: 1, day_landings_full_stop: 1 }),
+        entry({
+          date: daysAgo(10, now),
+          day_takeoffs: 1,
+          day_landings_full_stop: 1,
+        }),
       ];
       const result = calc(entries, now);
       expect(result.status).toBe('expired');
@@ -140,7 +152,11 @@ describe('CurrencyService', () => {
     it('should not count entries older than 90 days', () => {
       const now = new Date('2025-03-15');
       const entries = [
-        entry({ date: daysAgo(91, now), day_takeoffs: 5, day_landings_full_stop: 5 }),
+        entry({
+          date: daysAgo(91, now),
+          day_takeoffs: 5,
+          day_landings_full_stop: 5,
+        }),
       ];
       const result = calc(entries, now);
       expect(result.status).toBe('expired');
@@ -231,9 +247,7 @@ describe('CurrencyService', () => {
 
     it('should be current after IPC even without approaches', () => {
       const now = new Date('2025-03-15');
-      const entries = [
-        entry({ date: daysAgo(30, now), ipc: true }),
-      ];
+      const entries = [entry({ date: daysAgo(30, now), ipc: true })];
       const result = calc(entries, now);
       expect(result.status).toBe('current');
     });
@@ -241,9 +255,7 @@ describe('CurrencyService', () => {
     it('should expire when IPC was > 6 months ago (end of calendar month)', () => {
       const now = new Date('2025-03-15');
       // IPC 8 months ago
-      const entries = [
-        entry({ date: '2024-07-01', ipc: true }),
-      ];
+      const entries = [entry({ date: '2024-07-01', ipc: true })];
       const result = calc(entries, now);
       // IPC on Jul 1 → expires end of Jan 2025 → should be expired by Mar 15
       expect(result.status).toBe('expired');
@@ -271,9 +283,7 @@ describe('CurrencyService', () => {
 
     it('should be current when flight review is within 24 calendar months', () => {
       const now = new Date('2025-03-15');
-      const entries = [
-        entry({ date: '2024-06-15', flight_review: true }),
-      ];
+      const entries = [entry({ date: '2024-06-15', flight_review: true })];
       const result = calc(entries, now);
       expect(result.status).toBe('current');
       // Should expire end of June 2026
@@ -282,9 +292,7 @@ describe('CurrencyService', () => {
 
     it('should be expired when flight review is > 24 calendar months ago', () => {
       const now = new Date('2025-03-15');
-      const entries = [
-        entry({ date: '2022-12-01', flight_review: true }),
-      ];
+      const entries = [entry({ date: '2022-12-01', flight_review: true })];
       const result = calc(entries, now);
       // Dec 2022 + 24 months = end of Dec 2024 → expired
       expect(result.status).toBe('expired');
@@ -292,9 +300,7 @@ describe('CurrencyService', () => {
 
     it('should treat checkride as flight review', () => {
       const now = new Date('2025-03-15');
-      const entries = [
-        entry({ date: '2024-06-15', checkride: true }),
-      ];
+      const entries = [entry({ date: '2024-06-15', checkride: true })];
       const result = calc(entries, now);
       expect(result.status).toBe('current');
     });
@@ -309,9 +315,7 @@ describe('CurrencyService', () => {
     it('should show expiring_soon when within 60 days of expiration', () => {
       const now = new Date('2025-03-15');
       // Review on April 1, 2023 → expires end of April 2025 (46 days away)
-      const entries = [
-        entry({ date: '2023-04-01', flight_review: true }),
-      ];
+      const entries = [entry({ date: '2023-04-01', flight_review: true })];
       const result = calc(entries, now);
       expect(result.status).toBe('expiring_soon');
     });
@@ -340,27 +344,21 @@ describe('CurrencyService', () => {
 
     it('should be current when medical has not expired', () => {
       const now = new Date('2025-03-15');
-      const certs = [
-        cert({ expiration_date: '2026-03-31' }),
-      ];
+      const certs = [cert({ expiration_date: '2026-03-31' })];
       const result = calc(certs, now);
       expect(result.status).toBe('current');
     });
 
     it('should be expired when medical has passed expiration', () => {
       const now = new Date('2025-03-15');
-      const certs = [
-        cert({ expiration_date: '2024-12-31' }),
-      ];
+      const certs = [cert({ expiration_date: '2024-12-31' })];
       const result = calc(certs, now);
       expect(result.status).toBe('expired');
     });
 
     it('should be expiring_soon when within 30 days of expiration', () => {
       const now = new Date('2025-03-15');
-      const certs = [
-        cert({ expiration_date: '2025-04-01' }),
-      ];
+      const certs = [cert({ expiration_date: '2025-04-01' })];
       const result = calc(certs, now);
       expect(result.status).toBe('expiring_soon');
     });
@@ -368,8 +366,14 @@ describe('CurrencyService', () => {
     it('should use the latest expiration when multiple medicals exist', () => {
       const now = new Date('2025-03-15');
       const certs = [
-        cert({ expiration_date: '2024-12-31', certificate_class: 'third_class' }),
-        cert({ expiration_date: '2026-06-30', certificate_class: 'first_class' }),
+        cert({
+          expiration_date: '2024-12-31',
+          certificate_class: 'third_class',
+        }),
+        cert({
+          expiration_date: '2026-06-30',
+          certificate_class: 'first_class',
+        }),
       ];
       const result = calc(certs, now);
       expect(result.status).toBe('current');

@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { TRAFFIC } from '../config/constants';
@@ -91,7 +96,11 @@ export class TrafficService implements OnModuleInit, OnModuleDestroy {
   /**
    * Called by the controller. Returns cached data and marks the cell as active.
    */
-  getTrafficNearby(lat: number, lon: number, radiusNm: number): TrafficResponse {
+  getTrafficNearby(
+    lat: number,
+    lon: number,
+    radiusNm: number,
+  ): TrafficResponse {
     const key = this.cellKey(lat, lon);
     const now = Date.now();
 

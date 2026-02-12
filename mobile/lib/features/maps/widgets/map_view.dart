@@ -29,6 +29,29 @@ class EfbMapController {
   void zoomOut() => onZoomOut?.call();
   void flyTo(double lat, double lng, {double? zoom}) =>
       onFlyTo?.call(lat, lng, zoom: zoom);
+
+  // Particle animation (platform-specific: native uses Dart timer, web uses JS)
+  void Function(List<Map<String, dynamic>> windField,
+      {required double minLat,
+      required double maxLat,
+      required double minLng,
+      required double maxLng})? onUpdateParticleField;
+  void Function()? onStartParticles;
+  void Function()? onStopParticles;
+  bool Function()? getParticlesRunning;
+
+  void updateParticleField(
+    List<Map<String, dynamic>> windField, {
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  }) =>
+      onUpdateParticleField?.call(windField,
+          minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+  void startParticles() => onStartParticles?.call();
+  void stopParticles() => onStopParticles?.call();
+  bool get particlesRunning => getParticlesRunning?.call() ?? false;
 }
 
 class EfbMapView extends StatelessWidget {
@@ -45,10 +68,12 @@ class EfbMapView extends StatelessWidget {
   /// Route line coordinates as [[lng, lat], ...].
   final List<List<double>> routeCoordinates;
 
-  /// Aeronautical GeoJSON FeatureCollections (airspaces, airways, ARTCC).
+  /// Aeronautical GeoJSON FeatureCollections (airspaces, airways, ARTCC, navaids, fixes).
   final Map<String, dynamic>? airspaceGeoJson;
   final Map<String, dynamic>? airwayGeoJson;
   final Map<String, dynamic>? artccGeoJson;
+  final Map<String, dynamic>? navaidGeoJson;
+  final Map<String, dynamic>? fixGeoJson;
 
   /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'advisories', 'pireps').
   /// Each value is a GeoJSON FeatureCollection or null to clear.
@@ -71,6 +96,8 @@ class EfbMapView extends StatelessWidget {
     this.airspaceGeoJson,
     this.airwayGeoJson,
     this.artccGeoJson,
+    this.navaidGeoJson,
+    this.fixGeoJson,
     this.overlays = const {},
   });
 
@@ -90,6 +117,8 @@ class EfbMapView extends StatelessWidget {
       airspaceGeoJson: airspaceGeoJson,
       airwayGeoJson: airwayGeoJson,
       artccGeoJson: artccGeoJson,
+      navaidGeoJson: navaidGeoJson,
+      fixGeoJson: fixGeoJson,
       overlays: overlays,
     );
   }

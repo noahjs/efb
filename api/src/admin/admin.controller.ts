@@ -6,13 +6,14 @@ import {
   Param,
   Res,
   HttpCode,
+  BadRequestException,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { AdminService } from './admin.service';
+import { AdminService, VFR_SECTIONAL_CHARTS } from './admin.service';
 import * as path from 'path';
-import { Public } from '../auth/guards/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
 
-@Public()
+@Roles('admin')
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
@@ -128,6 +129,9 @@ export class AdminController {
   @Post('charts/process/:chart')
   @HttpCode(200)
   async processChart(@Param('chart') chart: string) {
+    if (!VFR_SECTIONAL_CHARTS.includes(chart)) {
+      throw new BadRequestException(`Invalid chart name: ${chart}`);
+    }
     return this.adminService.runProcessChart(chart);
   }
 
@@ -136,6 +140,9 @@ export class AdminController {
    */
   @Delete('charts/:chart')
   async deleteChart(@Param('chart') chart: string) {
+    if (!VFR_SECTIONAL_CHARTS.includes(chart)) {
+      throw new BadRequestException(`Invalid chart name: ${chart}`);
+    }
     return this.adminService.deleteChart(chart);
   }
 }

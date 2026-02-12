@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AirportsModule } from './airports/airports.module';
 import { WeatherModule } from './weather/weather.module';
 import { WeatherStation } from './weather/entities/weather-station.entity';
+import { AtisRecording } from './weather/entities/atis-recording.entity';
 import { Fbo } from './fbos/entities/fbo.entity';
 import { FuelPrice } from './fbos/entities/fuel-price.entity';
 import { TilesModule } from './tiles/tiles.module';
@@ -66,6 +69,7 @@ import { dbConfig } from './db.config';
 
 @Module({
   imports: [
+    ConfigModule.forRoot(),
     TypeOrmModule.forRoot({
       ...dbConfig,
       entities: [
@@ -105,10 +109,12 @@ import { dbConfig } from './db.config';
         Document,
         DocumentFolder,
         WeatherStation,
+        AtisRecording,
         Fbo,
         FuelPrice,
       ],
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     AirportsModule,
     WeatherModule,
     TilesModule,

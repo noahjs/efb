@@ -211,7 +211,10 @@ describe('Aircraft Performance', () => {
           AircraftService,
           {
             provide: getRepositoryToken(Aircraft),
-            useValue: { findOne: jest.fn(), findAndCount: jest.fn() },
+            useValue: {
+              findOne: jest.fn().mockResolvedValue({ id: 1 }),
+              findAndCount: jest.fn(),
+            },
           },
           {
             provide: getRepositoryToken(PerformanceProfile),

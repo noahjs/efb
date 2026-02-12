@@ -96,7 +96,13 @@
       "Bash(xargs:*)",
       "Bash(gem list:*)",
       "Bash(npx nest build:*)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "WebFetch(domain:www.liveatc.net)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.broadcastify.com)",
+      "Bash(npx eslint:*)",
+      "Bash(flutter devices:*)"
     ]
   }
 }

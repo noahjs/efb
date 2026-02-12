@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../models/briefing.dart';
+import '../../../imagery/widgets/pirep_symbols.dart';
+import 'briefing_pirep_map.dart';
 
-class PirepDetail extends StatelessWidget {
+class PirepDetail extends StatefulWidget {
   final String title;
   final List<BriefingPirep> pireps;
   final List<BriefingWaypoint> waypoints;
@@ -16,147 +18,330 @@ class PirepDetail extends StatelessWidget {
   });
 
   @override
+  State<PirepDetail> createState() => _PirepDetailState();
+}
+
+class _PirepDetailState extends State<PirepDetail> {
+  BriefingPirep? _selectedPirep;
+
+  @override
   Widget build(BuildContext context) {
-    if (pireps.isEmpty) {
+    if (widget.pireps.isEmpty) {
       return Center(
-        child: Text('No $title',
+        child: Text('No ${widget.title}',
             style: const TextStyle(color: AppColors.textMuted)),
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
+    return Stack(
       children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+        // Map fills the whole area
+        BriefingPirepMap(
+          pireps: widget.pireps,
+          waypoints: widget.waypoints,
+          onPirepTapped: (pirep) => setState(() => _selectedPirep = pirep),
+          onEmptyTapped: () => setState(() => _selectedPirep = null),
+        ),
+
+        // Report count badge
+        Positioned(
+          top: 12,
+          left: 12,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.surface.withAlpha(230),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${widget.pireps.length} ${widget.title}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 16),
-        for (final pirep in pireps) _PirepCard(pirep: pirep),
+
+        // Legend
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.surface.withAlpha(230),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _legendItem(PirepShape.circle, const Color(0xFF4CAF50),
+                    true, 'Smooth/NEG'),
+                const SizedBox(height: 4),
+                _legendItem(PirepShape.triangle, const Color(0xFF29B6F6),
+                    false, 'Turb Lgt'),
+                const SizedBox(height: 4),
+                _legendItem(PirepShape.triangle, const Color(0xFFFFC107),
+                    true, 'Turb Mod'),
+                const SizedBox(height: 4),
+                _legendItem(PirepShape.triangle, const Color(0xFFFF5252),
+                    true, 'Turb Sev'),
+                const SizedBox(height: 6),
+                _legendItem(PirepShape.diamond, const Color(0xFF29B6F6),
+                    false, 'Ice Lgt'),
+                const SizedBox(height: 4),
+                _legendItem(PirepShape.diamond, const Color(0xFFFFC107),
+                    true, 'Ice Mod'),
+                const SizedBox(height: 4),
+                _legendItem(PirepShape.diamond, const Color(0xFFFF5252),
+                    true, 'Ice Sev'),
+              ],
+            ),
+          ),
+        ),
+
+        // Detail card for selected PIREP
+        if (_selectedPirep != null)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _PirepDetailCard(
+              pirep: _selectedPirep!,
+              onClose: () => setState(() => _selectedPirep = null),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _legendItem(
+      PirepShape shape, Color color, bool filled, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CustomPaint(
+          size: const Size(14, 14),
+          painter: PirepSymbolPainter(
+              shape: shape, color: color, filled: filled),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 10,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _PirepCard extends StatelessWidget {
-  final BriefingPirep pirep;
+// ---------------------------------------------------------------------------
+// Detail card shown when a PIREP is tapped
+// ---------------------------------------------------------------------------
 
-  const _PirepCard({required this.pirep});
+class _PirepDetailCard extends StatelessWidget {
+  final BriefingPirep pirep;
+  final VoidCallback onClose;
+
+  const _PirepDetailCard({required this.pirep, required this.onClose});
 
   @override
   Widget build(BuildContext context) {
     final isUrgent = pirep.urgency == 'UUA';
+    final tbSev = extractSeverity(pirep.turbulence);
+    final iceSev = extractSeverity(pirep.icing);
+    final flStr = pirep.altitude != null
+        ? 'FL${pirep.altitude!.padLeft(3, '0')}'
+        : null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: isUrgent
-            ? Border.all(color: AppColors.error.withAlpha(100), width: 1)
-            : null,
+        color: AppColors.card,
+        borderRadius:
+            const BorderRadius.vertical(top: Radius.circular(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(100),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: isUrgent
-                      ? AppColors.error.withAlpha(40)
-                      : AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  pirep.urgency,
-                  style: TextStyle(
-                    color: isUrgent ? AppColors.error : AppColors.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
+              // Header: type badge, station, time, close
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color:
+                          (isUrgent ? AppColors.error : AppColors.primary)
+                              .withAlpha(50),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      pirep.urgency,
+                      style: TextStyle(
+                        color: isUrgent
+                            ? AppColors.error
+                            : AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (pirep.location != null) ...[
+                    const SizedBox(width: 10),
+                    Text(
+                      pirep.location!,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                  if (pirep.time != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatTime(pirep.time!),
+                      style: const TextStyle(
+                        color: AppColors.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: onClose,
+                    child: const Icon(Icons.close,
+                        size: 20, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Info badges
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  if (flStr != null) _infoBadge(Icons.height, flStr),
+                  if (pirep.aircraftType != null &&
+                      pirep.aircraftType!.isNotEmpty &&
+                      pirep.aircraftType != 'UNKN')
+                    _infoBadge(
+                        Icons.airplanemode_active, pirep.aircraftType!),
+                  if (pirep.turbulence != null)
+                    _coloredBadge('TB', pirep.turbulence!,
+                        _severityColor(tbSev)),
+                  if (pirep.icing != null)
+                    _coloredBadge(
+                        'ICE', pirep.icing!, _severityColor(iceSev)),
+                ],
+              ),
+              // Raw observation
+              if (pirep.raw.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    pirep.raw,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      height: 1.4,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              if (pirep.aircraftType != null)
-                Text(
-                  pirep.aircraftType!,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12),
-                ),
-              const Spacer(),
-              if (pirep.time != null)
-                Text(
-                  pirep.time!,
-                  style: const TextStyle(
-                      color: AppColors.textMuted, fontSize: 11),
-                ),
+              ],
             ],
           ),
-          const SizedBox(height: 8),
-          // Translated fields
-          if (pirep.location != null)
-            _FieldRow(label: 'Location', value: pirep.location!),
-          if (pirep.altitude != null)
-            _FieldRow(label: 'Altitude', value: 'FL${pirep.altitude}'),
-          if (pirep.turbulence != null)
-            _FieldRow(label: 'Turbulence', value: pirep.turbulence!),
-          if (pirep.icing != null)
-            _FieldRow(label: 'Icing', value: pirep.icing!),
-          const SizedBox(height: 6),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoBadge(IconData icon, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: AppColors.textMuted),
+          const SizedBox(width: 4),
           Text(
-            pirep.raw,
+            value,
             style: const TextStyle(
-              color: AppColors.textMuted,
+              color: AppColors.textSecondary,
               fontSize: 11,
-              fontFamily: 'monospace',
             ),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
-}
 
-class _FieldRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _FieldRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(
-                  color: AppColors.textMuted, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 12),
-            ),
-          ),
-        ],
+  Widget _coloredBadge(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(38),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
+  }
+
+  Color _severityColor(Severity sev) {
+    switch (sev) {
+      case Severity.none:
+        return const Color(0xFF4CAF50);
+      case Severity.light:
+        return const Color(0xFF29B6F6);
+      case Severity.moderate:
+        return const Color(0xFFFFC107);
+      case Severity.severe:
+        return const Color(0xFFFF5252);
+    }
+  }
+
+  String _formatTime(String timeStr) {
+    try {
+      final dt = DateTime.parse(timeStr);
+      return '${dt.hour.toString().padLeft(2, '0')}${dt.minute.toString().padLeft(2, '0')}Z';
+    } catch (_) {
+      return timeStr;
+    }
   }
 }

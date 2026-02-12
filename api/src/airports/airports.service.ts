@@ -55,6 +55,13 @@ export class AirportsService {
     });
   }
 
+  /** Lightweight lookup — returns the airport row without relations. */
+  async findByIdLean(identifier: string) {
+    return this.airportRepo.findOne({
+      where: [{ identifier }, { icao_identifier: identifier }],
+    });
+  }
+
   async findNearby(
     lat: number,
     lng: number,
@@ -141,7 +148,7 @@ export class AirportsService {
     maxLng: number,
     limit = AIRPORTS.BOUNDS_QUERY_LIMIT,
   ) {
-    return this.airportRepo
+    const airports = await this.airportRepo
       .createQueryBuilder('airport')
       .where('airport.latitude BETWEEN :minLat AND :maxLat', { minLat, maxLat })
       .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', {
@@ -150,6 +157,37 @@ export class AirportsService {
       })
       .take(limit)
       .getMany();
+
+    if (airports.length === 0) return airports;
+
+    const ids = airports.map((a) => a.identifier);
+
+    // Determine which airports have at least one hard-surface runway
+    const hardRows: { airport_identifier: string }[] = await this.runwayRepo
+      .createQueryBuilder('r')
+      .select('DISTINCT r.airport_identifier', 'airport_identifier')
+      .where('r.airport_identifier IN (:...ids)', { ids })
+      .andWhere(
+        "(r.surface LIKE 'ASPH%' OR r.surface LIKE 'CONC%' OR r.surface IN ('PFC', 'BRICK', 'METAL', 'STEEL', 'ALUMINUM', 'ALUM'))",
+      )
+      .getRawMany();
+    const hardSet = new Set(hardRows.map((r) => r.airport_identifier));
+
+    // Determine which airports have a control tower (TWR frequency)
+    const towerRows: { airport_identifier: string }[] =
+      await this.frequencyRepo
+        .createQueryBuilder('f')
+        .select('DISTINCT f.airport_identifier', 'airport_identifier')
+        .where('f.airport_identifier IN (:...ids)', { ids })
+        .andWhere("f.type = 'TWR'")
+        .getRawMany();
+    const towerSet = new Set(towerRows.map((r) => r.airport_identifier));
+
+    return airports.map((a) => ({
+      ...a,
+      has_hard_surface: hardSet.has(a.identifier),
+      has_tower: towerSet.has(a.identifier),
+    }));
   }
 
   /**
@@ -198,8 +236,7 @@ export class AirportsService {
         results.push(
           Object.assign(airport, {
             distanceAlongRoute: Math.round(pos.alongTrackNm),
-            distanceFromRoute:
-              Math.round(pos.crossTrackNm * 10) / 10,
+            distanceFromRoute: Math.round(pos.crossTrackNm * 10) / 10,
           }),
         );
       }

@@ -44,9 +44,7 @@ export class FlightsService {
       .leftJoinAndSelect('flight.arrival_fbo', 'arrival_fbo')
       .where('flight.id = :id', { id })
       .andWhere(
-        userId
-          ? '(flight.user_id = :userId OR flight.user_id IS NULL)'
-          : '1=1',
+        userId ? '(flight.user_id = :userId OR flight.user_id IS NULL)' : '1=1',
         { userId },
       )
       .getOne();
@@ -112,6 +110,13 @@ export class FlightsService {
       etd: flight.etd,
       performance_profile_id: flight.performance_profile_id,
     });
+  }
+
+  async saveBriefing(id: number, data: Record<string, any>, userId?: string) {
+    const flight = await this.findById(id, userId);
+    flight.briefing_data = data;
+    flight.briefing_generated_at = new Date();
+    await this.flightRepo.save(flight);
   }
 
   async remove(id: number, userId?: string) {

@@ -32,14 +32,14 @@ export class AircraftService {
 
   // --- Aircraft CRUD ---
 
-  async findAll(query?: string, limit = 50, offset = 0) {
+  async findAll(userId: string, query?: string, limit = 50, offset = 0) {
     const where = query
       ? [
-          { tail_number: ILike(`%${query}%`) },
-          { aircraft_type: ILike(`%${query}%`) },
-          { icao_type_code: ILike(`%${query}%`) },
+          { user_id: userId, tail_number: ILike(`%${query}%`) },
+          { user_id: userId, aircraft_type: ILike(`%${query}%`) },
+          { user_id: userId, icao_type_code: ILike(`%${query}%`) },
         ]
-      : undefined;
+      : { user_id: userId };
 
     const [items, total] = await this.aircraftRepo.findAndCount({
       where,
@@ -51,49 +51,59 @@ export class AircraftService {
     return { items, total };
   }
 
-  async findOne(id: number): Promise<Aircraft> {
+  async findOne(id: number, userId?: string): Promise<Aircraft> {
+    const where: Record<string, any> = { id };
+    if (userId) where.user_id = userId;
     const aircraft = await this.aircraftRepo.findOne({
-      where: { id },
+      where,
       relations: ['performance_profiles', 'fuel_tanks', 'equipment'],
     });
     if (!aircraft) throw new NotFoundException(`Aircraft #${id} not found`);
     return aircraft;
   }
 
-  async findDefault(): Promise<Aircraft | null> {
+  async findDefault(userId: string): Promise<Aircraft | null> {
     return this.aircraftRepo.findOne({
-      where: { is_default: true },
+      where: { is_default: true, user_id: userId },
       relations: ['performance_profiles', 'fuel_tanks', 'equipment'],
     });
   }
 
-  async create(dto: CreateAircraftDto): Promise<Aircraft> {
-    const aircraft = this.aircraftRepo.create(dto);
+  async create(dto: CreateAircraftDto, userId: string): Promise<Aircraft> {
+    const aircraft = this.aircraftRepo.create({ ...dto, user_id: userId });
     return this.aircraftRepo.save(aircraft);
   }
 
-  async update(id: number, dto: UpdateAircraftDto): Promise<Aircraft> {
-    const aircraft = await this.findOne(id);
+  async update(
+    id: number,
+    dto: UpdateAircraftDto,
+    userId: string,
+  ): Promise<Aircraft> {
+    const aircraft = await this.findOne(id, userId);
     Object.assign(aircraft, dto);
     return this.aircraftRepo.save(aircraft);
   }
 
-  async remove(id: number): Promise<void> {
-    const aircraft = await this.findOne(id);
+  async remove(id: number, userId: string): Promise<void> {
+    const aircraft = await this.findOne(id, userId);
     await this.aircraftRepo.remove(aircraft);
   }
 
-  async setDefault(id: number): Promise<Aircraft> {
-    // Clear all defaults
-    await this.aircraftRepo.update({}, { is_default: false });
+  async setDefault(id: number, userId: string): Promise<Aircraft> {
+    // Clear all defaults for this user
+    await this.aircraftRepo.update({ user_id: userId }, { is_default: false });
     // Set new default
     await this.aircraftRepo.update(id, { is_default: true });
-    return this.findOne(id);
+    return this.findOne(id, userId);
   }
 
   // --- Performance Profiles ---
 
-  async findProfiles(aircraftId: number): Promise<PerformanceProfile[]> {
+  async findProfiles(
+    aircraftId: number,
+    userId?: string,
+  ): Promise<PerformanceProfile[]> {
+    await this.findOne(aircraftId, userId);
     return this.profileRepo.find({
       where: { aircraft_id: aircraftId },
       order: { is_default: 'DESC', name: 'ASC' },
@@ -103,8 +113,9 @@ export class AircraftService {
   async createProfile(
     aircraftId: number,
     dto: CreatePerformanceProfileDto,
+    userId?: string,
   ): Promise<PerformanceProfile> {
-    await this.findOne(aircraftId); // ensure aircraft exists
+    await this.findOne(aircraftId, userId);
     const profile = this.profileRepo.create({
       ...dto,
       aircraft_id: aircraftId,
@@ -116,7 +127,9 @@ export class AircraftService {
     aircraftId: number,
     profileId: number,
     dto: UpdatePerformanceProfileDto,
+    userId?: string,
   ): Promise<PerformanceProfile> {
+    await this.findOne(aircraftId, userId);
     const profile = await this.profileRepo.findOne({
       where: { id: profileId, aircraft_id: aircraftId },
     });
@@ -126,7 +139,12 @@ export class AircraftService {
     return this.profileRepo.save(profile);
   }
 
-  async removeProfile(aircraftId: number, profileId: number): Promise<void> {
+  async removeProfile(
+    aircraftId: number,
+    profileId: number,
+    userId?: string,
+  ): Promise<void> {
+    await this.findOne(aircraftId, userId);
     const profile = await this.profileRepo.findOne({
       where: { id: profileId, aircraft_id: aircraftId },
     });
@@ -138,7 +156,9 @@ export class AircraftService {
   async setDefaultProfile(
     aircraftId: number,
     profileId: number,
+    userId?: string,
   ): Promise<PerformanceProfile> {
+    await this.findOne(aircraftId, userId);
     await this.profileRepo.update(
       { aircraft_id: aircraftId },
       { is_default: false },
@@ -159,7 +179,9 @@ export class AircraftService {
     aircraftId: number,
     profileId: number,
     templateType: string,
+    userId?: string,
   ): Promise<PerformanceProfile> {
+    await this.findOne(aircraftId, userId);
     const profile = await this.profileRepo.findOne({
       where: { id: profileId, aircraft_id: aircraftId },
     });
@@ -184,7 +206,8 @@ export class AircraftService {
 
   // --- Fuel Tanks ---
 
-  async findTanks(aircraftId: number): Promise<FuelTank[]> {
+  async findTanks(aircraftId: number, userId?: string): Promise<FuelTank[]> {
+    await this.findOne(aircraftId, userId);
     return this.tankRepo.find({
       where: { aircraft_id: aircraftId },
       order: { sort_order: 'ASC' },
@@ -194,8 +217,9 @@ export class AircraftService {
   async createTank(
     aircraftId: number,
     dto: CreateFuelTankDto,
+    userId?: string,
   ): Promise<FuelTank> {
-    await this.findOne(aircraftId);
+    await this.findOne(aircraftId, userId);
     const tank = this.tankRepo.create({ ...dto, aircraft_id: aircraftId });
     return this.tankRepo.save(tank);
   }
@@ -204,7 +228,9 @@ export class AircraftService {
     aircraftId: number,
     tankId: number,
     dto: UpdateFuelTankDto,
+    userId?: string,
   ): Promise<FuelTank> {
+    await this.findOne(aircraftId, userId);
     const tank = await this.tankRepo.findOne({
       where: { id: tankId, aircraft_id: aircraftId },
     });
@@ -213,7 +239,12 @@ export class AircraftService {
     return this.tankRepo.save(tank);
   }
 
-  async removeTank(aircraftId: number, tankId: number): Promise<void> {
+  async removeTank(
+    aircraftId: number,
+    tankId: number,
+    userId?: string,
+  ): Promise<void> {
+    await this.findOne(aircraftId, userId);
     const tank = await this.tankRepo.findOne({
       where: { id: tankId, aircraft_id: aircraftId },
     });
@@ -223,7 +254,11 @@ export class AircraftService {
 
   // --- Equipment ---
 
-  async findEquipment(aircraftId: number): Promise<Equipment | null> {
+  async findEquipment(
+    aircraftId: number,
+    userId?: string,
+  ): Promise<Equipment | null> {
+    await this.findOne(aircraftId, userId);
     return this.equipmentRepo.findOne({
       where: { aircraft_id: aircraftId },
     });
@@ -232,8 +267,9 @@ export class AircraftService {
   async upsertEquipment(
     aircraftId: number,
     dto: UpdateEquipmentDto,
+    userId?: string,
   ): Promise<Equipment> {
-    await this.findOne(aircraftId);
+    await this.findOne(aircraftId, userId);
     let equipment = await this.equipmentRepo.findOne({
       where: { aircraft_id: aircraftId },
     });

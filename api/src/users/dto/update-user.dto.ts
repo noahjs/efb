@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsIn, IsArray } from 'class-validator';
 
 export class UpdateUserDto {
   @IsOptional()
@@ -29,4 +29,9 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   leidos_username?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  fuel_programs?: string[];
 }

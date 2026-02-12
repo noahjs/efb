@@ -2,10 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
+import { Storage } from '@google-cloud/storage';
+import * as path from 'path';
 import { firstValueFrom } from 'rxjs';
 import { AirportsService } from '../airports/airports.service';
 import { WEATHER, DATIS } from '../config/constants';
 import { WeatherStation } from './entities/weather-station.entity';
+import { AtisRecording } from './entities/atis-recording.entity';
+import { AtisTranscriptionService } from './atis-transcription.service';
 
 interface WindsAloftAltitude {
   altitude: number;
@@ -57,39 +61,67 @@ export class WeatherService {
     Accept: 'application/geo+json',
   };
 
+  private readonly gcsStorage: Storage | null;
+  private readonly gcsBucket: string;
+
   constructor(
     private readonly http: HttpService,
     private readonly airportsService: AirportsService,
     @InjectRepository(WeatherStation)
     private readonly wxStationRepo: Repository<WeatherStation>,
-  ) {}
+    @InjectRepository(AtisRecording)
+    private readonly atisRecordingRepo: Repository<AtisRecording>,
+    private readonly atisTranscription: AtisTranscriptionService,
+  ) {
+    this.gcsBucket = process.env.GCS_ATIS_BUCKET || 'efb-atis-dev';
+    const keyFilePath =
+      process.env.GCS_KEY_FILE ||
+      path.resolve(process.cwd(), '..', 'gcs-key.json');
+
+    try {
+      this.gcsStorage = new Storage({ keyFilename: keyFilePath });
+    } catch {
+      this.logger.warn('GCS storage not available for ATIS audio');
+      this.gcsStorage = null;
+    }
+  }
 
   async getDatis(icao: string): Promise<any> {
     const cacheKey = `datis:${icao}`;
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
-    try {
-      this._totalRequests++;
-      const { data } = await firstValueFrom(
-        this.http.get(`${DATIS.API_URL}/${icao}`, {
-          timeout: DATIS.TIMEOUT_MS,
-        }),
-      );
+    // Check if the airport has D-ATIS capability before calling clowd.io
+    const airport = await this.airportsService.findByIdLean(icao);
+    const hasDatis = airport?.has_datis ?? false;
 
-      // API returns an array of ATIS entries or an error object
-      if (Array.isArray(data) && data.length > 0) {
-        this.setCache(cacheKey, data, DATIS.CACHE_TTL_MS);
-        return data;
+    if (hasDatis) {
+      try {
+        this._totalRequests++;
+        const { data } = await firstValueFrom(
+          this.http.get(`${DATIS.API_URL}/${icao}`, {
+            timeout: DATIS.TIMEOUT_MS,
+          }),
+        );
+
+        if (Array.isArray(data) && data.length > 0) {
+          const tagged = data.map((entry: any) => ({
+            ...entry,
+            source: 'datis',
+          }));
+          this.setCache(cacheKey, tagged, DATIS.CACHE_TTL_MS);
+          return tagged;
+        }
+      } catch (error) {
+        this._totalErrors++;
+        this._lastErrorAt = Date.now();
+        this._lastError = error?.message || String(error);
+        this.logger.warn(`D-ATIS error for ${icao}: ${this._lastError}`);
       }
-      return null;
-    } catch (error) {
-      this._totalErrors++;
-      this._lastErrorAt = Date.now();
-      this._lastError = error?.message || String(error);
-      this.logger.warn(`No D-ATIS for ${icao}: ${this._lastError}`);
-      return null;
     }
+
+    // LiveATC transcription fallback (or primary for non-D-ATIS airports)
+    return this.atisTranscription.getTranscribedAtis(icao);
   }
 
   async getMetar(icao: string): Promise<any> {
@@ -781,10 +813,14 @@ export class WeatherService {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
             Accept: 'application/json, text/plain, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
             Origin: 'https://notams.aim.faa.gov',
             Referer: 'https://notams.aim.faa.gov/notamSearch/',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
           },
           timeout: WEATHER.TIMEOUT_NOTAM_MS,
         }),
@@ -881,6 +917,27 @@ export class WeatherService {
     return this.wxStationRepo.findOne({
       where: { icao_id: icaoId },
     });
+  }
+
+  async getAtisAudioUrl(
+    icao: string,
+  ): Promise<{ url: string } | null> {
+    if (!this.gcsStorage) return null;
+
+    const recording = await this.atisRecordingRepo.findOne({
+      where: { icao: icao.toUpperCase() },
+      order: { recorded_at: 'DESC' },
+    });
+
+    if (!recording) return null;
+
+    const file = this.gcsStorage.bucket(this.gcsBucket).file(recording.gcs_key);
+    const [url] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 3600 * 1000, // 1 hour
+    });
+
+    return { url };
   }
 
   getStats() {

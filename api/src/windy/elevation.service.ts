@@ -157,7 +157,9 @@ export class ElevationService {
               this.setCache(cacheKey, elevFt, ELEVATION.CACHE_TTL_MS);
             }
           } catch (retryErr) {
-            this.logger.error(`Elevation retry also failed: ${retryErr.message}`);
+            this.logger.error(
+              `Elevation retry also failed: ${retryErr.message}`,
+            );
           }
         }
       }
@@ -348,9 +350,7 @@ export class ElevationService {
         const course = courses[nearestIdx];
         const windAngle =
           ((wind.direction - course + 360) % 360) * (Math.PI / 180);
-        const headwindComponent = Math.round(
-          wind.speed * Math.cos(windAngle),
-        );
+        const headwindComponent = Math.round(wind.speed * Math.cos(windAngle));
 
         return {
           distanceNm: Math.round(targetDist * 10) / 10,

@@ -20,7 +20,7 @@ import {
   WindsAloftTable,
   WindsAloftCell,
   GfaProduct,
-  RouteAirport,
+  TafForecastPeriod,
 } from './interfaces/briefing-response.interface';
 import {
   computeBoundingBox,
@@ -35,6 +35,9 @@ import {
   categorizeEnrouteNotams,
 } from './utils/notam-categorizer.util';
 import { determineGfaRegions } from './utils/gfa-region.util';
+import { contextualizeAdvisories } from './utils/advisory-context.util';
+import { computeRiskSummary } from './utils/risk-assessment.util';
+import { buildRouteTimeline } from './utils/route-timeline.util';
 import { BRIEFING } from '../config/constants';
 
 @Injectable()
@@ -50,6 +53,40 @@ export class BriefingService {
     private readonly airspacesService: AirspacesService,
     private readonly airportsService: AirportsService,
   ) {}
+
+  /**
+   * Get briefing — returns cached version if available, otherwise generates fresh.
+   */
+  async getBriefing(
+    flightId: number,
+    userId: string,
+    regenerate = false,
+  ): Promise<BriefingResponse & { generatedAt: string }> {
+    if (!regenerate) {
+      const flight = await this.flightsService.findById(flightId, userId);
+      if (!flight) throw new NotFoundException('Flight not found');
+
+      if (flight.briefing_data && flight.briefing_generated_at) {
+        return {
+          ...(flight.briefing_data as BriefingResponse),
+          generatedAt: flight.briefing_generated_at.toISOString(),
+        };
+      }
+    }
+
+    const briefing = await this.generateBriefing(flightId, userId);
+    const generatedAt = new Date();
+
+    // Save to flight record (fire-and-forget, don't block response)
+    this.flightsService
+      .saveBriefing(flightId, briefing as any, userId)
+      .catch((e) => this.logger.warn('Failed to cache briefing', e));
+
+    return {
+      ...briefing,
+      generatedAt: generatedAt.toISOString(),
+    };
+  }
 
   /**
    * Get all airports within a corridor of the flight's route.
@@ -85,8 +122,10 @@ export class BriefingService {
       calcResult.ete_minutes,
     );
 
-    const airports =
-      await this.airportsService.findAirportsInCorridor(waypoints, corridorNm);
+    const airports = await this.airportsService.findAirportsInCorridor(
+      waypoints,
+      corridorNm,
+    );
 
     return {
       corridorNm,
@@ -146,31 +185,27 @@ export class BriefingService {
     const bbox = computeBoundingBox(waypoints, BRIEFING.ROUTE_CORRIDOR_NM);
 
     // 5. Find all airports along the route corridor
-    const corridorAirports =
-      await this.airportsService.findAirportsInCorridor(
-        waypoints,
-        BRIEFING.ROUTE_CORRIDOR_NM,
-      );
+    const corridorAirports = await this.airportsService.findAirportsInCorridor(
+      waypoints,
+      BRIEFING.ROUTE_CORRIDOR_NM,
+    );
 
-    // Exclude departure/destination from route stations
+    // Exclude departure/destination, then sample at intervals for weather queries
     const excludeIds = new Set([
       flight.departure_identifier.toUpperCase(),
       flight.destination_identifier.toUpperCase(),
     ]);
-    const routeStations = corridorAirports
-      .filter(
-        (a) =>
-          !excludeIds.has(a.identifier.toUpperCase()) &&
-          !excludeIds.has((a.icao_identifier || '').toUpperCase()),
-      )
-      .map((a) => ({
-        identifier: a.identifier,
-        icaoId: a.icao_identifier || a.identifier,
-        lat: a.latitude,
-        lng: a.longitude,
-        distanceAlongRoute: a.distanceAlongRoute,
-        distanceFromRoute: a.distanceFromRoute,
-      }));
+    const enrouteAirports = corridorAirports.filter(
+      (a) =>
+        !excludeIds.has(a.identifier.toUpperCase()) &&
+        !excludeIds.has((a.icao_identifier || '').toUpperCase()),
+    );
+
+    // Sample enroute airports at ~75nm intervals for weather/NOTAM queries
+    const routeStations = this.sampleAtIntervals(
+      enrouteAirports,
+      BRIEFING.ROUTE_STATION_INTERVAL_NM,
+    );
 
     // 6. Build station list: departure + route + destination
     const depIcao =
@@ -206,9 +241,7 @@ export class BriefingService {
     ] = await Promise.allSettled([
       this.weatherService.getNotams(depIcao),
       this.weatherService.getNotams(destIcao),
-      altIcao
-        ? this.weatherService.getNotams(altIcao)
-        : Promise.resolve(null),
+      altIcao ? this.weatherService.getNotams(altIcao) : Promise.resolve(null),
       this.imageryService.getTfrs(),
       this.imageryService.getAdvisories('gairmets'),
       this.imageryService.getAdvisories('sigmets'),
@@ -218,17 +251,11 @@ export class BriefingService {
       ...this.buildStationFetches(depIcao, destIcao, routeStations),
     ]);
 
-    // Fetch enroute NOTAMs for airports along route
-    const enrouteNotamResults = await Promise.allSettled(
-      routeStations.map((s) =>
-        this.weatherService.getNotams(s.icaoId || s.identifier),
-      ),
+    // Fetch enroute + ARTCC NOTAMs sequentially to avoid FAA rate limiting
+    const enrouteNotamResults = await this.fetchNotamsThrottled(
+      routeStations.map((s) => s.icaoId || s.identifier),
     );
-
-    // Fetch ARTCC NOTAMs
-    const artccNotamResults = await Promise.allSettled(
-      artccIds.map((id) => this.weatherService.getNotams(id)),
-    );
+    const artccNotamResults = await this.fetchNotamsThrottled(artccIds);
 
     // Fetch winds aloft data
     let windsTable: WindsAloftTable | null = null;
@@ -279,8 +306,12 @@ export class BriefingService {
 
     // Extract closure NOTAMs
     const closedUnsafeNotams = [
-      ...depNotams.filter((n) => isClosureNotam(n.text) || isClosureNotam(n.fullText)),
-      ...destNotams.filter((n) => isClosureNotam(n.text) || isClosureNotam(n.fullText)),
+      ...depNotams.filter(
+        (n) => isClosureNotam(n.text) || isClosureNotam(n.fullText),
+      ),
+      ...destNotams.filter(
+        (n) => isClosureNotam(n.text) || isClosureNotam(n.fullText),
+      ),
     ];
 
     // Filter TFRs by route corridor
@@ -317,8 +348,25 @@ export class BriefingService {
       forecastHours: [3, 6, 9, 12, 15, 18],
     }));
 
-    // 11. Assemble response
-    return {
+    // 11. Contextualize advisories with route segment and altitude info
+    const cruiseAlt = flight.cruise_altitude || null;
+    const allAirmetArrays = [
+      categorizedAirmets.ifr,
+      categorizedAirmets.mountainObscuration,
+      categorizedAirmets.icing,
+      categorizedAirmets.turbulenceLow,
+      categorizedAirmets.turbulenceHigh,
+      categorizedAirmets.lowLevelWindShear,
+      categorizedAirmets.other,
+    ];
+    for (const arr of allAirmetArrays) {
+      contextualizeAdvisories(arr, waypoints, cruiseAlt);
+    }
+    contextualizeAdvisories(filteredSigmets, waypoints, cruiseAlt);
+    contextualizeAdvisories(filteredConvSigmets, waypoints, cruiseAlt);
+
+    // 12. Assemble response
+    const briefingResponse: BriefingResponse = {
       flight: {
         id: flight.id,
         departureIdentifier: flight.departure_identifier,
@@ -371,12 +419,25 @@ export class BriefingService {
       notams: {
         departure: categorizeNotamList(depNotams),
         destination: categorizeNotamList(destNotams),
-        alternate1: altNotams.length > 0 ? categorizeNotamList(altNotams) : null,
+        alternate1:
+          altNotams.length > 0 ? categorizeNotamList(altNotams) : null,
         alternate2: null,
         enroute: categorizeEnrouteNotams(allEnrouteNotams),
         artcc: artccNotamSets,
       },
+      // Placeholders — computed below
+      riskSummary: { overallLevel: 'green', categories: [], criticalItems: [] },
+      routeTimeline: [],
     };
+
+    // 13. Compute risk summary and route timeline
+    briefingResponse.riskSummary = computeRiskSummary(briefingResponse);
+    briefingResponse.routeTimeline = buildRouteTimeline(
+      briefingResponse,
+      flight.etd || null,
+    );
+
+    return briefingResponse;
   }
 
   /**
@@ -432,6 +493,88 @@ export class BriefingService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Fetch NOTAMs in small sequential batches to avoid FAA rate limiting.
+   * Processes 2 at a time with a short delay between batches.
+   */
+  private async fetchNotamsThrottled(
+    identifiers: string[],
+  ): Promise<PromiseSettledResult<any>[]> {
+    const results: PromiseSettledResult<any>[] = [];
+    const batchSize = 2;
+
+    for (let i = 0; i < identifiers.length; i += batchSize) {
+      const batch = identifiers.slice(i, i + batchSize);
+      const batchResults = await Promise.allSettled(
+        batch.map((id) => this.weatherService.getNotams(id)),
+      );
+      results.push(...batchResults);
+
+      // Small delay between batches to avoid triggering WAF
+      if (i + batchSize < identifiers.length) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Sample airports at roughly even intervals along the route.
+   * Picks the airport closest to the route at each interval.
+   */
+  private sampleAtIntervals(
+    airports: {
+      identifier: string;
+      icao_identifier: string;
+      latitude: number;
+      longitude: number;
+      distanceAlongRoute: number;
+      distanceFromRoute: number;
+    }[],
+    intervalNm: number,
+  ): {
+    identifier: string;
+    icaoId: string;
+    lat: number;
+    lng: number;
+    distanceAlongRoute: number;
+    distanceFromRoute: number;
+  }[] {
+    if (airports.length === 0) return [];
+
+    const sampled: typeof airports = [];
+    let lastDist = -intervalNm; // allow first airport
+
+    for (const a of airports) {
+      if (a.distanceAlongRoute - lastDist >= intervalNm) {
+        sampled.push(a);
+        lastDist = a.distanceAlongRoute;
+      } else if (
+        sampled.length > 0 &&
+        a.distanceFromRoute < sampled[sampled.length - 1].distanceFromRoute
+      ) {
+        // Replace last sample if this airport is closer to the route
+        // (within the same interval window)
+        if (
+          a.distanceAlongRoute - lastDist < intervalNm &&
+          a.distanceAlongRoute >= sampled[sampled.length - 1].distanceAlongRoute
+        ) {
+          sampled[sampled.length - 1] = a;
+        }
+      }
+    }
+
+    return sampled.map((a) => ({
+      identifier: a.identifier,
+      icaoId: a.icao_identifier || a.identifier,
+      lat: a.latitude,
+      lng: a.longitude,
+      distanceAlongRoute: a.distanceAlongRoute,
+      distanceFromRoute: a.distanceFromRoute,
+    }));
   }
 
   /**
@@ -513,13 +656,24 @@ export class BriefingService {
 
       const metarData = this.extractResult(results[metarIdx]);
       if (metarData) {
+        const clouds = this.parseClouds(metarData.clouds);
         metars.push({
           station,
           icaoId: metarData.icaoId || station,
           flightCategory: metarData.fltCat || null,
           rawOb: metarData.rawOb || null,
-          obsTime: metarData.reportTime || metarData.obsTime?.toString() || null,
+          obsTime:
+            (metarData.reportTime ?? metarData.obsTime)?.toString() || null,
           section,
+          temp: metarData.temp ?? null,
+          dewp: metarData.dewp ?? null,
+          wdir: metarData.wdir ?? null,
+          wspd: metarData.wspd ?? null,
+          wgst: metarData.wgst ?? null,
+          visib: metarData.visib ?? null,
+          altim: metarData.altim ?? null,
+          clouds,
+          ceiling: this.computeCeiling(clouds),
         });
       }
 
@@ -530,6 +684,7 @@ export class BriefingService {
           icaoId: tafData.icaoId || station,
           rawTaf: tafData.rawTAF || tafData.rawOb || null,
           section,
+          fcsts: this.parseTafForecasts(tafData.fcsts),
         });
       }
     }
@@ -569,13 +724,9 @@ export class BriefingService {
       )
       .map((feature: any) => ({
         notamNumber:
-          feature.properties?.NOTAM_KEY ||
-          feature.properties?.notam_id ||
-          '',
+          feature.properties?.NOTAM_KEY || feature.properties?.notam_id || '',
         description:
-          feature.properties?.TITLE ||
-          feature.properties?.description ||
-          '',
+          feature.properties?.TITLE || feature.properties?.description || '',
         effectiveStart: feature.properties?.effective_start || null,
         effectiveEnd: feature.properties?.effective_end || null,
         notamText: feature.properties?.notam_text || null,
@@ -637,8 +788,7 @@ export class BriefingService {
         result.icing.push(advisory);
       else if (hazard.includes('turb') && hazard.includes('lo'))
         result.turbulenceLow.push(advisory);
-      else if (hazard.includes('turb'))
-        result.turbulenceHigh.push(advisory);
+      else if (hazard.includes('turb')) result.turbulenceHigh.push(advisory);
       else if (hazard.includes('llws') || hazard.includes('wind shear'))
         result.lowLevelWindShear.push(advisory);
       else result.other.push(advisory);
@@ -673,8 +823,7 @@ export class BriefingService {
   private parseAdvisory(feature: any): BriefingAdvisory {
     const props = feature.properties || {};
     return {
-      hazardType:
-        props.hazard || props.hazardType || props.type || 'Unknown',
+      hazardType: props.hazard || props.hazardType || props.type || 'Unknown',
       rawText: props.rawAirSigmet || props.rawText || props.text || '',
       validStart: props.validTimeFrom || props.validStart || null,
       validEnd: props.validTimeTo || props.validEnd || null,
@@ -683,6 +832,11 @@ export class BriefingService {
       base: props.base != null ? String(props.base) : null,
       dueTo: props.dueTo || props.cause || null,
       geometry: feature.geometry || null,
+      topFt: null,
+      baseFt: null,
+      altitudeRelation: null,
+      affectedSegment: null,
+      plainEnglish: null,
     };
   }
 
@@ -711,17 +865,17 @@ export class BriefingService {
         const coords = feature.geometry?.coordinates || [];
         return {
           raw: props.rawOb || props.raw || '',
-          location: props.location || null,
-          time: props.obsTime || props.time || null,
+          location: props.icaoId || props.location || null,
+          time: (props.obsTime ?? props.time)?.toString() || null,
           altitude: props.fltlvl != null ? String(props.fltlvl) : null,
           aircraftType: props.acType || props.aircraftType || null,
-          turbulence: props.tbFreq
-            ? `${props.tbType || ''} ${props.tbFreq || ''} ${props.tbInten || ''}`.trim()
+          turbulence: props.tbInt1
+            ? `${props.tbInt1 || ''} ${props.tbType1 || ''} ${props.tbFreq1 || ''}`.trim()
             : null,
-          icing: props.icgFreq
-            ? `${props.icgType || ''} ${props.icgFreq || ''} ${props.icgInten || ''}`.trim()
+          icing: props.icgInt1
+            ? `${props.icgInt1 || ''} ${props.icgType1 || ''}`.trim()
             : null,
-          urgency: props.urgency || props.reportType || 'UA',
+          urgency: props.airepType === 'URGENT PIREP' ? 'UUA' : 'UA',
           latitude: coords[1] ?? null,
           longitude: coords[0] ?? null,
         };
@@ -848,5 +1002,54 @@ export class BriefingService {
     if (result.status === 'fulfilled') return result.value;
     this.logger.warn('Promise rejected in briefing fetch', result.reason);
     return null;
+  }
+
+  /**
+   * Parse clouds array from AWC METAR response.
+   */
+  private parseClouds(
+    raw: any,
+  ): Array<{ cover: string; base: number | null }> {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((c: any) => ({
+      cover: c.cover || c.type || '',
+      base: c.base != null ? Number(c.base) : null,
+    }));
+  }
+
+  /**
+   * Compute ceiling from clouds array (lowest BKN or OVC base).
+   */
+  private computeCeiling(
+    clouds: Array<{ cover: string; base: number | null }>,
+  ): number | null {
+    let ceiling: number | null = null;
+    for (const c of clouds) {
+      const cover = (c.cover || '').toUpperCase();
+      if ((cover === 'BKN' || cover === 'OVC') && c.base != null) {
+        if (ceiling == null || c.base < ceiling) {
+          ceiling = c.base;
+        }
+      }
+    }
+    return ceiling;
+  }
+
+  /**
+   * Parse TAF forecast periods from AWC response.
+   */
+  private parseTafForecasts(raw: any): TafForecastPeriod[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((f: any) => ({
+      timeFrom: (f.timeFrom ?? f.fcstTimeFrom ?? '')?.toString(),
+      timeTo: (f.timeTo ?? f.fcstTimeTo ?? '')?.toString(),
+      changeType: f.changeType || f.change || f.type || 'initial',
+      wdir: f.wdir ?? null,
+      wspd: f.wspd ?? null,
+      wgst: f.wgst ?? null,
+      visib: f.visib ?? null,
+      clouds: this.parseClouds(f.clouds),
+      fltCat: f.fltCat || null,
+    }));
   }
 }
