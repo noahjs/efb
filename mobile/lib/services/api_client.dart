@@ -162,16 +162,11 @@ class ApiClient {
     }
   }
 
-  Future<List<dynamic>?> getDatis(String icao) async {
+  Future<Map<String, dynamic>?> getDatis(String icao) async {
     try {
-      // LiveATC fallback captures ~90s of audio + transcription, so allow extra time
-      final response = await _dio.get(
-        '/weather/datis/$icao',
-        options: Options(receiveTimeout: const Duration(seconds: 120)),
-      );
+      final response = await _dio.get('/weather/datis/$icao');
       final data = response.data;
-      if (data is List) return data;
-      // API returns error object when no D-ATIS available
+      if (data is Map<String, dynamic>) return data;
       return null;
     } catch (_) {
       return null;
@@ -204,7 +199,12 @@ class ApiClient {
         'minLng': minLng,
         'maxLng': maxLng,
       });
-      return response.data;
+      // Backend returns { data: [...], _meta: {...} }
+      final body = response.data;
+      if (body is Map && body['data'] is List) {
+        return body['data'] as List<dynamic>;
+      }
+      return body is List ? body : [];
     } catch (_) {
       return [];
     }

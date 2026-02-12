@@ -14,10 +14,14 @@ import { WindsAloft } from './entities/winds-aloft.entity';
 import { WindGrid } from './entities/wind-grid.entity';
 import { Notam } from './entities/notam.entity';
 import { NwsForecast } from './entities/nws-forecast.entity';
+import { Airport } from '../airports/entities/airport.entity';
+import { Fbo } from '../fbos/entities/fbo.entity';
+import { FuelPrice } from '../fbos/entities/fuel-price.entity';
 
 // Infrastructure
 import { DataSchedulerService } from './data-scheduler.service';
 import { DataWorkerService } from './data-worker.service';
+import { DataCleanupService } from './data-cleanup.service';
 
 // Pollers
 import { AdvisoryPoller } from './pollers/advisory.poller';
@@ -28,6 +32,8 @@ import { TafPoller } from './pollers/taf.poller';
 import { WindsAloftPoller } from './pollers/winds-aloft.poller';
 import { WindGridPoller } from './pollers/wind-grid.poller';
 import { NotamPoller } from './pollers/notam.poller';
+import { FboPoller } from './pollers/fbo.poller';
+import { FuelPricePoller } from './pollers/fuel-price.poller';
 
 const entities = [
   DataSource,
@@ -40,6 +46,9 @@ const entities = [
   WindGrid,
   Notam,
   NwsForecast,
+  Airport,
+  Fbo,
+  FuelPrice,
 ];
 
 @Module({
@@ -51,6 +60,7 @@ const entities = [
   providers: [
     DataSchedulerService,
     DataWorkerService,
+    DataCleanupService,
     AdvisoryPoller,
     PirepPoller,
     TfrPoller,
@@ -59,6 +69,8 @@ const entities = [
     WindsAloftPoller,
     WindGridPoller,
     NotamPoller,
+    FboPoller,
+    FuelPricePoller,
   ],
   exports: [DataSchedulerService, DataWorkerService, TypeOrmModule],
 })
@@ -73,10 +85,12 @@ export class DataPlatformModule implements OnModuleInit {
     private readonly windsAloftPoller: WindsAloftPoller,
     private readonly windGridPoller: WindGridPoller,
     private readonly notamPoller: NotamPoller,
+    private readonly fboPoller: FboPoller,
+    private readonly fuelPricePoller: FuelPricePoller,
   ) {}
 
-  onModuleInit() {
-    // Register all pollers with the worker
+  async onModuleInit() {
+    // Register all pollers with the worker BEFORE starting it
     this.worker.registerPoller('advisory_poll', this.advisoryPoller);
     this.worker.registerPoller('pirep_poll', this.pirepPoller);
     this.worker.registerPoller('tfr_poll', this.tfrPoller);
@@ -85,5 +99,10 @@ export class DataPlatformModule implements OnModuleInit {
     this.worker.registerPoller('winds_aloft_poll', this.windsAloftPoller);
     this.worker.registerPoller('wind_grid_poll', this.windGridPoller);
     this.worker.registerPoller('notam_poll', this.notamPoller);
+    this.worker.registerPoller('fbo_poll', this.fboPoller);
+    this.worker.registerPoller('fuel_price_poll', this.fuelPricePoller);
+
+    // Now start processing jobs (pollers are guaranteed registered)
+    await this.worker.start();
   }
 }

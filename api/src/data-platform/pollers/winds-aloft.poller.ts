@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { BasePoller } from './base.poller';
+import { BasePoller, PollerResult } from './base.poller';
 import { WindsAloft } from '../entities/winds-aloft.entity';
 import { WEATHER } from '../../config/constants';
 import { parseWindsAloftText } from '../utils/winds-parser.util';
@@ -24,16 +24,23 @@ export class WindsAloftPoller extends BasePoller {
     super('WindsAloftPoller');
   }
 
-  async execute(): Promise<number> {
+  async execute(): Promise<PollerResult> {
     let totalUpdated = 0;
+    let errors = 0;
+    let lastError = '';
 
     for (const period of FORECAST_PERIODS) {
-      const count = await this.fetchPeriod(period.fcst);
-      totalUpdated += count;
+      try {
+        const count = await this.fetchPeriod(period.fcst);
+        totalUpdated += count;
+      } catch (error) {
+        errors++;
+        lastError = `fcst=${period.fcst}: ${error.message}`;
+      }
     }
 
-    this.logger.log(`Winds aloft: ${totalUpdated} station-periods`);
-    return totalUpdated;
+    this.logger.log(`Winds aloft: ${totalUpdated} station-periods, ${errors} errors`);
+    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
   }
 
   private async fetchPeriod(fcst: string): Promise<number> {
@@ -83,15 +90,17 @@ export class WindsAloftPoller extends BasePoller {
       }
 
       if (records.length > 0) {
-        // Batch upsert in chunks to avoid parameter limits
+        // Batch upsert in chunks within a transaction
         const chunkSize = 100;
-        for (let i = 0; i < records.length; i += chunkSize) {
-          const chunk = records.slice(i, i + chunkSize);
-          await this.windsRepo.upsert(chunk, [
-            'station_code',
-            'forecast_period',
-          ]);
-        }
+        await this.windsRepo.manager.transaction(async (em) => {
+          for (let i = 0; i < records.length; i += chunkSize) {
+            const chunk = records.slice(i, i + chunkSize);
+            await em.upsert(WindsAloft, chunk, [
+              'station_code',
+              'forecast_period',
+            ]);
+          }
+        });
       }
 
       return records.length;

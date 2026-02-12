@@ -15,6 +15,18 @@ async function bootstrap() {
       hsts: false,
       // Allow cross-origin resource loading (Flutter web loads from a different port)
       crossOriginResourcePolicy: { policy: 'cross-origin' },
+      // Disable X-Frame-Options so CSP frame-ancestors takes precedence
+      frameguard: false,
+      // Allow inline scripts for admin page; allow framing from any localhost port
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrcAttr: ["'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          frameAncestors: ["'self'", 'http://localhost:*', 'https://localhost:*'],
+        },
+      },
     }),
   );
 

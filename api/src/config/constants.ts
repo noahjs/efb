@@ -25,7 +25,7 @@ export const WEATHER = {
   CACHE_TTL_NOTAM_MS: 30 * 60 * 1000,
   CACHE_TTL_GRID_MS: 24 * 60 * 60 * 1000,
   TIMEOUT_NOTAM_MS: 30_000,
-  TIMEOUT_BULK_METAR_MS: 15_000,
+  TIMEOUT_BULK_METAR_MS: 25_000,
   TAF_SEARCH_RADIUS_NM: 50,
   TAF_SEARCH_LIMIT: 20,
   METAR_SEARCH_RADIUS_NM: 30,
@@ -139,6 +139,7 @@ export const TRAFFIC = {
 export const BRIEFING = {
   ROUTE_CORRIDOR_NM: 25,
   ROUTE_STATION_INTERVAL_NM: 75,
+  HAZARD_SAMPLE_INTERVAL_NM: 50,
   WINDS_TABLE_ALTITUDE_STEP: 2000,
   WINDS_TABLE_ALTITUDE_RANGE: 4000,
   PIREP_AGE_HOURS: 3,
@@ -157,13 +158,28 @@ export const DATA_PLATFORM = {
   },
   WIND_GRID_SPACING_DEG: 1.0,
   WIND_GRID_BATCH_SIZE: 250,
-  METAR_STATE_BATCH_SIZE: 6,
+  METAR_STATE_BATCH_SIZE: 3,
   NOTAM_CONCURRENCY: 2,
   NOTAM_THROTTLE_MS: 500,
   TFR_TEXT_BATCH_SIZE: 10,
   // Staleness thresholds for on-demand data
   NWS_FORECAST_STALE_MS: 30 * 60 * 1000, // 30 min
   NOTAM_ON_DEMAND_STALE_MS: 30 * 60 * 1000, // 30 min
+  // Staleness thresholds for data cleanup (delete rows older than these)
+  STALE_THRESHOLDS: {
+    METAR_MS: 3 * 60 * 60 * 1000, // 3 hours
+    TAF_MS: 6 * 60 * 60 * 1000, // 6 hours
+    WINDS_ALOFT_MS: 4 * 60 * 60 * 1000, // 4 hours
+    NOTAM_MS: 48 * 60 * 60 * 1000, // 48 hours
+    NWS_FORECAST_MS: 24 * 60 * 60 * 1000, // 24 hours
+    WIND_GRID_MS: 4 * 60 * 60 * 1000, // 4 hours
+  },
+};
+
+// --- FBO / Fuel Price Scraping ---
+export const FBO = {
+  AIRNAV_BASE_URL: 'https://www.airnav.com/airport',
+  SCRAPE_DELAY_MS: 2000,
 };
 
 // --- Airports ---

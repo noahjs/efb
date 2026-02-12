@@ -29,6 +29,9 @@ export class DataSource {
   @Column({ type: 'int', nullable: true })
   records_updated: number | null;
 
+  @Column({ type: 'int', nullable: true })
+  last_error_count: number | null;
+
   @Column({ type: 'boolean', default: true })
   enabled: boolean;
 }

@@ -8,6 +8,16 @@ import { Advisory } from '../data-platform/entities/advisory.entity';
 import { Pirep } from '../data-platform/entities/pirep.entity';
 import { Tfr } from '../data-platform/entities/tfr.entity';
 
+function dataMeta(
+  updatedAt: Date | null,
+): { updatedAt: string | null; ageSeconds: number | null } {
+  if (!updatedAt) return { updatedAt: null, ageSeconds: null };
+  return {
+    updatedAt: updatedAt.toISOString(),
+    ageSeconds: Math.round((Date.now() - updatedAt.getTime()) / 1000),
+  };
+}
+
 @Injectable()
 export class ImageryService {
   private readonly logger = new Logger(ImageryService.name);
@@ -473,6 +483,14 @@ export class ImageryService {
       where: { type: dbType },
     });
 
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+
     // Reconstruct GeoJSON FeatureCollection
     const features = rows.map((row) => ({
       type: 'Feature',
@@ -480,7 +498,11 @@ export class ImageryService {
       properties: row.properties ?? {},
     }));
 
-    return { type: 'FeatureCollection', features };
+    return {
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
   }
 
   /**
@@ -501,6 +523,20 @@ export class ImageryService {
       rows = await this.pirepRepo.find();
     }
 
+    // Filter by age (hours) if specified
+    if (age) {
+      const cutoff = new Date(Date.now() - age * 60 * 60 * 1000);
+      rows = rows.filter((r) => r.obs_time && r.obs_time >= cutoff);
+    }
+
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+
     // Reconstruct GeoJSON FeatureCollection
     const features = rows.map((row) => ({
       type: 'Feature',
@@ -511,7 +547,11 @@ export class ImageryService {
       properties: row.properties ?? {},
     }));
 
-    return { type: 'FeatureCollection', features };
+    return {
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
   }
 
   /**
@@ -519,6 +559,14 @@ export class ImageryService {
    */
   async getTfrs(): Promise<any> {
     const rows = await this.tfrRepo.find();
+
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
 
     const features = rows.map((row) => ({
       type: 'Feature',
@@ -540,7 +588,11 @@ export class ImageryService {
       },
     }));
 
-    return { type: 'FeatureCollection', features };
+    return {
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
   }
 
   getStats() {

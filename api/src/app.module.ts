@@ -75,6 +75,7 @@ import { WindsAloft } from './data-platform/entities/winds-aloft.entity';
 import { WindGrid } from './data-platform/entities/wind-grid.entity';
 import { Notam } from './data-platform/entities/notam.entity';
 import { NwsForecast } from './data-platform/entities/nws-forecast.entity';
+import { Atis } from './data-platform/entities/atis.entity';
 import { DataSource as DataSourceEntity } from './data-platform/entities/data-source.entity';
 import { dbConfig } from './db.config';
 
@@ -133,6 +134,7 @@ import { dbConfig } from './db.config';
         WindGrid,
         Notam,
         NwsForecast,
+        Atis,
       ],
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),

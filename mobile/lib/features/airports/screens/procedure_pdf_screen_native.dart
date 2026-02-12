@@ -6,13 +6,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/notam_matcher.dart';
+import '../../../models/scratchpad.dart';
 import '../../../services/airport_providers.dart';
+import '../../../services/plate_annotation_storage.dart';
+import '../widgets/plate_annotation_overlay.dart';
 
 class PlatformPdfScreen extends ConsumerStatefulWidget {
   final String title;
   final String pdfUrl;
   final String? airportId;
   final String? chartCode;
+  final int? procedureId;
 
   const PlatformPdfScreen({
     super.key,
@@ -20,6 +24,7 @@ class PlatformPdfScreen extends ConsumerStatefulWidget {
     required this.pdfUrl,
     this.airportId,
     this.chartCode,
+    this.procedureId,
   });
 
   @override
@@ -34,10 +39,37 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
   int _totalPages = 0;
   bool _notamDrawerOpen = false;
 
+  // Annotation state
+  bool _isAnnotating = false;
+  List<Stroke> _strokes = [];
+  Stroke? _currentStroke;
+  int _penColor = 0xFFFF3B30; // red default for plate markup
+  double _strokeWidth = 3.0;
+  bool _isEraser = false;
+
+  bool get _canAnnotate =>
+      widget.airportId != null && widget.procedureId != null;
+
   @override
   void initState() {
     super.initState();
     _downloadPdf();
+    _loadAnnotations();
+  }
+
+  Future<void> _loadAnnotations() async {
+    if (!_canAnnotate) return;
+    final strokes = await PlateAnnotationStorage.instance
+        .load(widget.airportId!, widget.procedureId!);
+    if (mounted && strokes.isNotEmpty) {
+      setState(() => _strokes = strokes);
+    }
+  }
+
+  Future<void> _saveAnnotations() async {
+    if (!_canAnnotate) return;
+    await PlateAnnotationStorage.instance
+        .save(widget.airportId!, widget.procedureId!, _strokes);
   }
 
   Future<void> _downloadPdf() async {
@@ -68,6 +100,139 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
     }
   }
 
+  void _onStrokeStart(Offset position) {
+    setState(() {
+      _currentStroke = Stroke(
+        points: [StrokePoint(x: position.dx, y: position.dy)],
+        colorValue: _isEraser ? 0x00000000 : _penColor,
+        strokeWidth: _isEraser ? _strokeWidth * 3 : _strokeWidth,
+        isEraser: _isEraser,
+      );
+    });
+  }
+
+  void _onStrokeUpdate(Offset position) {
+    if (_currentStroke == null) return;
+    setState(() {
+      _currentStroke = Stroke(
+        points: [
+          ..._currentStroke!.points,
+          StrokePoint(x: position.dx, y: position.dy),
+        ],
+        colorValue: _currentStroke!.colorValue,
+        strokeWidth: _currentStroke!.strokeWidth,
+        isEraser: _currentStroke!.isEraser,
+      );
+    });
+  }
+
+  void _onStrokeEnd() {
+    if (_currentStroke != null && _currentStroke!.points.length >= 2) {
+      setState(() {
+        _strokes = [..._strokes, _currentStroke!];
+        _currentStroke = null;
+      });
+      _saveAnnotations();
+    } else {
+      setState(() => _currentStroke = null);
+    }
+  }
+
+  void _undo() {
+    if (_strokes.isEmpty) return;
+    setState(() {
+      _strokes = _strokes.sublist(0, _strokes.length - 1);
+    });
+    _saveAnnotations();
+  }
+
+  void _clearAll() {
+    if (_strokes.isEmpty) return;
+    setState(() => _strokes = []);
+    _saveAnnotations();
+  }
+
+  void _showColorPicker() {
+    final colors = [
+      0xFFFF3B30, // red
+      0xFFFF9500, // orange
+      0xFFFFCC00, // yellow
+      0xFF34C759, // green
+      0xFF007AFF, // blue
+      0xFFFFFFFF, // white
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Pen Color',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: colors.map((c) {
+                final isSelected = c == _penColor;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _penColor = c;
+                      _isEraser = false;
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Color(c),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color:
+                            isSelected ? AppColors.accent : Colors.transparent,
+                        width: 3,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Stroke Width',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            Slider(
+              value: _strokeWidth,
+              min: 1.0,
+              max: 8.0,
+              divisions: 7,
+              activeColor: AppColors.accent,
+              label: _strokeWidth.round().toString(),
+              onChanged: (val) => setState(() => _strokeWidth = val),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> matchedNotams = [];
@@ -96,7 +261,7 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
         actions: [
           if (_totalPages > 1)
             Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 8),
               child: Center(
                 child: Text(
                   '${_currentPage + 1} / $_totalPages',
@@ -107,12 +272,82 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
                 ),
               ),
             ),
+          // Annotation toolbar
+          if (_canAnnotate) ...[
+            IconButton(
+              icon: Icon(
+                Icons.edit,
+                size: 20,
+                color: _isAnnotating ? AppColors.accent : Colors.white70,
+              ),
+              onPressed: () => setState(() {
+                _isAnnotating = !_isAnnotating;
+                if (!_isAnnotating) _isEraser = false;
+              }),
+              tooltip: _isAnnotating ? 'Exit drawing' : 'Draw on plate',
+            ),
+            if (_isAnnotating) ...[
+              IconButton(
+                icon: Icon(
+                  Icons.auto_fix_high,
+                  size: 20,
+                  color: _isEraser ? AppColors.accent : Colors.white70,
+                ),
+                onPressed: () => setState(() => _isEraser = !_isEraser),
+                tooltip: 'Eraser',
+              ),
+              IconButton(
+                icon: const Icon(Icons.palette, size: 20, color: Colors.white70),
+                onPressed: _showColorPicker,
+                tooltip: 'Color & width',
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.undo,
+                  size: 20,
+                  color: _strokes.isEmpty
+                      ? Colors.white24
+                      : Colors.white70,
+                ),
+                onPressed: _strokes.isEmpty ? null : _undo,
+                tooltip: 'Undo',
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: _strokes.isEmpty
+                      ? Colors.white24
+                      : Colors.white70,
+                ),
+                onPressed: _strokes.isEmpty ? null : _clearAll,
+                tooltip: 'Clear all',
+              ),
+            ],
+          ],
         ],
       ),
       body: Stack(
         children: [
           // PDF fills entire body
-          Positioned.fill(child: _buildBody()),
+          Positioned.fill(
+            child: _isAnnotating
+                ? IgnorePointer(child: _buildBody())
+                : _buildBody(),
+          ),
+
+          // Annotation overlay (always present to show strokes)
+          if (_canAnnotate && (_strokes.isNotEmpty || _isAnnotating))
+            Positioned.fill(
+              child: PlateAnnotationOverlay(
+                strokes: _strokes,
+                currentStroke: _currentStroke,
+                isDrawing: _isAnnotating,
+                onStrokeStart: _onStrokeStart,
+                onStrokeUpdate: _onStrokeUpdate,
+                onStrokeEnd: _onStrokeEnd,
+              ),
+            ),
 
           // Banner + dropdown overlay
           if (hasNotams)
@@ -255,7 +490,7 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
 
     return PDFView(
       filePath: _localPath!,
-      enableSwipe: true,
+      enableSwipe: !_isAnnotating,
       swipeHorizontal: false,
       autoSpacing: true,
       pageFling: true,
@@ -345,7 +580,7 @@ class _NotamListView extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: notams.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) => _buildCard(notams[index]),
     );
   }

@@ -1,9 +1,15 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
 import { PgBoss } from 'pg-boss';
 import { DataSource } from './entities/data-source.entity';
+import { DataCleanupService } from './data-cleanup.service';
 import { dbConfig } from '../db.config';
 
 const INITIAL_SOURCES = [
@@ -44,20 +50,28 @@ const INITIAL_SOURCES = [
     interval_seconds: 3600,
   },
   {
-    key: 'nws_grid_poll',
-    name: 'NWS Grid Mapping (permanent cache)',
-    interval_seconds: 86400,
+    key: 'fuel_price_poll',
+    name: 'Fuel Price Poller (AirNav)',
+    interval_seconds: 604800,
+  },
+  {
+    key: 'fbo_poll',
+    name: 'FBO Poller (AirNav)',
+    interval_seconds: 2592000,
   },
 ];
 
 @Injectable()
-export class DataSchedulerService implements OnModuleInit {
+export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DataSchedulerService.name);
   boss: PgBoss;
+  private readyPromise: Promise<void>;
+  private resolveReady: () => void;
 
   constructor(
     @InjectRepository(DataSource)
     private readonly dataSourceRepo: Repository<DataSource>,
+    private readonly cleanupService: DataCleanupService,
   ) {
     this.boss = new PgBoss({
       host: dbConfig.host,
@@ -65,13 +79,40 @@ export class DataSchedulerService implements OnModuleInit {
       user: dbConfig.username,
       password: dbConfig.password,
       database: dbConfig.database,
+      max: 5,
     });
+    this.readyPromise = new Promise((resolve) => {
+      this.resolveReady = resolve;
+    });
+  }
+
+  /** Resolves once pg-boss has started and is ready for work(). */
+  async whenReady(): Promise<void> {
+    return this.readyPromise;
   }
 
   async onModuleInit() {
     await this.boss.start();
+    await this.boss.createQueue('data-poll');
+    this.resolveReady();
     this.logger.log('pg-boss started');
     await this.seedDataSources();
+
+    // Crash recovery: reset any jobs stuck in 'running' from a prior crash
+    const stuck = await this.dataSourceRepo.update(
+      { status: 'running' },
+      { status: 'idle', last_error: 'Reset after server restart' },
+    );
+    if ((stuck.affected ?? 0) > 0) {
+      this.logger.warn(
+        `Reset ${stuck.affected} stuck 'running' jobs to 'idle'`,
+      );
+    }
+  }
+
+  async onModuleDestroy() {
+    await this.boss.stop({ graceful: true, timeout: 10000 });
+    this.logger.log('pg-boss stopped');
   }
 
   private async seedDataSources() {
@@ -89,6 +130,12 @@ export class DataSchedulerService implements OnModuleInit {
         });
         this.logger.log(`Seeded data source: ${src.key}`);
       }
+    }
+
+    // Remove deprecated data sources that no longer have pollers
+    const removed = await this.dataSourceRepo.delete({ key: 'nws_grid_poll' });
+    if ((removed.affected ?? 0) > 0) {
+      this.logger.log('Removed deprecated data source: nws_grid_poll');
     }
   }
 
@@ -122,13 +169,13 @@ export class DataSchedulerService implements OnModuleInit {
           })
           .execute();
 
-        if (result.affected === 1) {
+        if ((result.affected ?? 0) === 1) {
           await this.boss.send(
             'data-poll',
             { key: source.key },
             {
               singletonKey: source.key,
-              expireInSeconds: source.interval_seconds * 2,
+              expireInSeconds: Math.min(source.interval_seconds * 2, 86400),
             },
           );
           this.logger.log(`Enqueued job: ${source.key}`);
@@ -137,7 +184,48 @@ export class DataSchedulerService implements OnModuleInit {
     }
   }
 
+  @Cron('0 */15 * * * *') // Every 15 minutes
+  async cleanupStaleData() {
+    await this.cleanupService.cleanup();
+  }
+
   async getDataSources(): Promise<DataSource[]> {
     return this.dataSourceRepo.find({ order: { key: 'ASC' } });
+  }
+
+  async restartPoller(key: string) {
+    const source = await this.dataSourceRepo.findOne({ where: { key } });
+    if (!source) {
+      throw new Error(`Data source not found: ${key}`);
+    }
+
+    // Cancel any existing pg-boss jobs for this key
+    const activeJobs: { id: string }[] = await this.dataSourceRepo.query(
+      `SELECT id FROM pgboss.job WHERE name = 'data-poll' AND singletonkey = $1 AND state IN ('created', 'active', 'retry')`,
+      [key],
+    );
+    if (activeJobs.length > 0) {
+      const ids = activeJobs.map((j) => j.id);
+      await this.boss.cancel('data-poll', ids);
+      this.logger.log(`Cancelled ${ids.length} existing job(s) for ${key}`);
+    }
+
+    // Reset data source and enqueue a fresh job
+    await this.dataSourceRepo.update(key, {
+      status: 'queued',
+      last_requested_at: new Date(),
+      last_error: null,
+    });
+
+    await this.boss.send(
+      'data-poll',
+      { key },
+      {
+        singletonKey: key,
+        expireInSeconds: Math.min(source.interval_seconds * 2, 86400),
+      },
+    );
+
+    this.logger.log(`Restarted poller: ${key}`);
   }
 }

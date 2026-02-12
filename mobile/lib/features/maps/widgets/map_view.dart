@@ -30,12 +30,26 @@ class EfbMapController {
   void flyTo(double lat, double lng, {double? zoom}) =>
       onFlyTo?.call(lat, lng, zoom: zoom);
 
+  // Follow mode: smooth camera tracking for ownship position
+  void Function(double lat, double lng, {double bearing})? onFollowTo;
+
+  /// Called when the user pans/drags the map (to break follow mode).
+  VoidCallback? onUserPanned;
+
+  void followTo(double lat, double lng, {double bearing = 0}) =>
+      onFollowTo?.call(lat, lng, bearing: bearing);
+
   // Particle animation (platform-specific: native uses Dart timer, web uses JS)
   void Function(List<Map<String, dynamic>> windField,
       {required double minLat,
       required double maxLat,
       required double minLng,
       required double maxLng})? onUpdateParticleField;
+  void Function(
+      {required double minLat,
+      required double maxLat,
+      required double minLng,
+      required double maxLng})? onUpdateParticleViewport;
   void Function()? onStartParticles;
   void Function()? onStopParticles;
   bool Function()? getParticlesRunning;
@@ -49,6 +63,14 @@ class EfbMapController {
   }) =>
       onUpdateParticleField?.call(windField,
           minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
+  void updateParticleViewport({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  }) =>
+      onUpdateParticleViewport?.call(
+          minLat: minLat, maxLat: maxLat, minLng: minLng, maxLng: maxLng);
   void startParticles() => onStartParticles?.call();
   void stopParticles() => onStopParticles?.call();
   bool get particlesRunning => getParticlesRunning?.call() ?? false;
@@ -59,23 +81,22 @@ class EfbMapView extends StatelessWidget {
   final bool showFlightCategory;
   final bool interactive;
   final ValueChanged<String>? onAirportTapped;
+  final ValueChanged<String>? onNavaidTapped;
+  final ValueChanged<String>? onFixTapped;
   final ValueChanged<Map<String, dynamic>>? onPirepTapped;
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
+
+  /// Fires on every map tap, before feature-specific callbacks.
+  /// Use this to dismiss open sheets before a new one might open.
+  final VoidCallback? onMapTapped;
   final List<Map<String, dynamic>> airports;
   final EfbMapController? controller;
 
   /// Route line coordinates as [[lng, lat], ...].
   final List<List<double>> routeCoordinates;
 
-  /// Aeronautical GeoJSON FeatureCollections (airspaces, airways, ARTCC, navaids, fixes).
-  final Map<String, dynamic>? airspaceGeoJson;
-  final Map<String, dynamic>? airwayGeoJson;
-  final Map<String, dynamic>? artccGeoJson;
-  final Map<String, dynamic>? navaidGeoJson;
-  final Map<String, dynamic>? fixGeoJson;
-
-  /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'advisories', 'pireps').
+  /// GeoJSON overlays keyed by source ID (e.g. 'tfrs', 'airspaces', 'pireps').
   /// Each value is a GeoJSON FeatureCollection or null to clear.
   /// New overlays only need to be added here and in the layer registry
   /// in map_view_native.dart — no new named parameters required.
@@ -87,17 +108,15 @@ class EfbMapView extends StatelessWidget {
     this.showFlightCategory = false,
     this.interactive = true,
     this.onAirportTapped,
+    this.onNavaidTapped,
+    this.onFixTapped,
     this.onPirepTapped,
     this.onBoundsChanged,
     this.onMapLongPressed,
+    this.onMapTapped,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
-    this.airspaceGeoJson,
-    this.airwayGeoJson,
-    this.artccGeoJson,
-    this.navaidGeoJson,
-    this.fixGeoJson,
     this.overlays = const {},
   });
 
@@ -108,17 +127,15 @@ class EfbMapView extends StatelessWidget {
       showFlightCategory: showFlightCategory,
       interactive: interactive,
       onAirportTapped: onAirportTapped,
+      onNavaidTapped: onNavaidTapped,
+      onFixTapped: onFixTapped,
       onPirepTapped: onPirepTapped,
       onBoundsChanged: onBoundsChanged,
       onMapLongPressed: onMapLongPressed,
+      onMapTapped: onMapTapped,
       airports: airports,
       routeCoordinates: routeCoordinates,
       controller: controller,
-      airspaceGeoJson: airspaceGeoJson,
-      airwayGeoJson: airwayGeoJson,
-      artccGeoJson: artccGeoJson,
-      navaidGeoJson: navaidGeoJson,
-      fixGeoJson: fixGeoJson,
       overlays: overlays,
     );
   }

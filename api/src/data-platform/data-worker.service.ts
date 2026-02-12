@@ -1,12 +1,12 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { DataSource } from './entities/data-source.entity';
 import { DataSchedulerService } from './data-scheduler.service';
-import { BasePoller } from './pollers/base.poller';
+import { BasePoller, PollerResult } from './pollers/base.poller';
 
 @Injectable()
-export class DataWorkerService implements OnModuleInit {
+export class DataWorkerService {
   private readonly logger = new Logger(DataWorkerService.name);
   private pollers = new Map<string, BasePoller>();
 
@@ -20,7 +20,9 @@ export class DataWorkerService implements OnModuleInit {
     this.pollers.set(key, poller);
   }
 
-  async onModuleInit() {
+  /** Call after all pollers are registered to start processing jobs. */
+  async start() {
+    await this.scheduler.whenReady();
     await this.scheduler.boss.work(
       'data-poll',
       { localConcurrency: 3 },
@@ -56,18 +58,27 @@ export class DataWorkerService implements OnModuleInit {
     const startTime = Date.now();
 
     try {
-      const recordsUpdated = await poller.execute();
+      const result: PollerResult = await poller.execute();
       const durationMs = Date.now() - startTime;
 
       await this.dataSourceRepo.update(key, {
         status: 'idle',
         last_completed_at: new Date(),
         last_duration_ms: durationMs,
-        records_updated: recordsUpdated,
-        last_error: null,
+        records_updated: result.recordsUpdated,
+        last_error_count: result.errors,
+        last_error: result.errors > 0 ? result.lastError : null,
       });
 
-      this.logger.log(`${key}: ${recordsUpdated} records in ${durationMs}ms`);
+      if (result.errors > 0) {
+        this.logger.warn(
+          `${key}: ${result.recordsUpdated} records, ${result.errors} errors in ${durationMs}ms — ${result.lastError}`,
+        );
+      } else {
+        this.logger.log(
+          `${key}: ${result.recordsUpdated} records in ${durationMs}ms`,
+        );
+      }
     } catch (error) {
       const durationMs = Date.now() - startTime;
       const errorMessage = error?.message || String(error);

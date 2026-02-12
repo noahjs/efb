@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource as TypeOrmDataSource } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { BasePoller } from './base.poller';
+import { BasePoller, PollerResult } from './base.poller';
 import { Notam } from '../entities/notam.entity';
 import { WEATHER } from '../../config/constants';
 
@@ -21,10 +21,12 @@ export class NotamPoller extends BasePoller {
     super('NotamPoller');
   }
 
-  async execute(): Promise<number> {
+  async execute(): Promise<PollerResult> {
     // Get top airports that have TAF service (these are the most important)
     const topAirports = await this.getTopAirports();
     let totalUpdated = 0;
+    let errors = 0;
+    let lastError = '';
 
     // Process 2 airports at a time with a small delay to avoid hammering FAA
     const batchSize = 2;
@@ -34,9 +36,13 @@ export class NotamPoller extends BasePoller {
         batch.map((apt) => this.fetchNotamsForAirport(apt)),
       );
 
-      for (const result of results) {
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
         if (result.status === 'fulfilled') {
           totalUpdated += result.value;
+        } else {
+          errors++;
+          lastError = `${batch[j]}: ${result.reason?.message ?? result.reason}`;
         }
       }
 
@@ -47,9 +53,9 @@ export class NotamPoller extends BasePoller {
     }
 
     this.logger.log(
-      `NOTAMs: ${totalUpdated} records from ${topAirports.length} airports`,
+      `NOTAMs: ${totalUpdated} records from ${topAirports.length} airports, ${errors} errors`,
     );
-    return totalUpdated;
+    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
   }
 
   private async getTopAirports(): Promise<string[]> {

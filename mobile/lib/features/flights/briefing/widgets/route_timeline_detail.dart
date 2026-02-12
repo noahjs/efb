@@ -132,15 +132,34 @@ class _TimelineEntry extends StatelessWidget {
                     // Waypoint header
                     Row(
                       children: [
-                        Text(
-                          label ?? '${point.waypoint} (${point.distanceFromDep}nm)',
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                label ?? '${point.waypoint} (${point.distanceFromDep}nm)',
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (point.flightPhase != null) ...[
+                                const SizedBox(width: 8),
+                                _PhaseChip(phase: point.flightPhase!),
+                              ],
+                              if (point.estimatedAltitudeFt != null) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  _formatAltitude(point.estimatedAltitudeFt!),
+                                  style: const TextStyle(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        const Spacer(),
                         Text(
                           _formatEta(point),
                           style: const TextStyle(
@@ -211,18 +230,14 @@ class _TimelineEntry extends StatelessWidget {
                                 Icon(
                                   _hazardIcon(h.type),
                                   size: 14,
-                                  color: h.altitudeRelation == 'within'
-                                      ? AppColors.error
-                                      : AppColors.warning,
+                                  color: _alertColor(h.alertLevel),
                                 ),
                                 const SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
                                     h.description,
                                     style: TextStyle(
-                                      color: h.altitudeRelation == 'within'
-                                          ? AppColors.error
-                                          : AppColors.warning,
+                                      color: _alertColor(h.alertLevel),
                                       fontSize: 11,
                                     ),
                                   ),
@@ -251,6 +266,27 @@ class _TimelineEntry extends StatelessWidget {
     final h = pt.etaMinutes ~/ 60;
     final m = pt.etaMinutes % 60;
     return '+${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  }
+
+  static String _formatAltitude(int altFt) {
+    if (altFt >= 18000) {
+      return 'FL${(altFt / 100).round()}';
+    }
+    if (altFt >= 10000) {
+      return '${(altFt / 1000).toStringAsFixed(1)}k';
+    }
+    return '${altFt}ft';
+  }
+
+  static Color _alertColor(String alertLevel) {
+    switch (alertLevel) {
+      case 'red':
+        return AppColors.error;
+      case 'green':
+        return AppColors.success;
+      default:
+        return AppColors.warning;
+    }
   }
 
   String _formatWindComponent(int headwind, int? crosswind) {
@@ -320,6 +356,45 @@ class _InfoChip extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PhaseChip extends StatelessWidget {
+  final String phase;
+
+  const _PhaseChip({required this.phase});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, icon) = switch (phase) {
+      'climb' => ('CLB', Icons.trending_up),
+      'descent' => ('DES', Icons.trending_down),
+      _ => ('CRZ', Icons.trending_flat),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.surface.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: AppColors.textMuted),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

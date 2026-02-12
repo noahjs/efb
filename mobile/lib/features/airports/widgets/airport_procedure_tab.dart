@@ -162,6 +162,7 @@ class _ProcedureRow extends ConsumerWidget {
               pdfUrl: pdfUrl,
               airportId: airportId,
               chartCode: procedure.chartCode,
+              procedureId: procedure.id,
             ),
           ),
         );

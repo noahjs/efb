@@ -1,5 +1,11 @@
 import { Logger } from '@nestjs/common';
 
+export interface PollerResult {
+  recordsUpdated: number;
+  errors: number;
+  lastError?: string;
+}
+
 export abstract class BasePoller {
   protected readonly logger: Logger;
 
@@ -9,7 +15,7 @@ export abstract class BasePoller {
 
   /**
    * Execute the polling job.
-   * @returns The number of records upserted/updated.
+   * @returns Result with records updated and any error info.
    */
-  abstract execute(): Promise<number>;
+  abstract execute(): Promise<PollerResult>;
 }

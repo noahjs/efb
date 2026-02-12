@@ -11,6 +11,7 @@ class PlatformPdfScreen extends ConsumerStatefulWidget {
   final String pdfUrl;
   final String? airportId;
   final String? chartCode;
+  final int? procedureId;
 
   const PlatformPdfScreen({
     super.key,
@@ -18,6 +19,7 @@ class PlatformPdfScreen extends ConsumerStatefulWidget {
     required this.pdfUrl,
     this.airportId,
     this.chartCode,
+    this.procedureId,
   });
 
   @override

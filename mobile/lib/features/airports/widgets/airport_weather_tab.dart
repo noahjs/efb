@@ -2,10 +2,66 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/airport_providers.dart';
-import '../../../services/api_client.dart';
+import '../../../services/atis_audio_provider.dart';
+
+const _phoneticToLetter = {
+  'ALFA': 'A', 'ALPHA': 'A', 'BRAVO': 'B', 'CHARLIE': 'C',
+  'DELTA': 'D', 'ECHO': 'E', 'FOXTROT': 'F', 'GOLF': 'G',
+  'HOTEL': 'H', 'INDIA': 'I', 'JULIET': 'J', 'JULIETT': 'J',
+  'KILO': 'K', 'LIMA': 'L', 'MIKE': 'M', 'NOVEMBER': 'N',
+  'OSCAR': 'O', 'PAPA': 'P', 'QUEBEC': 'Q', 'ROMEO': 'R',
+  'SIERRA': 'S', 'TANGO': 'T', 'UNIFORM': 'U', 'VICTOR': 'V',
+  'WHISKEY': 'W', 'XRAY': 'X', 'X-RAY': 'X', 'YANKEE': 'Y',
+  'ZULU': 'Z',
+};
+
+/// Extract ATIS identifier letter from text.
+/// Tries structured patterns first, then falls back to last phonetic word.
+String? _parseAtisLetterFromText(String text) {
+  // "ATIS INFO A" or "ATIS INFORMATION A"
+  final infoMatch =
+      RegExp(r'ATIS\s+INFO(?:RMATION)?\s+([A-Z])\b', caseSensitive: false)
+          .firstMatch(text);
+  if (infoMatch != null) return infoMatch.group(1);
+
+  // "INFORMATION A" or "INFORMATION ALPHA"
+  final phoneticPattern = _phoneticToLetter.keys.join('|');
+  final informationMatch = RegExp(
+    r'INFORMATION\s+([A-Z]|' + phoneticPattern + r')\b',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (informationMatch != null) {
+    final matched = informationMatch.group(1)!.toUpperCase();
+    return _phoneticToLetter[matched] ?? matched;
+  }
+
+  // "ADVISE YOU HAVE ZULU" (flexible word order)
+  final adviseMatch = RegExp(
+    r'ADVISE\s+.*?\b([A-Z]|' + phoneticPattern + r')\b.*?(?:CONTACT|$)',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (adviseMatch != null) {
+    final matched = adviseMatch.group(1)!.toUpperCase();
+    if (_phoneticToLetter.containsKey(matched) || matched.length == 1) {
+      return _phoneticToLetter[matched] ?? matched;
+    }
+  }
+
+  // Last resort: find the last phonetic word anywhere in the text
+  final allMatches = RegExp(
+    r'\b(' + phoneticPattern + r')\b',
+    caseSensitive: false,
+  ).allMatches(text);
+  if (allMatches.isNotEmpty) {
+    final last = allMatches.last.group(1)!.toUpperCase();
+    return _phoneticToLetter[last];
+  }
+
+  return null;
+}
 
 class AirportWeatherTab extends ConsumerWidget {
   final String airportId;
@@ -52,8 +108,12 @@ class AirportWeatherTab extends ConsumerWidget {
       _WindsAloftView(airportId: airportId),
     ];
 
+    // Default to METAR tab (index 1 when ATIS tab is present, 0 otherwise)
+    final metarIndex = hasAtisCapability ? 1 : 0;
+
     return DefaultTabController(
       length: tabs.length,
+      initialIndex: metarIndex,
       child: Column(
         children: [
           Container(
@@ -78,10 +138,11 @@ class AirportWeatherTab extends ConsumerWidget {
   }
 }
 
-class _DatisView extends ConsumerWidget {
+class _DatisView extends ConsumerStatefulWidget {
   final String airportId;
   final bool hasDatis;
   final bool hasLiveatc;
+
   const _DatisView({
     required this.airportId,
     required this.hasDatis,
@@ -89,81 +150,213 @@ class _DatisView extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final datisAsync = ref.watch(datisProvider(airportId));
+  ConsumerState<_DatisView> createState() => _DatisViewState();
+}
+
+class _DatisViewState extends ConsumerState<_DatisView> {
+  /// Polling timer for 'processing' status
+  static const _pollInterval = Duration(seconds: 10);
+
+  bool _polling = false;
+
+  void _startPolling() {
+    if (_polling) return;
+    _polling = true;
+    _poll();
+  }
+
+  void _stopPolling() {
+    _polling = false;
+  }
+
+  void _poll() async {
+    if (!_polling || !mounted) return;
+    await Future.delayed(_pollInterval);
+    if (!_polling || !mounted) return;
+    ref.invalidate(datisProvider(widget.airportId));
+    _poll();
+  }
+
+  @override
+  void dispose() {
+    _polling = false;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final datisAsync = ref.watch(datisProvider(widget.airportId));
 
     return datisAsync.when(
-      loading: () => _buildLoadingState(),
-      error: (error, _) => Center(
-        child: Text(
-          hasDatis ? 'Failed to load D-ATIS' : 'Failed to load ATIS',
-          style: const TextStyle(color: AppColors.textMuted),
-        ),
-      ),
-      data: (atisList) {
-        if (atisList == null || atisList.isEmpty) {
-          return _buildEmptyState();
+      loading: () {
+        // Brief network loading — show spinner
+        return const Center(child: CircularProgressIndicator());
+      },
+      error: (error, _) {
+        _stopPolling();
+        return Center(
+          child: Text(
+            widget.hasDatis ? 'Failed to load D-ATIS' : 'Failed to load ATIS',
+            style: const TextStyle(color: AppColors.textMuted),
+          ),
+        );
+      },
+      data: (result) {
+        final status = result.status;
+        final entries = result.entries;
+        final fetchedAt = result.fetchedAt;
+        final hasEntries = entries != null && entries.isNotEmpty;
+
+        // Start/stop polling based on status
+        if (status == 'processing') {
+          _startPolling();
+        } else {
+          _stopPolling();
         }
 
-        final source =
-            (atisList[0] as Map<String, dynamic>)['source'] as String?;
-        final isLiveAtc = source == 'liveatc';
+        // processing + no entries → transcribing spinner
+        if (status == 'processing' && !hasEntries) {
+          return _buildTranscribingState();
+        }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: atisList.length + (isLiveAtc ? 1 : 0),
-          itemBuilder: (context, index) {
-            if (isLiveAtc && index == 0) {
-              return _LiveAtcBanner(airportId: airportId);
-            }
-            final atisIndex = isLiveAtc ? index - 1 : index;
-            final atis = atisList[atisIndex] as Map<String, dynamic>;
-            return _DatisCard(atis: atis);
-          },
-        );
+        // processing + entries → show stale data + refreshing banner
+        if (status == 'processing' && hasEntries) {
+          return _buildAtisListView(entries!, fetchedAt, isRefreshing: true);
+        }
+
+        // current + entries → normal display
+        if (status == 'current' && hasEntries) {
+          return _buildAtisListView(entries!, fetchedAt);
+        }
+
+        // error + entries → show data + subtle error note
+        if (status == 'error' && hasEntries) {
+          return _buildAtisListView(entries!, fetchedAt, lastUpdateFailed: true);
+        }
+
+        // error + no entries (or current + no entries) → empty state
+        return _buildEmptyState();
       },
     );
   }
 
-  Widget _buildLoadingState() {
-    // LiveATC transcription takes ~90s — show an informative loading state
-    if (!hasDatis && hasLiveatc) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Transcribing ATIS',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Listening to LiveATC audio and transcribing with AI. This usually takes about 90 seconds.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+  Widget _buildAtisListView(
+    List<dynamic> atisList,
+    DateTime? fetchedAt, {
+    bool isRefreshing = false,
+    bool lastUpdateFailed = false,
+  }) {
+    final source =
+        (atisList[0] as Map<String, dynamic>)['source'] as String?;
+    final isLiveAtc = source == 'liveatc';
 
-    return const Center(child: CircularProgressIndicator());
+    // Extract ATIS letter: prefer server-provided, fall back to parsing text
+    final firstEntry = atisList[0] as Map<String, dynamic>;
+    final atisLetter = firstEntry['letter'] as String? ??
+        _extractAtisLetter(firstEntry['datis'] as String? ?? '');
+
+    // Header items: LiveATC banner (optional) + identifier + timestamp + error banner (optional)
+    final headerCount =
+        (isLiveAtc ? 1 : 0) + 1 + (lastUpdateFailed ? 1 : 0);
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: atisList.length + headerCount,
+      itemBuilder: (context, index) {
+        int cursor = 0;
+        if (isLiveAtc && index == cursor) {
+          return _LiveAtcBanner(
+            airportId: widget.airportId,
+            isRefreshing: isRefreshing,
+          );
+        }
+        if (isLiveAtc) cursor++;
+        if (index == cursor) {
+          return _AtisHeader(
+            letter: atisLetter,
+            fetchedAt: fetchedAt,
+            isRefreshing: !isLiveAtc && isRefreshing,
+          );
+        }
+        cursor++;
+        if (lastUpdateFailed && index == cursor) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: AppColors.warning.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.warning_amber_rounded,
+                    size: 14, color: AppColors.warning),
+                const SizedBox(width: 6),
+                Text(
+                  'Last update failed — showing previous data',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.warning,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        if (lastUpdateFailed) cursor++;
+        final atisIndex = index - cursor;
+        final atis = atisList[atisIndex] as Map<String, dynamic>;
+        return _DatisCard(atis: atis);
+      },
+    );
+  }
+
+  /// Extract ATIS letter from text (e.g., "ATIS INFO A" or "INFORMATION ALPHA")
+  static String? _extractAtisLetter(String text) {
+    return _parseAtisLetterFromText(text);
+  }
+
+  Widget _buildTranscribingState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Transcribing ATIS',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              widget.hasDatis
+                  ? 'Fetching D-ATIS data...'
+                  : 'Listening to LiveATC audio and transcribing with AI. This usually takes about 90 seconds.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildEmptyState() {
@@ -172,12 +365,12 @@ class _DatisView extends ConsumerWidget {
     final String subtitle;
     final IconData icon;
 
-    if (hasDatis) {
+    if (widget.hasDatis) {
       title = 'D-ATIS Temporarily Unavailable';
       subtitle =
           'This airport has Digital ATIS but the service is not responding. Try again shortly.';
       icon = Icons.cloud_off;
-    } else if (hasLiveatc) {
+    } else if (widget.hasLiveatc) {
       title = 'ATIS Unavailable';
       subtitle =
           'Could not transcribe ATIS from LiveATC. The feed may be offline or the audio was unclear.';
@@ -223,54 +416,275 @@ class _DatisView extends ConsumerWidget {
 
 class _LiveAtcBanner extends ConsumerWidget {
   final String airportId;
-  const _LiveAtcBanner({required this.airportId});
+  final bool isRefreshing;
+  const _LiveAtcBanner({required this.airportId, this.isRefreshing = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.info.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: AppColors.info.withValues(alpha: 0.3),
+    final audioState = ref.watch(atisAudioProvider(airportId));
+
+    return Column(
+      children: [
+        // Info banner
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.info.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: AppColors.info.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.auto_awesome, size: 16, color: AppColors.info),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Transcribed from LiveATC audio by AI',
+                  style: TextStyle(
+                    color: AppColors.info,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              if (isRefreshing) ...[
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: AppColors.info,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Refreshing...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.info,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.auto_awesome, size: 16, color: AppColors.info),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Transcribed from LiveATC audio by AI',
-              style: TextStyle(
-                color: AppColors.info,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+
+        // Play / Stop button
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          width: double.infinity,
+          child: GestureDetector(
+            onTap: () {
+              final notifier = ref.read(atisAudioProvider(airportId).notifier);
+              if (audioState.isPlaying || audioState.isLoading) {
+                notifier.stop();
+              } else {
+                notifier.play();
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: (audioState.isPlaying || audioState.isLoading)
+                    ? AppColors.error.withValues(alpha: 0.15)
+                    : AppColors.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: (audioState.isPlaying || audioState.isLoading)
+                      ? AppColors.error.withValues(alpha: 0.4)
+                      : AppColors.primary.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (audioState.isLoading)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  Icon(
+                    (audioState.isPlaying || audioState.isLoading)
+                        ? Icons.stop_circle
+                        : Icons.play_circle_fill,
+                    size: 20,
+                    color: (audioState.isPlaying || audioState.isLoading)
+                        ? AppColors.error
+                        : AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    audioState.isLoading
+                        ? 'Stop Loading'
+                        : audioState.isPlaying
+                            ? 'Stop ATIS Audio'
+                            : 'Play ATIS Audio',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: (audioState.isPlaying || audioState.isLoading)
+                          ? AppColors.error
+                          : AppColors.primary,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          GestureDetector(
-            onTap: () => _playAudio(ref),
-            child: Icon(
-              Icons.play_circle_outline,
-              size: 24,
-              color: AppColors.info,
+        ),
+      ],
+    );
+  }
+}
+
+class _AtisHeader extends StatelessWidget {
+  final String? letter;
+  final DateTime? fetchedAt;
+  final bool isRefreshing;
+  const _AtisHeader({
+    required this.letter,
+    required this.fetchedAt,
+    this.isRefreshing = false,
+  });
+
+  static const _letterToPhonetic = {
+    'A': 'Alpha', 'B': 'Bravo', 'C': 'Charlie', 'D': 'Delta',
+    'E': 'Echo', 'F': 'Foxtrot', 'G': 'Golf', 'H': 'Hotel',
+    'I': 'India', 'J': 'Juliet', 'K': 'Kilo', 'L': 'Lima',
+    'M': 'Mike', 'N': 'November', 'O': 'Oscar', 'P': 'Papa',
+    'Q': 'Quebec', 'R': 'Romeo', 'S': 'Sierra', 'T': 'Tango',
+    'U': 'Uniform', 'V': 'Victor', 'W': 'Whiskey', 'X': 'X-ray',
+    'Y': 'Yankee', 'Z': 'Zulu',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final ageStr = fetchedAt != null ? _formatAge(fetchedAt!) : null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ATIS identifier row
+          if (letter != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      letter!,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Information ${_letterToPhonetic[letter] ?? letter}',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+
+          // Timestamp + refresh indicator
+          if (isRefreshing)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.info.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: AppColors.info.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: AppColors.info,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Refreshing ATIS...',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.info,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (!isRefreshing && ageStr != null)
+            Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  size: 14,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Downloaded $ageStr',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
   }
 
-  Future<void> _playAudio(WidgetRef ref) async {
-    final api = ref.read(apiClientProvider);
-    final url = await api.getAtisAudioUrl(airportId);
-    if (url != null) {
-      final uri = Uri.parse(url);
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+  static String _formatAge(DateTime dt) {
+    final diff = DateTime.now().toUtc().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes == 1) return '1 minute ago';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} minutes ago';
+    if (diff.inHours == 1) return '1 hour ago';
+    if (diff.inHours < 24) return '${diff.inHours} hours ago';
+    return '${diff.inDays}d ago';
   }
 }
 
@@ -283,8 +697,8 @@ class _DatisCard extends StatelessWidget {
     final type = atis['type'] as String? ?? 'combined';
     final datisText = atis['datis'] as String? ?? '';
 
-    // Extract ATIS letter from the text (e.g., "ATIS INFO A" or "...INFORMATION ALPHA")
-    final letter = _extractAtisLetter(datisText);
+    // Prefer server-provided letter, fall back to parsing text
+    final letter = atis['letter'] as String? ?? _extractAtisLetter(datisText);
 
     // Determine label for type
     String typeLabel;
@@ -465,39 +879,7 @@ class _DatisCard extends StatelessWidget {
   }
 
   static String? _extractAtisLetter(String text) {
-    // Match "ATIS INFO X" or "INFORMATION ALPHA/BRAVO/..." patterns
-    final infoMatch =
-        RegExp(r'ATIS\s+INFO(?:RMATION)?\s+([A-Z])\b', caseSensitive: false)
-            .firstMatch(text);
-    if (infoMatch != null) return infoMatch.group(1);
-
-    final informationMatch =
-        RegExp(r'INFORMATION\s+([A-Z])\b', caseSensitive: false)
-            .firstMatch(text);
-    if (informationMatch != null) return informationMatch.group(1);
-
-    // Try phonetic alphabet
-    const phoneticToLetter = {
-      'ALFA': 'A', 'ALPHA': 'A', 'BRAVO': 'B', 'CHARLIE': 'C',
-      'DELTA': 'D', 'ECHO': 'E', 'FOXTROT': 'F', 'GOLF': 'G',
-      'HOTEL': 'H', 'INDIA': 'I', 'JULIET': 'J', 'JULIETT': 'J',
-      'KILO': 'K', 'LIMA': 'L', 'MIKE': 'M', 'NOVEMBER': 'N',
-      'OSCAR': 'O', 'PAPA': 'P', 'QUEBEC': 'Q', 'ROMEO': 'R',
-      'SIERRA': 'S', 'TANGO': 'T', 'UNIFORM': 'U', 'VICTOR': 'V',
-      'WHISKEY': 'W', 'XRAY': 'X', 'X-RAY': 'X', 'YANKEE': 'Y',
-      'ZULU': 'Z',
-    };
-
-    final phoneticPattern = phoneticToLetter.keys.join('|');
-    final phoneticMatch = RegExp(
-      r'INFORMATION\s+(' + phoneticPattern + r')\b',
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (phoneticMatch != null) {
-      return phoneticToLetter[phoneticMatch.group(1)!.toUpperCase()];
-    }
-
-    return null;
+    return _parseAtisLetterFromText(text);
   }
 }
 

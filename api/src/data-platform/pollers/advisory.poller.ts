@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { BasePoller } from './base.poller';
+import { BasePoller, PollerResult } from './base.poller';
 import { Advisory } from '../entities/advisory.entity';
 import { IMAGERY } from '../../config/constants';
 
@@ -17,16 +17,32 @@ export class AdvisoryPoller extends BasePoller {
     super('AdvisoryPoller');
   }
 
-  async execute(): Promise<number> {
+  async execute(): Promise<PollerResult> {
     const batchId = `batch-${Date.now()}`;
 
     // Fetch all 3 advisory types in parallel
-    const [gairmets, sigmets, cwas] = await Promise.all([
+    const results = await Promise.allSettled([
       this.fetchAdvisories('gairmet', 'gairmet'),
       this.fetchAdvisories('airsigmet', 'sigmet'),
       this.fetchAdvisories('cwa', 'cwa'),
     ]);
 
+    const labels = ['gairmet', 'sigmet', 'cwa'];
+    const fetched: Advisory[][] = [];
+    let errors = 0;
+    let lastError = '';
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === 'fulfilled') {
+        fetched.push(r.value);
+      } else {
+        errors++;
+        lastError = `${labels[i]}: ${r.reason?.message ?? r.reason}`;
+        fetched.push([]);
+      }
+    }
+
+    const [gairmets, sigmets, cwas] = fetched;
     const all = [...gairmets, ...sigmets, ...cwas];
 
     // Assign batch ID to all
@@ -36,7 +52,7 @@ export class AdvisoryPoller extends BasePoller {
 
     // Full replace in a transaction
     await this.advisoryRepo.manager.transaction(async (em) => {
-      await em.delete(Advisory, {});
+      await em.createQueryBuilder().delete().from(Advisory).execute();
       if (all.length > 0) {
         await em.save(Advisory, all);
       }
@@ -45,7 +61,7 @@ export class AdvisoryPoller extends BasePoller {
     this.logger.log(
       `Advisories: ${gairmets.length} GAIRMETs, ${sigmets.length} SIGMETs, ${cwas.length} CWAs`,
     );
-    return all.length;
+    return { recordsUpdated: all.length, errors, lastError: lastError || undefined };
   }
 
   private async fetchAdvisories(

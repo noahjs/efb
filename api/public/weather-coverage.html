@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EFB - Weather Coverage</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size: 20px; font-weight: 600; }
+    .header h1 span { color: #58a6ff; }
+    .header h1 a { color: #58a6ff; text-decoration: none; }
+    .header h1 a:hover { text-decoration: underline; }
+    .header .status { font-size: 13px; color: #8b949e; }
+
+    /* Layout */
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .stat-card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+    .stat-card .subtitle { font-size: 12px; color: #8b949e; margin-top: 2px; }
+    .stat-card .value.green { color: #3fb950; }
+    .stat-card .value.blue { color: #58a6ff; }
+    .stat-card .value.amber { color: #d29922; }
+
+    /* Section */
+    .section {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      padding: 16px 20px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .toolbar .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .toolbar .search-box {
+      margin-left: auto;
+      position: relative;
+    }
+    .toolbar input[type="text"] {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e1e4e8;
+      padding: 8px 12px 8px 32px;
+      font-size: 13px;
+      width: 260px;
+      outline: none;
+    }
+    .toolbar input[type="text"]:focus { border-color: #58a6ff; }
+    .toolbar .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #484f58;
+      font-size: 13px;
+    }
+
+    /* Filter buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+    }
+    .btn:hover { background: #30363d; border-color: #8b949e; }
+    .btn.active { background: #388bfd26; border-color: #58a6ff; color: #58a6ff; }
+    .btn.active-amber { background: #d2992226; border-color: #d29922; color: #d29922; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      padding: 10px 14px;
+      text-align: left;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+      font-weight: 600;
+      font-size: 12px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: color 0.15s;
+    }
+    thead th:hover { color: #c9d1d9; }
+    thead th .sort-arrow { margin-left: 4px; font-size: 10px; }
+    thead th.sorted { color: #58a6ff; }
+    tbody td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #21262d;
+      white-space: nowrap;
+    }
+    tbody tr:hover { background: #1c2128; }
+    .cell-center { text-align: center; }
+
+    /* Status icons */
+    .icon-check { color: #3fb950; }
+    .icon-warn { color: #d29922; }
+    .icon-dash { color: #30363d; }
+
+    /* Pagination */
+    .pagination {
+      padding: 12px 20px;
+      border-top: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: #8b949e;
+    }
+    .pagination .page-btns { display: flex; gap: 4px; }
+    .pagination button {
+      padding: 4px 10px;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .pagination button:hover { background: #30363d; }
+    .pagination button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .loading { text-align: center; padding: 48px; color: #484f58; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1><a href="/api/admin">EFB</a> <span>/ Weather Coverage</span></h1>
+  <div class="status" id="refreshStatus">Loading...</div>
+</div>
+
+<div class="container">
+  <!-- Stats bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-card">
+      <div class="label">METAR Stations</div>
+      <div class="value green" id="statMetar">--</div>
+      <div class="subtitle" id="statMetarSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">TAF Stations</div>
+      <div class="value green" id="statTaf">--</div>
+      <div class="subtitle" id="statTafSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">D-ATIS</div>
+      <div class="value blue" id="statDatis">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">LiveATC</div>
+      <div class="value blue" id="statLiveatc">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">AWOS</div>
+      <div class="value blue" id="statAwos">--</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Missing Data</div>
+      <div class="value amber" id="statMissing">--</div>
+    </div>
+  </div>
+
+  <!-- Table section -->
+  <div class="section">
+    <div class="toolbar">
+      <div class="filters">
+        <button class="btn active" onclick="setFilter('all')" id="filter-all">All</button>
+        <button class="btn" onclick="setFilter('metar')" id="filter-metar">METAR</button>
+        <button class="btn" onclick="setFilter('taf')" id="filter-taf">TAF</button>
+        <button class="btn" onclick="setFilter('datis')" id="filter-datis">D-ATIS</button>
+        <button class="btn" onclick="setFilter('liveatc')" id="filter-liveatc">LiveATC</button>
+        <button class="btn" onclick="setFilter('awos')" id="filter-awos">AWOS</button>
+        <button class="btn" onclick="setFilter('missing')" id="filter-missing">Missing Data</button>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">&#128269;</span>
+        <input type="text" id="searchInput" placeholder="Search ID, ICAO, name, city, state..." oninput="onSearch()">
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="setSort('identifier')">ID<span class="sort-arrow" id="sort-identifier"></span></th>
+            <th onclick="setSort('icao')">ICAO<span class="sort-arrow" id="sort-icao"></span></th>
+            <th onclick="setSort('name')">Name<span class="sort-arrow" id="sort-name"></span></th>
+            <th onclick="setSort('city')">City / State<span class="sort-arrow" id="sort-city"></span></th>
+            <th class="cell-center" onclick="setSort('metar')">METAR<span class="sort-arrow" id="sort-metar"></span></th>
+            <th class="cell-center" onclick="setSort('taf')">TAF<span class="sort-arrow" id="sort-taf"></span></th>
+            <th class="cell-center" onclick="setSort('datis')">D-ATIS<span class="sort-arrow" id="sort-datis"></span></th>
+            <th class="cell-center" onclick="setSort('liveatc')">LiveATC<span class="sort-arrow" id="sort-liveatc"></span></th>
+            <th class="cell-center" onclick="setSort('awos')">AWOS<span class="sort-arrow" id="sort-awos"></span></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="9" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <span id="pageInfo">--</span>
+      <div class="page-btns">
+        <button onclick="goPage('first')" id="btnFirst">First</button>
+        <button onclick="goPage('prev')" id="btnPrev">Prev</button>
+        <button onclick="goPage('next')" id="btnNext">Next</button>
+        <button onclick="goPage('last')" id="btnLast">Last</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/admin/weather-coverage/data';
+const PAGE_SIZE = 100;
+
+let allAirports = [];
+let filtered = [];
+let currentFilter = 'all';
+let searchTerm = '';
+let currentPage = 0;
+let sortColumn = null;   // null | 'identifier' | 'icao' | 'name' | 'city' | 'metar' | 'taf' | 'datis' | 'liveatc' | 'awos'
+let sortDirection = 'asc'; // 'asc' | 'desc'
+
+function statusIcon(flag, hasData, flagOnly) {
+  if (!flag) return '<span class="icon-dash">&#8212;</span>';
+  if (flagOnly) return '<span class="icon-check">&#10003;</span>';
+  if (hasData) return '<span class="icon-check">&#10003;</span>';
+  return '<span class="icon-warn">&#9888;</span>';
+}
+
+function ageIcon(flag, epochMs) {
+  if (!flag) return '<span class="icon-dash">&#8212;</span>';
+  if (!epochMs) return '<span class="icon-warn">&#9888;</span>';
+  const mins = Math.floor((Date.now() - epochMs) / 60000);
+  if (mins < 60) return `<span class="icon-check">${mins}m</span>`;
+  if (mins < 1440) return `<span class="icon-check">${Math.floor(mins / 60)}h ${mins % 60}m</span>`;
+  return `<span class="icon-warn">${Math.floor(mins / 1440)}d</span>`;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+const SORT_ACCESSORS = {
+  identifier: a => a.identifier || '',
+  icao: a => a.icao_identifier || '',
+  name: a => a.name || '',
+  city: a => (a.city || '') + (a.state || ''),
+  metar: a => a.metarObsTime,
+  taf: a => a.tafUpdatedAt,
+  datis: a => a.has_datis ? 1 : 0,
+  liveatc: a => a.has_liveatc ? 1 : 0,
+  awos: a => a.has_awos ? 1 : 0,
+};
+
+function applyFilters() {
+  let list = allAirports;
+  if (currentFilter === 'metar') list = list.filter(a => a.has_metar);
+  else if (currentFilter === 'taf') list = list.filter(a => a.has_taf);
+  else if (currentFilter === 'datis') list = list.filter(a => a.has_datis);
+  else if (currentFilter === 'liveatc') list = list.filter(a => a.has_liveatc);
+  else if (currentFilter === 'awos') list = list.filter(a => a.has_awos);
+  else if (currentFilter === 'missing') list = list.filter(a =>
+    (a.has_metar && !a.hasMetarData) || (a.has_taf && !a.hasTafData)
+  );
+
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    list = list.filter(a =>
+      (a.identifier && a.identifier.toLowerCase().includes(q)) ||
+      (a.icao_identifier && a.icao_identifier.toLowerCase().includes(q)) ||
+      (a.name && a.name.toLowerCase().includes(q)) ||
+      (a.city && a.city.toLowerCase().includes(q)) ||
+      (a.state && a.state.toLowerCase().includes(q))
+    );
+  }
+
+  if (sortColumn) {
+    const accessor = SORT_ACCESSORS[sortColumn];
+    const dir = sortDirection === 'asc' ? 1 : -1;
+    list = [...list].sort((a, b) => {
+      let va = accessor(a), vb = accessor(b);
+      // Nulls always sort to bottom
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'string') return va.localeCompare(vb) * dir;
+      return (va - vb) * dir;
+    });
+  }
+
+  filtered = list;
+  currentPage = 0;
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const start = currentPage * PAGE_SIZE;
+  const page = filtered.slice(start, start + PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  if (page.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="loading">No airports match current filters</td></tr>';
+  } else {
+    tbody.innerHTML = page.map(a => `
+      <tr>
+        <td><strong>${escapeHtml(a.identifier)}</strong></td>
+        <td>${escapeHtml(a.icao_identifier || '')}</td>
+        <td>${escapeHtml(a.name)}</td>
+        <td>${escapeHtml(a.city || '')}${a.state ? ', ' + escapeHtml(a.state) : ''}</td>
+        <td class="cell-center">${ageIcon(a.has_metar, a.metarObsTime)}</td>
+        <td class="cell-center">${ageIcon(a.has_taf, a.tafUpdatedAt)}</td>
+        <td class="cell-center">${statusIcon(a.has_datis, false, true)}</td>
+        <td class="cell-center">${statusIcon(a.has_liveatc, false, true)}</td>
+        <td class="cell-center">${statusIcon(a.has_awos, false, true)}</td>
+      </tr>
+    `).join('');
+  }
+
+  document.getElementById('pageInfo').textContent =
+    `Showing ${filtered.length === 0 ? 0 : start + 1}-${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length.toLocaleString()} airports`;
+
+  document.getElementById('btnFirst').disabled = currentPage === 0;
+  document.getElementById('btnPrev').disabled = currentPage === 0;
+  document.getElementById('btnNext').disabled = currentPage >= totalPages - 1;
+  document.getElementById('btnLast').disabled = currentPage >= totalPages - 1;
+}
+
+function setFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filters .btn').forEach(b => {
+    b.classList.remove('active', 'active-amber');
+  });
+  const el = document.getElementById('filter-' + filter);
+  if (filter === 'missing') {
+    el.classList.add('active-amber');
+  } else {
+    el.classList.add('active');
+  }
+  applyFilters();
+}
+
+function onSearch() {
+  searchTerm = document.getElementById('searchInput').value.trim();
+  applyFilters();
+}
+
+function setSort(col) {
+  if (sortColumn === col) {
+    sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortColumn = col;
+    // Default newest-first for time columns, A-Z for text
+    sortDirection = (col === 'metar' || col === 'taf') ? 'desc' : 'asc';
+  }
+  updateSortHeaders();
+  applyFilters();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
+  document.querySelectorAll('.sort-arrow').forEach(el => el.textContent = '');
+  if (sortColumn) {
+    const arrow = document.getElementById('sort-' + sortColumn);
+    if (arrow) {
+      arrow.textContent = sortDirection === 'asc' ? ' \u25B2' : ' \u25BC';
+      arrow.closest('th').classList.add('sorted');
+    }
+  }
+}
+
+function goPage(action) {
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  if (action === 'first') currentPage = 0;
+  else if (action === 'prev') currentPage = Math.max(0, currentPage - 1);
+  else if (action === 'next') currentPage = Math.min(totalPages - 1, currentPage + 1);
+  else if (action === 'last') currentPage = totalPages - 1;
+  renderTable();
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(API);
+    const data = await res.json();
+
+    allAirports = data.airports;
+
+    // Stats
+    const s = data.summary;
+    document.getElementById('statMetar').textContent = s.metar.flagged.toLocaleString();
+    document.getElementById('statMetarSub').textContent = `${s.metar.hasData.toLocaleString()} with data`;
+    document.getElementById('statTaf').textContent = s.taf.flagged.toLocaleString();
+    document.getElementById('statTafSub').textContent = `${s.taf.hasData.toLocaleString()} with data`;
+    document.getElementById('statDatis').textContent = s.datis.toLocaleString();
+    document.getElementById('statLiveatc').textContent = s.liveatc.toLocaleString();
+    document.getElementById('statAwos').textContent = s.awos.toLocaleString();
+
+    const totalMissing = s.metar.missing + s.taf.missing;
+    document.getElementById('statMissing').textContent = totalMissing.toLocaleString();
+
+    document.getElementById('refreshStatus').textContent = `Loaded ${new Date().toLocaleTimeString()}`;
+    applyFilters();
+  } catch (e) {
+    document.getElementById('refreshStatus').textContent = 'Error loading data';
+    document.getElementById('tableBody').innerHTML =
+      '<tr><td colspan="9" class="loading">Failed to load data. Is the server running?</td></tr>';
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>

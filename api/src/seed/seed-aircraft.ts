@@ -14,6 +14,10 @@ import { Equipment } from '../aircraft/entities/equipment.entity';
 import { User } from '../users/entities/user.entity';
 import { StarredAirport } from '../users/entities/starred-airport.entity';
 import { dbConfig } from '../db.config';
+import {
+  TBM960_TAKEOFF_DATA,
+  TBM960_LANDING_DATA,
+} from '../aircraft/seed/tbm960-performance';
 
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -83,6 +87,8 @@ async function main() {
       descent_rate: 1500,
       descent_speed: 200,
       descent_fuel_flow: 20,
+      takeoff_data: JSON.stringify(TBM960_TAKEOFF_DATA),
+      landing_data: JSON.stringify(TBM960_LANDING_DATA),
     },
     {
       aircraft_id: aircraft.id,

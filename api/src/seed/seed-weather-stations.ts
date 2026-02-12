@@ -14,6 +14,8 @@ import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { RunwayEnd } from '../airports/entities/runway-end.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
+import { Fbo } from '../fbos/entities/fbo.entity';
+import { FuelPrice } from '../fbos/entities/fuel-price.entity';
 import { dbConfig } from '../db.config';
 
 const AWC_METAR_URL = 'https://aviationweather.gov/api/data/metar';
@@ -31,7 +33,7 @@ async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
     // Airport has OneToMany relations that require related entities
-    entities: [WeatherStation, Airport, Runway, RunwayEnd, Frequency],
+    entities: [WeatherStation, Airport, Runway, RunwayEnd, Frequency, Fbo, FuelPrice],
   });
   await ds.initialize();
   return ds;

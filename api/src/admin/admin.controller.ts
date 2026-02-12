@@ -28,11 +28,43 @@ export class AdminController {
   }
 
   /**
+   * Serve the weather coverage HTML page at /api/admin/weather-coverage
+   */
+  @Get('weather-coverage')
+  serveWeatherCoveragePage(@Res() res: Response) {
+    const htmlPath = path.join(
+      __dirname,
+      '..',
+      '..',
+      'public',
+      'weather-coverage.html',
+    );
+    res.sendFile(htmlPath);
+  }
+
+  /**
+   * JSON API for weather coverage data
+   */
+  @Get('weather-coverage/data')
+  async getWeatherCoverageData() {
+    return this.adminService.getWeatherCoverage();
+  }
+
+  /**
    * Get data platform polling job status
    */
   @Get('data-sources')
   async getDataSources() {
     return this.adminService.getDataSources();
+  }
+
+  /**
+   * Restart a data source poller (cancel existing, re-enqueue)
+   */
+  @Post('data-sources/:key/restart')
+  @HttpCode(200)
+  async restartDataSource(@Param('key') key: string) {
+    return this.adminService.restartDataSource(key);
   }
 
   /**

@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { BasePoller } from './base.poller';
+import { BasePoller, PollerResult } from './base.poller';
 import { Tfr } from '../entities/tfr.entity';
 import { IMAGERY } from '../../config/constants';
 import { parseTfrWebText } from '../utils/tfr-parser.util';
@@ -18,7 +18,7 @@ export class TfrPoller extends BasePoller {
     super('TfrPoller');
   }
 
-  async execute(): Promise<number> {
+  async execute(): Promise<PollerResult> {
     // Fetch WFS polygons and metadata list in parallel
     const [wfsResponse, listResponse] = await Promise.all([
       firstValueFrom(
@@ -124,14 +124,23 @@ export class TfrPoller extends BasePoller {
     // Upsert TFRs, remove any that are no longer active
     if (tfrs.length > 0) {
       await this.tfrRepo.manager.transaction(async (em) => {
-        await em.delete(Tfr, {});
+        await em.createQueryBuilder().delete().from(Tfr).execute();
         await em.save(Tfr, tfrs);
       });
     } else {
-      await this.tfrRepo.delete({});
+      await this.tfrRepo.createQueryBuilder().delete().from(Tfr).execute();
     }
 
-    this.logger.log(`TFRs: ${tfrs.length} active`);
-    return tfrs.length;
+    // Count web text fetch failures
+    const webTextErrors = ids.length - webTextMap.size;
+
+    this.logger.log(`TFRs: ${tfrs.length} active, ${webTextErrors} text fetch errors`);
+    return {
+      recordsUpdated: tfrs.length,
+      errors: webTextErrors,
+      lastError: webTextErrors > 0
+        ? `${webTextErrors} of ${ids.length} TFR text fetches failed`
+        : undefined,
+    };
   }
 }

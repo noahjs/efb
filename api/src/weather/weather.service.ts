@@ -6,7 +6,7 @@ import { Storage } from '@google-cloud/storage';
 import * as path from 'path';
 import { firstValueFrom } from 'rxjs';
 import { AirportsService } from '../airports/airports.service';
-import { WEATHER, DATIS } from '../config/constants';
+import { WEATHER, DATIS, LIVEATC_ATIS } from '../config/constants';
 import { WeatherStation } from './entities/weather-station.entity';
 import { AtisRecording } from './entities/atis-recording.entity';
 import { AtisTranscriptionService } from './atis-transcription.service';
@@ -15,11 +15,22 @@ import { Taf } from '../data-platform/entities/taf.entity';
 import { WindsAloft } from '../data-platform/entities/winds-aloft.entity';
 import { Notam } from '../data-platform/entities/notam.entity';
 import { NwsForecast } from '../data-platform/entities/nws-forecast.entity';
+import { Atis } from '../data-platform/entities/atis.entity';
 
 interface WindsAloftForecast {
   period: string;
   label: string;
   altitudes: any[];
+}
+
+function dataMeta(
+  updatedAt: Date | null,
+): { updatedAt: string | null; ageSeconds: number | null } {
+  if (!updatedAt) return { updatedAt: null, ageSeconds: null };
+  return {
+    updatedAt: updatedAt.toISOString(),
+    ageSeconds: Math.round((Date.now() - updatedAt.getTime()) / 1000),
+  };
 }
 
 @Injectable()
@@ -28,6 +39,9 @@ export class WeatherService {
 
   // In-memory cache for non-polled data (D-ATIS, NWS forecast, nearest lookups)
   private cache = new Map<string, { data: any; expiresAt: number }>();
+
+  // Track in-flight ATIS refreshes to prevent duplicate background work
+  private atisRefreshing = new Set<string>();
 
   // API status tracking
   private _totalRequests = 0;
@@ -62,6 +76,8 @@ export class WeatherService {
     private readonly notamRepo: Repository<Notam>,
     @InjectRepository(NwsForecast)
     private readonly nwsForecastRepo: Repository<NwsForecast>,
+    @InjectRepository(Atis)
+    private readonly atisRepo: Repository<Atis>,
   ) {
     this.gcsBucket = process.env.GCS_ATIS_BUCKET || 'efb-atis-dev';
     const keyFilePath =
@@ -76,15 +92,62 @@ export class WeatherService {
     }
   }
 
-  async getDatis(icao: string): Promise<any> {
+  async getDatis(
+    icao: string,
+  ): Promise<{
+    status: 'processing' | 'current' | 'error';
+    entries: any[] | null;
+    _meta: { updatedAt: string | null; ageSeconds: number | null } | null;
+  }> {
     const cacheKey = `datis:${icao}`;
+
+    // 1. In-memory cache hit → return immediately
     const cached = this.getFromCache(cacheKey);
     if (cached) return cached;
 
+    // 2. Check DB for persisted ATIS
+    const dbRow = await this.atisRepo.findOne({ where: { icao_id: icao } });
+
+    if (dbRow) {
+      const entries = dbRow.raw_data as any[] | null;
+      const meta = dataMeta(dbRow.fetched_at);
+
+      if (dbRow.status === 'current' && entries) {
+        const age = Date.now() - (dbRow.fetched_at?.getTime() ?? 0);
+        const ttl =
+          dbRow.source === 'liveatc'
+            ? LIVEATC_ATIS.CACHE_TTL_MS
+            : DATIS.CACHE_TTL_MS;
+
+        if (age < ttl) {
+          // Fresh — populate in-memory cache and return
+          const result = { status: 'current' as const, entries, _meta: meta };
+          this.setCache(cacheKey, result, ttl - age);
+          return result;
+        }
+
+        // Stale — mark processing, kick off background, return stale data
+        await this.atisRepo.update(icao, { status: 'processing' });
+        this.refreshAtisBackground(icao);
+        return { status: 'processing', entries, _meta: meta };
+      }
+
+      if (dbRow.status === 'processing') {
+        // Already refreshing — don't start another
+        return { status: 'processing', entries, _meta: meta };
+      }
+
+      if (dbRow.status === 'error') {
+        return { status: 'error', entries, _meta: meta };
+      }
+    }
+
+    // 3. No DB row — first time for this airport
     const airport = await this.airportsService.findByIdLean(icao);
     const hasDatis = airport?.has_datis ?? false;
 
     if (hasDatis) {
+      // D-ATIS API is fast (~2s) — try it blocking
       try {
         this._totalRequests++;
         const { data } = await firstValueFrom(
@@ -98,8 +161,15 @@ export class WeatherService {
             ...entry,
             source: 'datis',
           }));
-          this.setCache(cacheKey, tagged, DATIS.CACHE_TTL_MS);
-          return tagged;
+          const now = new Date();
+          await this.saveAtisToDb(icao, tagged, 'datis', now, 'current');
+          const result = {
+            status: 'current' as const,
+            entries: tagged,
+            _meta: dataMeta(now),
+          };
+          this.setCache(cacheKey, result, DATIS.CACHE_TTL_MS);
+          return result;
         }
       } catch (error) {
         this._totalErrors++;
@@ -109,7 +179,149 @@ export class WeatherService {
       }
     }
 
-    return this.atisTranscription.getTranscribedAtis(icao);
+    // LiveATC-capable or D-ATIS failed — insert processing row, return immediately
+    const hasLiveatc = airport?.has_liveatc ?? false;
+    if (hasLiveatc || hasDatis) {
+      await this.saveAtisToDb(
+        icao,
+        null,
+        hasLiveatc ? 'liveatc' : 'datis',
+        null,
+        'processing',
+      );
+      this.refreshAtisBackground(icao);
+      return { status: 'processing', entries: null, _meta: null };
+    }
+
+    // No ATIS capability at all
+    return { status: 'error', entries: null, _meta: null };
+  }
+
+  private refreshAtisBackground(icao: string): void {
+    if (this.atisRefreshing.has(icao)) return;
+    this.atisRefreshing.add(icao);
+
+    (async () => {
+      try {
+        const airport = await this.airportsService.findByIdLean(icao);
+        const hasDatis = airport?.has_datis ?? false;
+
+        if (hasDatis) {
+          this._totalRequests++;
+          const { data } = await firstValueFrom(
+            this.http.get(`${DATIS.API_URL}/${icao}`, {
+              timeout: DATIS.TIMEOUT_MS,
+            }),
+          );
+          if (Array.isArray(data) && data.length > 0) {
+            const tagged = data.map((entry: any) => ({
+              ...entry,
+              source: 'datis',
+            }));
+            const now = new Date();
+            await this.saveAtisToDb(icao, tagged, 'datis', now, 'current');
+            const result = {
+              status: 'current' as const,
+              entries: tagged,
+              _meta: dataMeta(now),
+            };
+            this.setCache(`datis:${icao}`, result, DATIS.CACHE_TTL_MS);
+            return;
+          }
+        }
+
+        // Fall back to LiveATC
+        const liveatcResult =
+          await this.atisTranscription.getTranscribedAtis(icao);
+        if (liveatcResult && liveatcResult.length > 0) {
+          const now = new Date();
+          await this.saveAtisToDb(
+            icao,
+            liveatcResult,
+            'liveatc',
+            now,
+            'current',
+          );
+          const result = {
+            status: 'current' as const,
+            entries: liveatcResult,
+            _meta: dataMeta(now),
+          };
+          this.setCache(
+            `datis:${icao}`,
+            result,
+            LIVEATC_ATIS.CACHE_TTL_MS,
+          );
+        } else {
+          // Transcription failed — mark error, preserve old raw_data
+          await this.atisRepo.update(icao, { status: 'error' });
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Background ATIS refresh failed for ${icao}: ${error?.message || error}`,
+        );
+        // Mark error in DB but preserve last good raw_data
+        try {
+          await this.atisRepo.update(icao, { status: 'error' });
+        } catch {
+          // ignore
+        }
+      } finally {
+        this.atisRefreshing.delete(icao);
+      }
+    })();
+  }
+
+  private async saveAtisToDb(
+    icao: string,
+    entries: any[] | null,
+    source: string,
+    fetchedAt: Date | null,
+    status: 'processing' | 'current' | 'error',
+  ): Promise<void> {
+    try {
+      const firstText = entries?.[0]?.datis ?? '';
+      const letterMatch = firstText.match(
+        /INFORMATION\s+([A-Z])\b|ATIS\s+INFO(?:RMATION)?\s+([A-Z])\b/i,
+      );
+      const letter = letterMatch
+        ? (letterMatch[1] || letterMatch[2]).toUpperCase()
+        : null;
+
+      const type = entries?.[0]?.type ?? 'combined';
+
+      const row: any = {
+        icao_id: icao,
+        source,
+        type,
+        status,
+      };
+
+      // Only overwrite raw_data/text/letter when we have actual entries
+      if (entries) {
+        row.datis_text = firstText;
+        row.letter = letter;
+        row.raw_data = entries;
+        row.fetched_at = fetchedAt;
+      } else if (status === 'processing') {
+        // For initial processing row with no prior data
+        const existing = await this.atisRepo.findOne({
+          where: { icao_id: icao },
+        });
+        if (!existing) {
+          row.datis_text = null;
+          row.letter = null;
+          row.raw_data = null;
+          row.fetched_at = null;
+        }
+      }
+
+      await this.atisRepo.upsert(row, ['icao_id']);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to save ATIS to DB for ${icao}: ${error?.message || error}`,
+      );
+    }
   }
 
   /**
@@ -118,8 +330,8 @@ export class WeatherService {
   async getMetar(icao: string): Promise<any> {
     const row = await this.metarRepo.findOne({ where: { icao_id: icao } });
     if (!row) return null;
-    // Return the raw AWC response for backward compatibility
-    return row.raw_data;
+    // Return the raw AWC response with staleness metadata
+    return { ...row.raw_data, _meta: dataMeta(row.updated_at) };
   }
 
   /**
@@ -128,7 +340,7 @@ export class WeatherService {
   async getTaf(icao: string): Promise<any> {
     const row = await this.tafRepo.findOne({ where: { icao_id: icao } });
     if (!row) return null;
-    return row.raw_data;
+    return { ...row.raw_data, _meta: dataMeta(row.updated_at) };
   }
 
   /**
@@ -140,14 +352,24 @@ export class WeatherService {
     maxLat: number;
     minLng: number;
     maxLng: number;
-  }): Promise<any[]> {
+  }): Promise<any> {
     const rows = await this.metarRepo.find({
       where: {
         latitude: Between(bounds.minLat, bounds.maxLat),
         longitude: Between(bounds.minLng, bounds.maxLng),
       },
     });
-    return rows.map((r) => r.raw_data);
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+    return {
+      data: rows.map((r) => r.raw_data),
+      _meta: dataMeta(oldestUpdatedAt),
+    };
   }
 
   async getNearestMetar(icao: string): Promise<any> {
@@ -501,6 +723,14 @@ export class WeatherService {
       altitudes: rowMap.get(p.fcst) ?? [],
     }));
 
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+
     return {
       station: stationCode,
       icao,
@@ -508,6 +738,7 @@ export class WeatherService {
       distanceNm,
       requestedStation: icao,
       forecasts,
+      _meta: dataMeta(oldestUpdatedAt),
     };
   }
 

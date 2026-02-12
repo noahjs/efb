@@ -1,0 +1,79 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Not, IsNull } from 'typeorm';
+import { BasePoller, PollerResult } from './base.poller';
+import { Airport } from '../../airports/entities/airport.entity';
+import { Fbo } from '../../fbos/entities/fbo.entity';
+import { FuelPrice } from '../../fbos/entities/fuel-price.entity';
+import { FBO } from '../../config/constants';
+import { scrapeAndUpsertAirport, sleep } from './fbo-scrape.utils';
+
+@Injectable()
+export class FuelPricePoller extends BasePoller {
+  constructor(
+    @InjectRepository(Airport)
+    private readonly airportRepo: Repository<Airport>,
+    @InjectRepository(Fbo)
+    private readonly fboRepo: Repository<Fbo>,
+    @InjectRepository(FuelPrice)
+    private readonly fuelPriceRepo: Repository<FuelPrice>,
+  ) {
+    super('FuelPricePoller');
+  }
+
+  async execute(): Promise<PollerResult> {
+    // Re-scrape airports that already have FBO data
+    const airports = await this.airportRepo.find({
+      where: { fbo_scraped_at: Not(IsNull()) },
+      order: { identifier: 'ASC' },
+    });
+
+    this.logger.log(
+      `Fuel price update: ${airports.length} airports with existing FBO data`,
+    );
+
+    let recordsUpdated = 0;
+    let errors = 0;
+    let lastError = '';
+
+    for (let i = 0; i < airports.length; i++) {
+      const airport = airports[i];
+
+      try {
+        const result = await scrapeAndUpsertAirport(
+          airport,
+          this.fboRepo,
+          this.fuelPriceRepo,
+          this.airportRepo,
+        );
+        recordsUpdated += result.fbos + result.prices;
+      } catch (err: any) {
+        errors++;
+        lastError = `${airport.identifier}: ${err.message}`;
+        this.logger.warn(lastError);
+      }
+
+      // Rate limiting between requests
+      if (i < airports.length - 1) {
+        await sleep(FBO.SCRAPE_DELAY_MS);
+      }
+
+      // Log progress every 100 airports
+      if ((i + 1) % 100 === 0) {
+        this.logger.log(
+          `Fuel price progress: ${i + 1}/${airports.length} airports, ${recordsUpdated} records, ${errors} errors`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Fuel price update complete: ${recordsUpdated} records from ${airports.length} airports, ${errors} errors`,
+    );
+
+    return {
+      recordsUpdated,
+      errors,
+      lastError: lastError || undefined,
+    };
+  }
+}

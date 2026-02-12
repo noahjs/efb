@@ -1,76 +1,30 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class LayerPicker extends StatefulWidget {
-  final String selectedBaseLayer;
-  final Set<String> activeOverlays;
-  final ValueChanged<String> onBaseLayerChanged;
-  final ValueChanged<String> onOverlayToggled;
+import '../../../core/theme/app_theme.dart';
+import '../layers/map_layer_def.dart';
+import '../layers/map_layer_registry.dart';
+import '../providers/map_layer_state_provider.dart';
+
+class LayerPicker extends ConsumerWidget {
   final VoidCallback onClose;
+
+  /// Called after a base layer is selected (so MapsScreen can dismiss the picker).
+  final VoidCallback? onBaseLayerSelected;
 
   const LayerPicker({
     super.key,
-    required this.selectedBaseLayer,
-    required this.activeOverlays,
-    required this.onBaseLayerChanged,
-    required this.onOverlayToggled,
     required this.onClose,
+    this.onBaseLayerSelected,
   });
 
   @override
-  State<LayerPicker> createState() => _LayerPickerState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final layerState = ref.watch(mapLayerStateProvider).value;
+    if (layerState == null) return const SizedBox.shrink();
 
-class _LayerPickerState extends State<LayerPicker> {
-  void _onOverlayTap(String id) {
-    // For exclusive weather overlays, turn off the others first
-    if (_exclusiveWeatherOverlays.contains(id) &&
-        !widget.activeOverlays.contains(id)) {
-      for (final other in _exclusiveWeatherOverlays) {
-        if (other != id && widget.activeOverlays.contains(other)) {
-          widget.onOverlayToggled(other);
-        }
-      }
-    }
-    widget.onOverlayToggled(id);
-  }
+    final notifier = ref.read(mapLayerStateProvider.notifier);
 
-  static const baseLayers = [
-    ('vfr', 'VFR Sectional'),
-    ('satellite', 'Satellite'),
-    ('dark', 'Dark'),
-    ('street', 'Street'),
-  ];
-
-  static const leftOverlays = [
-    ('aeronautical', 'Aeronautical'),
-  ];
-
-  static const overlayLayers = [
-    ('flight_category', 'Flight Category'),
-    ('traffic', 'Traffic'),
-    ('tfrs', 'TFRs'),
-    ('air_sigmet', 'AIR/SIGMET/CWAs'),
-    ('pireps', 'PIREPs'),
-    ('_divider', ''),
-    ('surface_wind', 'Surface Wind'),
-    ('winds_aloft', 'Winds Aloft'),
-    ('temperature', 'Temperature'),
-    ('visibility', 'Visibility'),
-    ('ceiling', 'Ceiling'),
-  ];
-
-  /// Weather overlays that are mutually exclusive — only one at a time.
-  static const _exclusiveWeatherOverlays = {
-    'surface_wind',
-    'winds_aloft',
-    'temperature',
-    'visibility',
-    'ceiling',
-  };
-
-  @override
-  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {}, // absorb taps on the picker itself
       child: Container(
@@ -84,29 +38,30 @@ class _LayerPickerState extends State<LayerPicker> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Base layers + aeronautical column
+            // Left column: left overlays + base layers
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 shrinkWrap: true,
                 children: [
-                  ...leftOverlays.map((entry) {
-                    final (id, label) = entry;
-                    final isActive = widget.activeOverlays.contains(id);
+                  ...kLeftOverlays.map((def) {
+                    final isActive = layerState.isActive(def.id);
                     return _LayerRow(
-                      label: label,
+                      label: def.displayName,
                       isActive: isActive,
-                      onTap: () => widget.onOverlayToggled(id),
+                      onTap: () => notifier.toggleOverlay(def.id),
                     );
                   }),
                   const Divider(color: AppColors.divider, height: 12),
-                  ...baseLayers.map((entry) {
-                    final (id, label) = entry;
-                    final isSelected = widget.selectedBaseLayer == id;
+                  ...kBaseLayers.map((def) {
+                    final isSelected = layerState.baseLayer == def.id;
                     return _LayerRow(
-                      label: label,
+                      label: def.displayName,
                       isActive: isSelected,
-                      onTap: () => widget.onBaseLayerChanged(id),
+                      onTap: () {
+                        notifier.setBaseLayer(def.id);
+                        onBaseLayerSelected?.call();
+                      },
                     );
                   }),
                 ],
@@ -116,22 +71,22 @@ class _LayerPickerState extends State<LayerPicker> {
               width: 0.5,
               color: AppColors.divider,
             ),
-            // Overlay layers column
+            // Right column: overlay layers
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 shrinkWrap: true,
-                itemCount: overlayLayers.length,
+                itemCount: _rightColumnItems.length,
                 itemBuilder: (context, index) {
-                  final (id, label) = overlayLayers[index];
-                  if (id == '_divider') {
+                  final item = _rightColumnItems[index];
+                  if (item == null) {
                     return const Divider(color: AppColors.divider, height: 12);
                   }
-                  final isActive = widget.activeOverlays.contains(id);
+                  final isActive = layerState.isActive(item.id);
                   return _LayerRow(
-                    label: label,
+                    label: item.displayName,
                     isActive: isActive,
-                    onTap: () => _onOverlayTap(id),
+                    onTap: () => notifier.toggleOverlay(item.id),
                   );
                 },
               ),
@@ -141,6 +96,21 @@ class _LayerPickerState extends State<LayerPicker> {
       ),
     );
   }
+
+  /// Right column items with dividers auto-inserted before exclusive groups.
+  static final List<MapLayerDef?> _rightColumnItems = () {
+    final items = <MapLayerDef?>[];
+    String? lastExclusiveGroup;
+    for (final def in kRightOverlays) {
+      // Insert divider when entering an exclusive group
+      if (def.exclusiveGroup != null && def.exclusiveGroup != lastExclusiveGroup) {
+        items.add(null); // null = divider
+      }
+      items.add(def);
+      lastExclusiveGroup = def.exclusiveGroup;
+    }
+    return items;
+  }();
 }
 
 class _LayerRow extends StatelessWidget {

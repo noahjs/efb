@@ -11,6 +11,8 @@ import { DtppCycle } from '../procedures/entities/dtpp-cycle.entity';
 import { FaaRegistryAircraft } from '../registry/entities/faa-registry-aircraft.entity';
 import { Fbo } from '../fbos/entities/fbo.entity';
 import { FuelPrice } from '../fbos/entities/fuel-price.entity';
+import { Metar } from '../data-platform/entities/metar.entity';
+import { Taf } from '../data-platform/entities/taf.entity';
 import { WeatherService } from '../weather/weather.service';
 import { ImageryService } from '../imagery/imagery.service';
 import { WindyService } from '../windy/windy.service';
@@ -109,6 +111,8 @@ export class AdminService {
     private registryRepo: Repository<FaaRegistryAircraft>,
     @InjectRepository(Fbo) private fboRepo: Repository<Fbo>,
     @InjectRepository(FuelPrice) private fuelPriceRepo: Repository<FuelPrice>,
+    @InjectRepository(Metar) private metarRepo: Repository<Metar>,
+    @InjectRepository(Taf) private tafRepo: Repository<Taf>,
     private readonly weatherService: WeatherService,
     private readonly imageryService: ImageryService,
     private readonly windyService: WindyService,
@@ -489,6 +493,132 @@ export class AdminService {
 
   async getDataSources() {
     return this.dataScheduler.getDataSources();
+  }
+
+  async restartDataSource(key: string) {
+    await this.dataScheduler.restartPoller(key);
+    return { restarted: true, key };
+  }
+
+  // --- Weather Coverage ---
+
+  async getWeatherCoverage() {
+    // 1. Query airports with any weather flag
+    const airports = await this.airportRepo
+      .createQueryBuilder('a')
+      .select([
+        'a.identifier',
+        'a.icao_identifier',
+        'a.name',
+        'a.city',
+        'a.state',
+        'a.has_metar',
+        'a.has_taf',
+        'a.has_datis',
+        'a.has_liveatc',
+        'a.has_awos',
+      ])
+      .where(
+        'a.has_metar = true OR a.has_taf = true OR a.has_datis = true OR a.has_liveatc = true OR a.has_awos = true',
+      )
+      .orderBy('a.identifier', 'ASC')
+      .getMany();
+
+    // 2. Get all ICAO IDs that have polled METAR/TAF data (with timestamps)
+    const metarRows: { icao_id: string; obs_time: string | null }[] =
+      await this.metarRepo
+        .createQueryBuilder('m')
+        .select('m.icao_id', 'icao_id')
+        .addSelect('m.obs_time', 'obs_time')
+        .getRawMany();
+    const metarMap = new Map(
+      metarRows.map((r) => {
+        const t = Number(r.obs_time);
+        // obs_time from AWC is in seconds; convert to ms
+        return [r.icao_id, t ? t * 1000 : null];
+      }),
+    );
+
+    const tafRows: { icao_id: string; updated_at: string | null }[] =
+      await this.tafRepo
+        .createQueryBuilder('t')
+        .select('t.icao_id', 'icao_id')
+        .addSelect('t.updated_at', 'updated_at')
+        .getRawMany();
+    const tafMap = new Map(
+      tafRows.map((r) => [
+        r.icao_id,
+        r.updated_at ? new Date(r.updated_at).getTime() : null,
+      ]),
+    );
+
+    // 3. Build response
+    let metarFlagged = 0,
+      metarHasData = 0;
+    let tafFlagged = 0,
+      tafHasData = 0;
+    let datisCount = 0,
+      liveatcCount = 0,
+      awosCount = 0;
+
+    const airportList = airports.map((a) => {
+      const metarObsTime = a.icao_identifier
+        ? metarMap.get(a.icao_identifier) ?? null
+        : null;
+      const tafUpdatedAt = a.icao_identifier
+        ? tafMap.get(a.icao_identifier) ?? null
+        : null;
+      const hasMetarData = metarObsTime !== null;
+      const hasTafData = tafUpdatedAt !== null;
+
+      if (a.has_metar) {
+        metarFlagged++;
+        if (hasMetarData) metarHasData++;
+      }
+      if (a.has_taf) {
+        tafFlagged++;
+        if (hasTafData) tafHasData++;
+      }
+      if (a.has_datis) datisCount++;
+      if (a.has_liveatc) liveatcCount++;
+      if (a.has_awos) awosCount++;
+
+      return {
+        identifier: a.identifier,
+        icao_identifier: a.icao_identifier,
+        name: a.name,
+        city: a.city,
+        state: a.state,
+        has_metar: a.has_metar,
+        has_taf: a.has_taf,
+        has_datis: a.has_datis,
+        has_liveatc: a.has_liveatc,
+        has_awos: a.has_awos,
+        hasMetarData,
+        hasTafData,
+        metarObsTime,
+        tafUpdatedAt,
+      };
+    });
+
+    return {
+      summary: {
+        metar: {
+          flagged: metarFlagged,
+          hasData: metarHasData,
+          missing: metarFlagged - metarHasData,
+        },
+        taf: {
+          flagged: tafFlagged,
+          hasData: tafHasData,
+          missing: tafFlagged - tafHasData,
+        },
+        datis: datisCount,
+        liveatc: liveatcCount,
+        awos: awosCount,
+      },
+      airports: airportList,
+    };
   }
 
   // --- Helpers ---

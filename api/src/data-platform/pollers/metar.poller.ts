@@ -3,12 +3,12 @@ import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
-import { BasePoller } from './base.poller';
+import { BasePoller, PollerResult } from './base.poller';
 import { Metar } from '../entities/metar.entity';
-import { WEATHER } from '../../config/constants';
+import { WEATHER, DATA_PLATFORM } from '../../config/constants';
 
-// US state abbreviations for per-state AWC queries
-const US_STATES = [
+// US states + DC + territories for per-region AWC queries
+const US_REGIONS = [
   'AL',
   'AK',
   'AZ',
@@ -59,6 +59,12 @@ const US_STATES = [
   'WV',
   'WI',
   'WY',
+  'DC',
+  'PR',
+  'GU',
+  'VI',
+  'AS',
+  'MP',
 ];
 
 @Injectable()
@@ -71,26 +77,37 @@ export class MetarPoller extends BasePoller {
     super('MetarPoller');
   }
 
-  async execute(): Promise<number> {
+  async execute(): Promise<PollerResult> {
     let totalUpdated = 0;
+    let errors = 0;
+    let lastError = '';
 
-    // Process states in batches of 6 to avoid overwhelming AWC
-    const batchSize = 6;
-    for (let i = 0; i < US_STATES.length; i += batchSize) {
-      const batch = US_STATES.slice(i, i + batchSize);
+    // Process states in small batches with delay to avoid overwhelming AWC
+    const batchSize = DATA_PLATFORM.METAR_STATE_BATCH_SIZE;
+    for (let i = 0; i < US_REGIONS.length; i += batchSize) {
+      const batch = US_REGIONS.slice(i, i + batchSize);
       const results = await Promise.allSettled(
         batch.map((state) => this.fetchState(state)),
       );
 
-      for (const result of results) {
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
         if (result.status === 'fulfilled') {
           totalUpdated += result.value;
+        } else {
+          errors++;
+          lastError = `@${batch[j]}: ${result.reason?.message ?? result.reason}`;
         }
+      }
+
+      // Brief pause between batches to be a good API citizen
+      if (i + batchSize < US_REGIONS.length) {
+        await new Promise((r) => setTimeout(r, 500));
       }
     }
 
-    this.logger.log(`METARs: ${totalUpdated} stations updated`);
-    return totalUpdated;
+    this.logger.log(`METARs: ${totalUpdated} stations updated, ${errors} errors`);
+    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
   }
 
   private async fetchState(state: string): Promise<number> {
@@ -129,9 +146,9 @@ export class MetarPoller extends BasePoller {
         metar.flight_category = m.fltCat ?? null;
         metar.temp = m.temp ?? null;
         metar.dewp = m.dewp ?? null;
-        metar.wdir = m.wdir ?? null;
-        metar.wspd = m.wspd ?? null;
-        metar.wgst = m.wgst ?? null;
+        metar.wdir = typeof m.wdir === 'number' ? m.wdir : null;
+        metar.wspd = typeof m.wspd === 'number' ? m.wspd : null;
+        metar.wgst = typeof m.wgst === 'number' ? m.wgst : null;
         metar.visib = typeof m.visib === 'number' ? m.visib : null;
         metar.altim = m.altim ?? null;
         metar.clouds = m.clouds ?? null;

@@ -73,6 +73,7 @@ export interface WindGridResult {
       tempLabel: string;
     };
   }>;
+  _meta: { updatedAt: string | null; ageSeconds: number | null };
 }
 
 export interface WindStreamlineResult {
@@ -87,6 +88,16 @@ export interface WindStreamlineResult {
       speedCategory: string;
     };
   }>;
+}
+
+function dataMeta(
+  updatedAt: Date | null,
+): { updatedAt: string | null; ageSeconds: number | null } {
+  if (!updatedAt) return { updatedAt: null, ageSeconds: null };
+  return {
+    updatedAt: updatedAt.toISOString(),
+    ageSeconds: Math.round((Date.now() - updatedAt.getTime()) / 1000),
+  };
 }
 
 @Injectable()
@@ -406,6 +417,14 @@ export class WindyService {
       },
     });
 
+    const oldestUpdatedAt = gridRows.length
+      ? gridRows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          gridRows[0].updated_at,
+        )
+      : null;
+
     // Convert to PointForecastResult format and apply altitude interpolation
     const features = gridRows.map((row) => {
       const forecast: PointForecastResult = {
@@ -435,7 +454,12 @@ export class WindyService {
       };
     });
 
-    return { altitudeFt, type: 'FeatureCollection', features };
+    return {
+      altitudeFt,
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
   }
 
   async getWindHeatmapPng(
