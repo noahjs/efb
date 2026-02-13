@@ -15,6 +15,7 @@ export interface CalculateInput {
   fuel_burn_rate?: number;
   etd?: string;
   performance_profile_id?: number;
+  aircraft_id?: number;
 }
 
 export interface PhaseResult {
@@ -32,6 +33,7 @@ export interface CalculateResult {
   ete_minutes: number | null;
   flight_fuel_gallons: number | null;
   eta: string | null;
+  wind_component: number | null; // negative = headwind, positive = tailwind
   calculation_method: string;
   phases: PhaseResult[] | null;
   waypoints: {
@@ -258,6 +260,7 @@ export class CalculateService {
       ete_minutes: null,
       flight_fuel_gallons: null,
       eta: null,
+      wind_component: null,
       calculation_method: method,
       phases: null,
       waypoints: [],
@@ -362,8 +365,35 @@ export class CalculateService {
 
     const distanceNm = Math.round(totalNm * 10) / 10;
 
+    // Load performance profile once for both calculation paths.
+    // Fall back to the aircraft's default profile if no explicit profile is set.
+    let profile: PerformanceProfile | null = null;
+    if (input.performance_profile_id) {
+      profile = await this.profileRepo.findOne({
+        where: { id: input.performance_profile_id },
+      });
+    } else if (input.aircraft_id) {
+      profile = await this.profileRepo.findOne({
+        where: { aircraft_id: input.aircraft_id, is_default: true },
+      });
+      if (debug && profile) {
+        steps.push({
+          label: 'Profile Fallback',
+          value: `Using default profile "${profile.name}" from aircraft`,
+        });
+      }
+    }
+
     // Try 3-phase calculation
-    const threePhase = await this.tryThreePhase(input, totalNm, steps, debug);
+    const threePhase = await this.tryThreePhase(
+      input,
+      totalNm,
+      profile,
+      steps,
+      debug,
+    );
+
+    let result: CalculateResult;
 
     if (threePhase) {
       const eteMinutes = Math.round(
@@ -398,34 +428,75 @@ export class CalculateService {
         });
       }
 
-      const result: CalculateResult = {
+      result = {
         distance_nm: distanceNm,
         ete_minutes: eteMinutes,
         flight_fuel_gallons: fuelGallons,
         eta,
+        wind_component: null,
         calculation_method: 'three_phase',
         phases: threePhase,
         waypoints,
         calculated_at: now,
       };
-      return debug ? { ...result, steps } : result;
+    } else {
+      // Fallback: single-phase (with profile fallback for TAS/fuel burn)
+      result = this.singlePhase(
+        input,
+        totalNm,
+        distanceNm,
+        waypoints,
+        profile,
+        steps,
+        debug,
+        now,
+      );
     }
 
-    // Fallback: single-phase
-    return this.singlePhase(
-      input,
-      totalNm,
-      distanceNm,
-      waypoints,
-      steps,
-      debug,
-      now,
-    );
+    // Compute wind component (best-effort, don't block on failure)
+    const effectiveTas =
+      input.true_airspeed || (profile?.cruise_tas ?? 0);
+    const altitude = input.cruise_altitude ?? 0;
+    if (effectiveTas > 0 && altitude > 0 && waypoints.length >= 2) {
+      try {
+        const waypointCoords = waypoints.map((wp) => ({
+          lat: wp.latitude,
+          lng: wp.longitude,
+        }));
+        const windResult = await this.windyService.getRouteWinds(
+          waypointCoords,
+          altitude,
+          effectiveTas,
+        );
+        result.wind_component =
+          Math.round(windResult.avgWindComponent * 10) / 10;
+        if (debug) {
+          steps.push({
+            label: 'Wind Component',
+            value: `${result.wind_component > 0 ? '+' : ''}${result.wind_component} kt (${result.wind_component < 0 ? 'headwind' : 'tailwind'})`,
+          });
+          steps.push({
+            label: 'Avg Groundspeed',
+            value: `${Math.round(windResult.avgGroundspeed)} kt`,
+          });
+        }
+      } catch {
+        if (debug) {
+          steps.push({
+            label: 'Wind Component',
+            value: 'unavailable (wind data fetch failed)',
+          });
+        }
+      }
+    }
+
+    return debug ? { ...result, steps } : result;
   }
 
   private async tryThreePhase(
     input: CalculateInput,
     totalNm: number,
+    profile: PerformanceProfile | null,
     steps: { label: string; value: string }[],
     debug: boolean,
   ): Promise<PhaseResult[] | null> {
@@ -441,9 +512,6 @@ export class CalculateService {
       return null;
     }
 
-    const profile = await this.profileRepo.findOne({
-      where: { id: input.performance_profile_id },
-    });
     if (!profile) {
       if (debug) {
         steps.push({
@@ -568,32 +636,40 @@ export class CalculateService {
       longitude: number;
       type: string;
     }[],
+    profile: PerformanceProfile | null,
     steps: { label: string; value: string }[],
     debug: boolean,
     now: string,
-  ): CalculateResult | CalculateDebugResult {
-    const tas = input.true_airspeed;
+  ): CalculateResult {
+    // Fall back to profile TAS/fuel burn when not explicitly set on the flight
+    const tas = input.true_airspeed || (profile?.cruise_tas ?? 0);
+    const burnRate = input.fuel_burn_rate || (profile?.cruise_fuel_burn ?? 0);
 
     if (debug) {
       steps.push({ label: 'Calculation Method', value: 'single_phase' });
+      const tasSource = input.true_airspeed
+        ? 'flight'
+        : profile?.cruise_tas
+          ? 'profile'
+          : 'none';
       steps.push({
         label: 'True Airspeed (TAS)',
-        value: tas ? `${tas} kt` : '(not set)',
+        value: tas > 0 ? `${tas} kt (from ${tasSource})` : '(not set)',
       });
     }
 
     if (!tas || tas <= 0) {
-      const result: CalculateResult = {
+      return {
         distance_nm: distanceNm,
         ete_minutes: null,
         flight_fuel_gallons: null,
         eta: null,
+        wind_component: null,
         calculation_method: 'single_phase',
         phases: null,
         waypoints,
         calculated_at: now,
       };
-      return debug ? { ...result, steps } : result;
     }
 
     const eteHours = totalNm / tas;
@@ -607,7 +683,6 @@ export class CalculateService {
       }
     }
 
-    const burnRate = input.fuel_burn_rate;
     const fuelGallons =
       burnRate && burnRate > 0
         ? Math.round(eteHours * burnRate * 10) / 10
@@ -626,9 +701,14 @@ export class CalculateService {
           steps.push({ label: 'ETA', value: eta });
         }
       }
+      const burnSource = input.fuel_burn_rate
+        ? 'flight'
+        : profile?.cruise_fuel_burn
+          ? 'profile'
+          : 'none';
       steps.push({
         label: 'Fuel Burn Rate',
-        value: burnRate ? `${burnRate} GPH` : '(not set)',
+        value: burnRate > 0 ? `${burnRate} GPH (from ${burnSource})` : '(not set)',
       });
       if (fuelGallons != null) {
         steps.push({
@@ -638,17 +718,17 @@ export class CalculateService {
       }
     }
 
-    const result: CalculateResult = {
+    return {
       distance_nm: distanceNm,
       ete_minutes: eteMinutes,
       flight_fuel_gallons: fuelGallons,
       eta,
+      wind_component: null,
       calculation_method: 'single_phase',
       phases: null,
       waypoints,
       calculated_at: now,
     };
-    return debug ? { ...result, steps } : result;
   }
 
   private async getAirportElevation(identifier?: string): Promise<number> {

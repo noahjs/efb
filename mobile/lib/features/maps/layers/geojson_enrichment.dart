@@ -247,6 +247,78 @@ Map<String, dynamic> fixesToGeoJson(List<dynamic> fixes) {
   return {'type': 'FeatureCollection', 'features': features};
 }
 
+// ── Storm Cell enrichment ────────────────────────────────────────────────────
+
+/// Tags each storm cell feature with a `color` property based on its trait.
+Map<String, dynamic> enrichStormCellGeoJson(Map<String, dynamic> original) {
+  final features = (original['features'] as List<dynamic>?) ?? [];
+  final enrichedFeatures = features.map((f) {
+    final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
+    final props =
+        Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
+    final trait = (props['trait'] as String? ?? '').toLowerCase();
+    props['color'] = switch (trait) {
+      'tornado' => '#FF1744',
+      'rotating' => '#FF9100',
+      'hail' => '#FFEA00',
+      _ => '#FFC107',
+    };
+    // Symbol char for cell points
+    final featureType = props['featureType'] as String? ?? '';
+    if (featureType == 'cell') {
+      props['symbol'] = switch (trait) {
+        'tornado' => '\u26A0',  // ⚠
+        'rotating' => '\u21BB', // ↻
+        'hail' => '\u25C6',     // ◆
+        _ => '\u25CF',          // ●
+      };
+    }
+    feature['properties'] = props;
+    return feature;
+  }).toList();
+  return {'type': 'FeatureCollection', 'features': enrichedFeatures};
+}
+
+// ── Lightning enrichment ─────────────────────────────────────────────────────
+
+/// Tags each lightning feature with a `color` property.
+Map<String, dynamic> enrichLightningGeoJson(Map<String, dynamic> original) {
+  final features = (original['features'] as List<dynamic>?) ?? [];
+  final enrichedFeatures = features.map((f) {
+    final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
+    final props =
+        Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
+    final featureType = props['featureType'] as String? ?? '';
+    props['color'] = featureType == 'path' ? '#FF9100' : '#FFD600';
+    feature['properties'] = props;
+    return feature;
+  }).toList();
+  return {'type': 'FeatureCollection', 'features': enrichedFeatures};
+}
+
+// ── Weather Alert enrichment ────────────────────────────────────────────────
+
+/// Tags each weather alert feature with a `color` property based on severity.
+Map<String, dynamic> enrichWeatherAlertGeoJson(Map<String, dynamic> original) {
+  final features = (original['features'] as List<dynamic>?) ?? [];
+  final enrichedFeatures = features.map((f) {
+    final feature = Map<String, dynamic>.from(f as Map<String, dynamic>);
+    final props =
+        Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
+    final severity = (props['severity'] as String? ?? '').toLowerCase();
+    props['color'] = switch (severity) {
+      'extreme' => '#FF1744',
+      'severe' => '#FF5252',
+      'moderate' => '#FF9800',
+      'minor' => '#FFC107',
+      _ => '#B0B4BC',
+    };
+    feature['properties'] = props;
+    return feature;
+  }).toList();
+  return {'type': 'FeatureCollection', 'features': enrichedFeatures};
+}
+
 /// Extract the features list from a GeoJSON FeatureCollection, or null.
 List<dynamic>? extractFeatures(Map<String, dynamic>? geojson) {
   if (geojson == null) return null;

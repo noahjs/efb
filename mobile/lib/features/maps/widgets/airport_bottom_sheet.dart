@@ -248,7 +248,7 @@ class _AirportSheetContent extends ConsumerWidget {
                         Row(
                           children: [
                             Icon(Icons.wb_sunny_outlined,
-                                size: 14, color: Colors.amber.shade300),
+                                size: 14, color: AppColors.starred),
                             const SizedBox(width: 4),
                             Text(
                               sunriseStr,
@@ -259,7 +259,7 @@ class _AirportSheetContent extends ConsumerWidget {
                             ),
                             const SizedBox(width: 10),
                             Icon(Icons.nightlight_outlined,
-                                size: 14, color: Colors.blue.shade300),
+                                size: 14, color: AppColors.info),
                             const SizedBox(width: 4),
                             Text(
                               sunsetStr,
@@ -478,7 +478,7 @@ class _StarIcon extends ConsumerWidget {
         padding: const EdgeInsets.all(8),
         child: Icon(
           isStarred ? Icons.star : Icons.star_border,
-          color: isStarred ? Colors.amber : AppColors.textMuted,
+          color: isStarred ? AppColors.starred : AppColors.textMuted,
           size: 24,
         ),
       ),

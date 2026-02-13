@@ -216,3 +216,24 @@ final mapPirepsProvider =
   final api = ref.watch(apiClientProvider);
   return api.getPireps(bbox: bbox);
 });
+
+/// Fetches storm cell GeoJSON from the backend.
+final stormCellsProvider =
+    FutureProvider<Map<String, dynamic>?>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getStormCells();
+});
+
+/// Fetches lightning threat GeoJSON from the backend.
+final lightningThreatsProvider =
+    FutureProvider<Map<String, dynamic>?>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getLightningThreats();
+});
+
+/// Fetches weather alert GeoJSON from the backend.
+final weatherAlertsProvider =
+    FutureProvider<Map<String, dynamic>?>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  return api.getWeatherAlerts();
+});

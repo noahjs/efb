@@ -1051,6 +1051,42 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>?> getStormCells() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/storm-cells',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getLightningThreats() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/lightning-threats',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getWeatherAlerts() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/weather-alerts',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // --- CIFP ---
 
   Future<List<dynamic>> getApproaches(String airportId) async {

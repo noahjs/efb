@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../models/flight.dart';
 import '../../services/flight_providers.dart';
 
@@ -81,25 +82,10 @@ class _FlightsScreenState extends ConsumerState<FlightsScreen> {
               ),
               data: (flights) {
                 if (flights.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.flight_takeoff,
-                            size: 64, color: AppColors.textMuted),
-                        const SizedBox(height: 16),
-                        const Text('No Flights',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            )),
-                        const SizedBox(height: 8),
-                        const Text('Tap + to create a new flight',
-                            style: TextStyle(
-                                color: AppColors.textSecondary)),
-                      ],
-                    ),
+                  return const EmptyState(
+                    icon: Icons.flight_takeoff,
+                    title: 'No Flights',
+                    subtitle: 'Tap + to create a new flight',
                   );
                 }
                 return _buildGroupedList(flights);

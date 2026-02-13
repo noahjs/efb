@@ -62,6 +62,52 @@ const kMapLayers = <MapLayerDef>[
     needsBounds: true,
   ),
 
+  MapLayerDef(
+    id: MapLayerId.radar,
+    displayName: 'Radar',
+    group: LayerGroup.rightOverlay,
+  ),
+
+  // Xweather raster tile overlays
+  MapLayerDef(
+    id: MapLayerId.satelliteGeocolor,
+    displayName: 'Satellite (GeoColor)',
+    group: LayerGroup.rightOverlay,
+    exclusiveGroup: 'xw_satellite',
+  ),
+  MapLayerDef(
+    id: MapLayerId.satelliteIr,
+    displayName: 'Satellite (IR)',
+    group: LayerGroup.rightOverlay,
+    exclusiveGroup: 'xw_satellite',
+  ),
+  MapLayerDef(
+    id: MapLayerId.satelliteVisible,
+    displayName: 'Satellite (Visible)',
+    group: LayerGroup.rightOverlay,
+    exclusiveGroup: 'xw_satellite',
+  ),
+  MapLayerDef(
+    id: MapLayerId.lightning,
+    displayName: 'Lightning',
+    group: LayerGroup.rightOverlay,
+  ),
+  MapLayerDef(
+    id: MapLayerId.weatherAlerts,
+    displayName: 'Weather Alerts',
+    group: LayerGroup.rightOverlay,
+  ),
+  MapLayerDef(
+    id: MapLayerId.stormCells,
+    displayName: 'Storm Cells',
+    group: LayerGroup.rightOverlay,
+  ),
+  MapLayerDef(
+    id: MapLayerId.forecastRadar,
+    displayName: 'Forecast Radar',
+    group: LayerGroup.rightOverlay,
+  ),
+
   // Weather-derived (mutually exclusive)
   MapLayerDef(
     id: MapLayerId.surfaceWind,
@@ -134,3 +180,12 @@ final Map<String, Set<MapLayerId>> kExclusiveGroups = () {
   }
   return map;
 }();
+
+/// Xweather raster tile layer names — single source of truth for the API
+/// layer name used in tile URLs.
+const kXweatherLayerNames = <MapLayerId, String>{
+  MapLayerId.satelliteGeocolor: 'satellite-geocolor',
+  MapLayerId.satelliteIr: 'satellite-infrared-color',
+  MapLayerId.satelliteVisible: 'satellite-visible',
+  MapLayerId.forecastRadar: 'fradar',
+};

@@ -66,7 +66,12 @@ export class FlightsService {
     if ('arrival_fbo_id' in dto) {
       delete (flight as any).arrival_fbo;
     }
-    Object.assign(flight, dto);
+    // Strip undefined values so class-transformer's transform: true
+    // doesn't overwrite existing fields with undefined.
+    const defined = Object.fromEntries(
+      Object.entries(dto).filter(([, v]) => v !== undefined),
+    );
+    Object.assign(flight, defined);
     await this.calculate(flight);
     await this.flightRepo.save(flight);
     return this.findById(id, userId);
@@ -86,12 +91,14 @@ export class FlightsService {
       fuel_burn_rate: flight.fuel_burn_rate,
       etd: flight.etd,
       performance_profile_id: flight.performance_profile_id,
+      aircraft_id: flight.aircraft_id,
     });
 
     (flight as any).distance_nm = result.distance_nm;
     (flight as any).ete_minutes = result.ete_minutes;
     (flight as any).flight_fuel_gallons = result.flight_fuel_gallons;
     (flight as any).eta = result.eta;
+    (flight as any).wind_component = result.wind_component;
     flight.calculated_at = result.calculated_at;
   }
 
@@ -109,6 +116,7 @@ export class FlightsService {
       fuel_burn_rate: flight.fuel_burn_rate,
       etd: flight.etd,
       performance_profile_id: flight.performance_profile_id,
+      aircraft_id: flight.aircraft_id,
     });
   }
 

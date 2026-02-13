@@ -4,6 +4,40 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/airport_providers.dart';
+import 'airport_notam_tab.dart';
+
+final _rwyNotamRegex =
+    RegExp(r'RWY\s+(\d{1,2}[LRC]?)', caseSensitive: false);
+
+/// Returns NOTAMs relevant to a runway given its end identifiers.
+List<Map<String, dynamic>> notamsForRunway(
+  List<dynamic> allNotams,
+  List<String> endIdentifiers,
+) {
+  final upperEnds = endIdentifiers.map((e) => e.toUpperCase()).toSet();
+  final matched = <Map<String, dynamic>>[];
+  for (final raw in allNotams) {
+    final notam = raw as Map<String, dynamic>;
+    final text = ((notam['text'] as String?) ?? '').toUpperCase();
+    final fullText = ((notam['fullText'] as String?) ?? '').toUpperCase();
+    final searchText = '$text\n$fullText';
+    final type = ((notam['type'] as String?) ?? '').toUpperCase();
+
+    final refs = _rwyNotamRegex
+        .allMatches(searchText)
+        .map((m) => m.group(1)!.toUpperCase())
+        .toSet();
+
+    if (refs.isEmpty) continue;
+    if (refs.intersection(upperEnds).isNotEmpty) {
+      matched.add(notam);
+    } else if (type == 'IAP') {
+      // IAP-type NOTAMs that reference either runway end
+      if (refs.intersection(upperEnds).isNotEmpty) matched.add(notam);
+    }
+  }
+  return matched;
+}
 
 class AirportRunwayTab extends ConsumerWidget {
   final String airportId;
@@ -13,6 +47,10 @@ class AirportRunwayTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final airportAsync = ref.watch(airportDetailProvider(airportId));
     final metarAsync = ref.watch(metarProvider(airportId));
+    final notamsAsync = ref.watch(notamsProvider(airportId));
+    final allNotams = notamsAsync.whenData((d) => d).value;
+    final notamList =
+        (allNotams?['notams'] as List<dynamic>?) ?? [];
 
     return airportAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -140,7 +178,8 @@ class AirportRunwayTab extends ConsumerWidget {
               ),
             ),
             for (final rwy in runways)
-              _buildRunwayCard(context, rwy, endWinds, bestEndKey),
+              _buildRunwayCard(
+                  context, rwy, endWinds, bestEndKey, notamList),
             const SizedBox(height: 12),
             // Wind info from METAR
             if (windDir != null && windSpd != null)
@@ -174,6 +213,7 @@ class AirportRunwayTab extends ConsumerWidget {
     Map<String, dynamic> rwy,
     Map<String, _WindComponents> endWinds,
     int? bestEndKey,
+    List<dynamic> allNotams,
   ) {
     final identifiers = rwy['identifiers'] as String? ?? '';
     final length = rwy['length'];
@@ -194,6 +234,14 @@ class AirportRunwayTab extends ConsumerWidget {
 
     final ends =
         (rwy['ends'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+
+    // Count matching NOTAMs for this runway
+    final endIds = ends
+        .map((e) => (e['identifier'] as String?) ?? '')
+        .where((e) => e.isNotEmpty)
+        .toList();
+    final rwyNotamCount =
+        allNotams.isNotEmpty ? notamsForRunway(allNotams, endIds).length : 0;
 
     return InkWell(
       onTap: () => _showRunwayDetail(context, airportId, identifiers),
@@ -220,6 +268,24 @@ class AirportRunwayTab extends ConsumerWidget {
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  if (rwyNotamCount > 0)
+                    Container(
+                      margin: const EdgeInsets.only(top: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: AppColors.warning.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '$rwyNotamCount NOTAM${rwyNotamCount == 1 ? '' : 's'}',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 2),
                   if (dims.isNotEmpty)
                     Text(
@@ -350,7 +416,7 @@ class _RunwayEndWidget extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade700,
+                  color: AppColors.warning,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(
@@ -443,6 +509,7 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
   Widget build(BuildContext context) {
     final airportAsync = ref.watch(airportDetailProvider(widget.airportId));
     final metarAsync = ref.watch(metarProvider(widget.airportId));
+    final notamsAsync = ref.watch(notamsProvider(widget.airportId));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.85,
@@ -785,6 +852,15 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
                                       '${lat.toStringAsFixed(4)}°${lat >= 0 ? 'N' : 'S'} / ${lng.abs().toStringAsFixed(4)}°${lng >= 0 ? 'E' : 'W'}',
                                 ),
                               ]),
+                        // Runway NOTAMs section
+                        _buildRunwayNotams(
+                          context,
+                          notamsAsync,
+                          ends.map((e) => (e['identifier'] as String?) ?? '')
+                              .where((e) => e.isNotEmpty)
+                              .toList(),
+                          widget.runwayIdentifiers,
+                        ),
                         const SizedBox(height: 32),
                       ],
                     ),
@@ -806,6 +882,74 @@ class _RunwayDetailSheetState extends ConsumerState<_RunwayDetailSheet> {
           );
     }
     return n?.toString() ?? '--';
+  }
+
+  Widget _buildRunwayNotams(
+    BuildContext context,
+    AsyncValue<Map<String, dynamic>?> notamsAsync,
+    List<String> endIdentifiers,
+    String runwayIdentifiers,
+  ) {
+    return notamsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (data) {
+        final allNotams = (data?['notams'] as List<dynamic>?) ?? [];
+        if (allNotams.isEmpty) return const SizedBox.shrink();
+
+        final matched = notamsForRunway(allNotams, endIdentifiers);
+        final displayIds = runwayIdentifiers.replaceAll('-', '/');
+
+        if (matched.isEmpty) {
+          return _DetailSection(
+            title: 'NOTAMS - $displayIds',
+            items: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.divider, width: 0.5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline,
+                        size: 16, color: AppColors.vfr),
+                    const SizedBox(width: 8),
+                    Text(
+                      'No NOTAMs for this runway',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.vfr,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
+
+        return _DetailSection(
+          title: 'NOTAMS - $displayIds (${matched.length})',
+          items: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                children: [
+                  for (int i = 0; i < matched.length; i++) ...[
+                    NotamCard(notam: matched[i], compact: true),
+                    if (i < matched.length - 1) const SizedBox(height: 6),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 

@@ -31,7 +31,7 @@ class AdsbStatusBar extends ConsumerWidget {
           borderRadius: BorderRadius.circular(8),
           boxShadow: const [
             BoxShadow(
-              color: Colors.black26,
+              color: AppColors.scrim,
               blurRadius: 4,
               offset: Offset(0, 2),
             ),

@@ -35,6 +35,10 @@ class CalculateDto {
   @IsOptional()
   @IsNumber()
   performance_profile_id?: number;
+
+  @IsOptional()
+  @IsNumber()
+  aircraft_id?: number;
 }
 
 class CalculateAltitudesDto extends CalculateDto {

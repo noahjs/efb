@@ -838,7 +838,7 @@ export class WeatherService {
       const rawList = data?.notamList ?? [];
 
       const notams = rawList
-        .filter((n: any) => !n.cancelledOrExpired)
+        .filter((n: any) => n.notamNumber)
         .map((n: any) => ({
           id: n.notamNumber ?? '',
           type: n.keyword ?? '',

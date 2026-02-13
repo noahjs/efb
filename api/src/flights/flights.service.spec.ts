@@ -18,6 +18,7 @@ describe('FlightsService', () => {
     ete_minutes: 60,
     flight_fuel_gallons: 10.2,
     eta: '2025-03-15T15:00:00.000Z',
+    wind_component: -8.5,
     calculation_method: 'single_phase',
     phases: null,
     waypoints: [
@@ -172,6 +173,7 @@ describe('FlightsService', () => {
       expect(savedFlight.ete_minutes).toBe(60);
       expect(savedFlight.flight_fuel_gallons).toBe(10.2);
       expect(savedFlight.eta).toBe('2025-03-15T15:00:00.000Z');
+      expect(savedFlight.wind_component).toBe(-8.5);
     });
 
     it('should pass correct fields to calculate service', async () => {
