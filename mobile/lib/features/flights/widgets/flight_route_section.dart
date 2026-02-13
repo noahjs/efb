@@ -131,6 +131,7 @@ class FlightRouteSection extends StatelessWidget {
               trueAirspeed: flight.trueAirspeed,
               fuelBurnRate: flight.fuelBurnRate,
               performanceProfileId: flight.performanceProfileId,
+              aircraftId: flight.aircraftId,
               flightRules: flight.flightRules,
             );
             if (result != null) {

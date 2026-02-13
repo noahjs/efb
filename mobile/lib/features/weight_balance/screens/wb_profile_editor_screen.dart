@@ -532,45 +532,20 @@ class _WBProfileEditorScreenState
 
   Widget _buildStationRow(WBStation station) {
     final lateral = _profile?.lateralCgEnabled ?? false;
-    return Dismissible(
-      key: Key('station-${station.id}'),
-      direction: DismissDirection.endToStart,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 16),
-        color: AppColors.error,
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      confirmDismiss: (direction) async => true,
-      onDismissed: (_) async {
-        if (station.id != null) {
-          try {
-            final service = ref.read(wbServiceProvider);
-            await service.deleteStation(
-                widget.aircraftId, widget.profileId, station.id!);
-            _reloadProfile();
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to delete: $e')),
-              );
-            }
-          }
-        }
-      },
-      child: lateral
-          ? _buildDualArmRow(
-              label: '${station.name}\n${station.category}',
-              longValue: station.arm,
-              latValue: station.lateralArm,
-              onTapLong: () => _editStation(station),
-              onTapLat: () => _editStationLateralArm(station),
-            )
-          : FlightFieldRow(
-              label: station.name,
-              value: '${station.category} | ${station.arm} in',
-              onTap: () => _editStation(station),
-            ),
+    if (lateral) {
+      return _buildDualArmRow(
+        label: '${station.name}\n${station.category}',
+        longValue: station.arm,
+        latValue: station.lateralArm,
+        onTapLong: () => _editStation(station),
+        onTapLat: () => _editStation(station),
+      );
+    }
+    return FlightFieldRow(
+      label: station.name,
+      value: '${station.category} | ${station.arm} in',
+      showChevron: true,
+      onTap: () => _editStation(station),
     );
   }
 
@@ -700,48 +675,203 @@ class _WBProfileEditorScreenState
   }
 
   Future<void> _editStation(WBStation station) async {
-    final armResult = await showNumberEditSheet(context,
-        title: '${station.name} - Longitudinal Arm',
-        currentValue: station.arm,
-        hintText: 'inches from datum',
-        suffix: 'in');
-    if (armResult != null && station.id != null) {
-      try {
-        final service = ref.read(wbServiceProvider);
-        await service.updateStation(
-            widget.aircraftId, widget.profileId, station.id!, {
-          'arm': armResult,
-        });
-        _reloadProfile();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to update: $e')),
-          );
+    if (station.id == null) return;
+    final lateral = _profile?.lateralCgEnabled ?? false;
+    final nameController = TextEditingController(text: station.name);
+    final armController = TextEditingController(text: station.arm.toString());
+    final latArmController =
+        TextEditingController(text: station.lateralArm?.toString() ?? '');
+    final maxWeightController =
+        TextEditingController(text: station.maxWeight?.toString() ?? '');
+    final defaultWeightController =
+        TextEditingController(text: station.defaultWeight?.toString() ?? '');
+    String category = station.category;
+
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBottomState) => Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Edit Station',
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary)),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, 'save'),
+                    child: const Text('Save',
+                        style: TextStyle(color: AppColors.accent)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nameController,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: category,
+                dropdownColor: AppColors.surface,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: ['seat', 'baggage', 'fuel', 'other']
+                    .map((c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(c,
+                            style: const TextStyle(
+                                color: AppColors.textPrimary))))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setBottomState(() => category = v);
+                },
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: armController,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                    labelText: lateral
+                        ? 'Longitudinal Arm (in)'
+                        : 'Arm (in)'),
+              ),
+              if (lateral) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: latArmController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true, signed: true),
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  decoration:
+                      const InputDecoration(labelText: 'Lateral Arm (in)'),
+                ),
+              ],
+              const SizedBox(height: 8),
+              TextField(
+                controller: maxWeightController,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration:
+                    const InputDecoration(labelText: 'Max Weight (lbs)'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: defaultWeightController,
+                keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true),
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration:
+                    const InputDecoration(labelText: 'Default Weight (lbs)'),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: TextButton.icon(
+                  onPressed: () => Navigator.pop(ctx, 'delete'),
+                  icon: const Icon(Icons.delete_outline,
+                      color: AppColors.error, size: 18),
+                  label: const Text('Delete Station',
+                      style: TextStyle(color: AppColors.error)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (result == 'save') {
+      final updates = <String, dynamic>{};
+      if (nameController.text != station.name) {
+        updates['name'] = nameController.text;
+      }
+      if (category != station.category) {
+        updates['category'] = category;
+      }
+      final arm = double.tryParse(armController.text);
+      if (arm != null && arm != station.arm) {
+        updates['arm'] = arm;
+      }
+      if (lateral) {
+        final latArm = double.tryParse(latArmController.text);
+        if (latArm != station.lateralArm) {
+          updates['lateral_arm'] = latArm;
         }
       }
-    }
-  }
-
-  Future<void> _editStationLateralArm(WBStation station) async {
-    final result = await showNumberEditSheet(context,
-        title: '${station.name} - Lateral Arm',
-        currentValue: station.lateralArm,
-        hintText: 'inches from centerline',
-        suffix: 'in');
-    if (result != null && station.id != null) {
-      try {
-        final service = ref.read(wbServiceProvider);
-        await service.updateStation(
-            widget.aircraftId, widget.profileId, station.id!, {
-          'lateral_arm': result,
-        });
-        _reloadProfile();
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to update: $e')),
-          );
+      final maxW = double.tryParse(maxWeightController.text);
+      if (maxW != station.maxWeight) {
+        updates['max_weight'] = maxW;
+      }
+      final defW = double.tryParse(defaultWeightController.text);
+      if (defW != station.defaultWeight) {
+        updates['default_weight'] = defW;
+      }
+      if (updates.isNotEmpty) {
+        try {
+          final service = ref.read(wbServiceProvider);
+          await service.updateStation(
+              widget.aircraftId, widget.profileId, station.id!, updates);
+          _reloadProfile();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to update: $e')),
+            );
+          }
+        }
+      }
+    } else if (result == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: AppColors.surface,
+          title: const Text('Delete Station?'),
+          content: Text(
+              'Are you sure you want to delete "${station.name}"? This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete',
+                  style: TextStyle(color: AppColors.error)),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        try {
+          final service = ref.read(wbServiceProvider);
+          await service.deleteStation(
+              widget.aircraftId, widget.profileId, station.id!);
+          _reloadProfile();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to delete: $e')),
+            );
+          }
         }
       }
     }

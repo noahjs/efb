@@ -144,15 +144,10 @@ class FilingValidationSheet extends StatelessWidget {
                   onPressed: ready && !filing ? onFile : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
                     disabledBackgroundColor:
                         AppColors.accent.withValues(alpha: 0.3),
                     disabledForegroundColor:
                         Colors.white.withValues(alpha: 0.5),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
                   ),
                   child: filing
                       ? const SizedBox(

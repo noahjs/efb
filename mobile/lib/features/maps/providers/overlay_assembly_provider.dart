@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../layers/map_layer_registry.dart';
 import 'breadcrumb_provider.dart';
 import 'layer_data_providers.dart';
 
@@ -41,6 +42,28 @@ final assembledOverlaysProvider =
 
   final metarOverlay = ref.watch(metarOverlayProvider);
   if (metarOverlay != null) overlays['metar-overlay'] = metarOverlay;
+
+  // Vector weather overlays
+  final stormCells = ref.watch(stormCellOverlayProvider);
+  if (stormCells != null) overlays['storm_cells'] = stormCells;
+
+  final lightning = ref.watch(lightningOverlayProvider);
+  if (lightning != null) overlays['lightning'] = lightning;
+
+  final weatherAlerts = ref.watch(weatherAlertOverlayProvider);
+  if (weatherAlerts != null) overlays['weather_alerts'] = weatherAlerts;
+
+  final radar = ref.watch(radarOverlayProvider);
+  if (radar != null) overlays['radar'] = radar;
+
+  // Xweather raster tile overlays
+  for (final id in kXweatherLayerNames.keys) {
+    final xw = ref.watch(xweatherOverlayProvider(id));
+    if (xw != null) {
+      final def = kLayerById[id]!;
+      overlays[def.sourceKey] = xw;
+    }
+  }
 
   final windsAloft = ref.watch(windsAloftOverlayProvider);
   if (windsAloft != null) overlays['winds-aloft'] = windsAloft;

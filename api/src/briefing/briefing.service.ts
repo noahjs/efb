@@ -731,7 +731,6 @@ export class BriefingService {
     if (!Array.isArray(notamList)) return [];
 
     return notamList
-      .filter((n: any) => !n.cancelledOrExpired)
       .map((n: any) => parseNotam(n, icaoId));
   }
 

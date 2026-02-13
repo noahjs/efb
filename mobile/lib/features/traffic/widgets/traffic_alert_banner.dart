@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../adsb/models/traffic_target.dart';
 import '../providers/traffic_alert_provider.dart';
 
@@ -25,7 +26,7 @@ class TrafficAlertBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
           BoxShadow(
-            color: Colors.black45,
+            color: AppColors.scrim,
             blurRadius: 8,
             offset: Offset(0, 2),
           ),

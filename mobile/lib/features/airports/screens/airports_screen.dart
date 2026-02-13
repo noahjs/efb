@@ -284,7 +284,7 @@ class _AirportsScreenState extends ConsumerState<AirportsScreen> {
                   ],
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.star, color: Colors.amber, size: 22),
+                  icon: const Icon(Icons.star, color: AppColors.starred, size: 22),
                   onPressed: () => _toggleStar(identifier, true),
                 ),
               );
@@ -385,7 +385,7 @@ class _AirportsScreenState extends ConsumerState<AirportsScreen> {
           trailing: IconButton(
             icon: Icon(
               isStarred ? Icons.star : Icons.star_border,
-              color: isStarred ? Colors.amber : AppColors.textMuted,
+              color: isStarred ? AppColors.starred : AppColors.textMuted,
               size: 22,
             ),
             onPressed: () => _toggleStar(identifier, isStarred),

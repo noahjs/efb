@@ -379,7 +379,7 @@ BJC 1810    1820-08
   // --- NOTAMs ---
 
   describe('getNotams', () => {
-    it('should filter out cancelled/expired NOTAMs', async () => {
+    it('should include NOTAMs regardless of cancelledOrExpired flag', async () => {
       const notamData = {
         notamList: [
           {
@@ -395,7 +395,10 @@ BJC 1810    1820-08
             notamNumber: '01/002',
             keyword: 'AD',
             cancelledOrExpired: true,
-            traditionalMessageFrom4thWord: 'EXPIRED NOTAM',
+            traditionalMessageFrom4thWord: 'DAILY CLOSURE NOTAM',
+            startDate: '03/15/2025 0400',
+            endDate: '03/20/2025 1300',
+            featureName: 'AERODROME',
           },
         ],
       };
@@ -405,9 +408,10 @@ BJC 1810    1820-08
       });
 
       const result = await service.getNotams('KAPA');
-      expect(result.count).toBe(1);
-      expect(result.notams).toHaveLength(1);
+      expect(result.count).toBe(2);
+      expect(result.notams).toHaveLength(2);
       expect(result.notams[0].id).toBe('01/001');
+      expect(result.notams[1].id).toBe('01/002');
     });
 
     it('should map NOTAM fields correctly', async () => {

@@ -17,6 +17,18 @@ enum MapLayerId {
   airSigmet,
   pireps,
 
+  // Weather radar (independent, can coexist with any other overlay)
+  radar,
+
+  // Xweather raster tile overlays
+  satelliteGeocolor,
+  satelliteIr,
+  satelliteVisible,
+  lightning,
+  weatherAlerts,
+  stormCells,
+  forecastRadar,
+
   // Exclusive weather-derived group (only one active at a time)
   surfaceWind,
   windsAloft,
@@ -77,6 +89,14 @@ class MapLayerDef {
       case MapLayerId.tfrs: return 'tfrs';
       case MapLayerId.airSigmet: return 'air_sigmet';
       case MapLayerId.pireps: return 'pireps';
+      case MapLayerId.radar: return 'radar';
+      case MapLayerId.satelliteGeocolor: return 'satellite_geocolor';
+      case MapLayerId.satelliteIr: return 'satellite_ir';
+      case MapLayerId.satelliteVisible: return 'satellite_visible';
+      case MapLayerId.lightning: return 'lightning';
+      case MapLayerId.weatherAlerts: return 'weather_alerts';
+      case MapLayerId.stormCells: return 'storm_cells';
+      case MapLayerId.forecastRadar: return 'forecast_radar';
       case MapLayerId.surfaceWind: return 'surface_wind';
       case MapLayerId.windsAloft: return 'winds_aloft';
       case MapLayerId.temperature: return 'temperature';

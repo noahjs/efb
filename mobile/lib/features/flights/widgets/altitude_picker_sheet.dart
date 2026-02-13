@@ -14,6 +14,7 @@ Future<int?> showAltitudePickerSheet(
   int? trueAirspeed,
   double? fuelBurnRate,
   int? performanceProfileId,
+  int? aircraftId,
   String? flightRules,
 }) {
   return showModalBottomSheet<int>(
@@ -38,6 +39,7 @@ Future<int?> showAltitudePickerSheet(
         trueAirspeed: trueAirspeed,
         fuelBurnRate: fuelBurnRate,
         performanceProfileId: performanceProfileId,
+        aircraftId: aircraftId,
         flightRules: flightRules,
       ),
     ),
@@ -58,6 +60,7 @@ class _AltitudePickerBody extends StatefulWidget {
   final int? trueAirspeed;
   final double? fuelBurnRate;
   final int? performanceProfileId;
+  final int? aircraftId;
 
   final String? flightRules;
 
@@ -71,6 +74,7 @@ class _AltitudePickerBody extends StatefulWidget {
     this.trueAirspeed,
     this.fuelBurnRate,
     this.performanceProfileId,
+    this.aircraftId,
     this.flightRules,
   });
 
@@ -151,6 +155,7 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
         trueAirspeed: widget.trueAirspeed,
         fuelBurnRate: widget.fuelBurnRate,
         performanceProfileId: widget.performanceProfileId,
+        aircraftId: widget.aircraftId,
         altitudes: altitudes,
       );
       final results = response['results'] as List<dynamic>? ?? [];

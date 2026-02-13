@@ -59,6 +59,21 @@ const INITIAL_SOURCES = [
     name: 'FBO Poller (AirNav)',
     interval_seconds: 2592000,
   },
+  {
+    key: 'storm_cell_poll',
+    name: 'Storm Cell Poller (Xweather)',
+    interval_seconds: 180,
+  },
+  {
+    key: 'lightning_threat_poll',
+    name: 'Lightning Threat Poller (Xweather)',
+    interval_seconds: 180,
+  },
+  {
+    key: 'weather_alert_poll',
+    name: 'Weather Alert Poller (NWS)',
+    interval_seconds: 300,
+  },
 ];
 
 @Injectable()

@@ -141,6 +141,21 @@ export class ImageryController {
     return this.imageryService.getTfrs();
   }
 
+  @Get('storm-cells')
+  async getStormCells() {
+    return this.imageryService.getStormCells();
+  }
+
+  @Get('lightning-threats')
+  async getLightningThreats() {
+    return this.imageryService.getLightningThreats();
+  }
+
+  @Get('weather-alerts')
+  async getWeatherAlerts() {
+    return this.imageryService.getWeatherAlerts();
+  }
+
   @Get('advisories/:type')
   async getAdvisories(
     @Param('type') type: string,

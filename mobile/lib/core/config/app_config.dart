@@ -27,4 +27,12 @@ class AppConfig {
     'DEV_AUTO_LOGIN',
     defaultValue: false,
   );
+
+  static const String xweatherClientId = String.fromEnvironment(
+    'XWEATHER_CLIENT_ID',
+  );
+
+  static const String xweatherClientSecret = String.fromEnvironment(
+    'XWEATHER_CLIENT_SECRET',
+  );
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/sheet_handle.dart';
 import '../../../models/flight.dart';
 import '../../../services/api_client.dart';
 
@@ -244,18 +245,7 @@ class _CalculationDebugSheetState extends State<_CalculationDebugSheet> {
       expand: false,
       builder: (ctx, scrollController) => Column(
         children: [
-          // Handle
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.textMuted,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
+          const SheetHandle(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(

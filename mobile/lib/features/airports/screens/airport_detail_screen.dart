@@ -12,6 +12,7 @@ import '../widgets/airport_weather_tab.dart';
 import '../widgets/airport_runway_tab.dart';
 import '../widgets/airport_procedure_tab.dart';
 import '../widgets/airport_notam_tab.dart';
+import '../widgets/runway_diagram_icon.dart';
 import '../../../services/procedure_providers.dart';
 import 'package:go_router/go_router.dart';
 import 'airport_3d_view_screen.dart';
@@ -19,8 +20,13 @@ import 'procedure_pdf_screen.dart';
 
 class AirportDetailScreen extends ConsumerWidget {
   final String airportId;
+  final int initialTab;
 
-  const AirportDetailScreen({super.key, required this.airportId});
+  const AirportDetailScreen({
+    super.key,
+    required this.airportId,
+    this.initialTab = 0,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,6 +40,7 @@ class AirportDetailScreen extends ConsumerWidget {
 
     return DefaultTabController(
       length: 5,
+      initialIndex: initialTab.clamp(0, 4),
       child: Scaffold(
         appBar: AppBar(
           title: Text(airportId),
@@ -83,6 +90,9 @@ class AirportDetailScreen extends ConsumerWidget {
               },
             ),
 
+            // Runway closure NOTAMs banner
+            _ClosureNotamsBanner(airportId: airportId),
+
             // Tab bar
             Container(
               color: AppColors.surface,
@@ -127,6 +137,14 @@ class _AirportHeader extends ConsumerWidget {
 
   const _AirportHeader({required this.airportId, required this.airport});
 
+  static bool _isTowered(Map<String, dynamic>? airport) {
+    final frequencies = (airport?['frequencies'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>();
+    final towerHours = airport?['tower_hours'] as String?;
+    return frequencies.any((f) => f['type'] == 'TWR') ||
+        (towerHours != null && towerHours.trim().isNotEmpty);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final name = airport?['name'] ?? airportId;
@@ -166,17 +184,11 @@ class _AirportHeader extends ConsumerWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Airport diagram thumbnail
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: AppColors.surfaceLight,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.divider, width: 0.5),
-              ),
-              child: const Icon(Icons.map_outlined,
-                  color: AppColors.textMuted, size: 28),
+            // Runway diagram thumbnail
+            RunwayDiagramIcon(
+              runways: (airport?['runways'] as List<dynamic>? ?? [])
+                  .cast<Map<String, dynamic>>(),
+              isTowered: _isTowered(airport),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -206,7 +218,7 @@ class _AirportHeader extends ConsumerWidget {
                   Row(
                     children: [
                       Icon(Icons.wb_sunny_outlined,
-                          size: 14, color: Colors.amber.shade300),
+                          size: 14, color: AppColors.starred),
                       const SizedBox(width: 4),
                       Text(
                         sunriseStr,
@@ -217,7 +229,7 @@ class _AirportHeader extends ConsumerWidget {
                       ),
                       const SizedBox(width: 8),
                       Icon(Icons.nightlight_outlined,
-                          size: 14, color: Colors.blue.shade300),
+                          size: 14, color: AppColors.info),
                       const SizedBox(width: 4),
                       Text(
                         sunsetStr,
@@ -291,6 +303,102 @@ class _AirportHeader extends ConsumerWidget {
   }
 }
 
+class _ClosureNotamsBanner extends ConsumerWidget {
+  final String airportId;
+  const _ClosureNotamsBanner({required this.airportId});
+
+  static final _closurePattern =
+      RegExp(r'\bCLSD\b|\bCLOSED\b', caseSensitive: false);
+
+  static bool _isClosureNotam(Map<String, dynamic> notam) {
+    final type = ((notam['type'] as String?) ?? '').toUpperCase();
+    final text = ((notam['text'] as String?) ?? '').toUpperCase();
+    final fullText = ((notam['fullText'] as String?) ?? '').toUpperCase();
+    // Runway or aerodrome closure
+    if ((type == 'RWY' || type == 'AD') && _closurePattern.hasMatch('$text $fullText')) {
+      return true;
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notamsAsync = ref.watch(notamsProvider(airportId));
+
+    return notamsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, _) => const SizedBox.shrink(),
+      data: (data) {
+        final allNotams = (data?['notams'] as List<dynamic>?) ?? [];
+        final closures = allNotams
+            .cast<Map<String, dynamic>>()
+            .where(_isClosureNotam)
+            .toList();
+
+        if (closures.isEmpty) return const SizedBox.shrink();
+
+        return Container(
+          color: AppColors.surface,
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Column(
+            children: [
+              for (int i = 0; i < closures.length; i++) ...[
+                _ClosureNotamRow(notam: closures[i]),
+                if (i < closures.length - 1) const SizedBox(height: 4),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ClosureNotamRow extends StatelessWidget {
+  final Map<String, dynamic> notam;
+  const _ClosureNotamRow({required this.notam});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = notam['text'] as String? ?? '';
+
+    return GestureDetector(
+      onTap: () => showNotamDetail(context, notam),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.textMuted.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: AppColors.textMuted.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.block, size: 16, color: AppColors.textMuted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace',
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right,
+                size: 16, color: AppColors.textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StarButton extends ConsumerWidget {
   final String airportId;
 
@@ -311,7 +419,7 @@ class _StarButton extends ConsumerWidget {
     return IconButton(
       icon: Icon(
         isStarred ? Icons.star : Icons.star_border,
-        color: isStarred ? Colors.amber : null,
+        color: isStarred ? AppColors.starred : null,
       ),
       onPressed: () async {
         final client = ref.read(apiClientProvider);

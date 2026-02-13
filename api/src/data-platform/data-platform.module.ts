@@ -14,6 +14,9 @@ import { WindsAloft } from './entities/winds-aloft.entity';
 import { WindGrid } from './entities/wind-grid.entity';
 import { Notam } from './entities/notam.entity';
 import { NwsForecast } from './entities/nws-forecast.entity';
+import { StormCell } from './entities/storm-cell.entity';
+import { LightningThreat } from './entities/lightning-threat.entity';
+import { WeatherAlert } from './entities/weather-alert.entity';
 import { Airport } from '../airports/entities/airport.entity';
 import { Fbo } from '../fbos/entities/fbo.entity';
 import { FuelPrice } from '../fbos/entities/fuel-price.entity';
@@ -34,6 +37,9 @@ import { WindGridPoller } from './pollers/wind-grid.poller';
 import { NotamPoller } from './pollers/notam.poller';
 import { FboPoller } from './pollers/fbo.poller';
 import { FuelPricePoller } from './pollers/fuel-price.poller';
+import { StormCellPoller } from './pollers/storm-cell.poller';
+import { LightningThreatPoller } from './pollers/lightning-threat.poller';
+import { WeatherAlertPoller } from './pollers/weather-alert.poller';
 
 const entities = [
   DataSource,
@@ -46,6 +52,9 @@ const entities = [
   WindGrid,
   Notam,
   NwsForecast,
+  StormCell,
+  LightningThreat,
+  WeatherAlert,
   Airport,
   Fbo,
   FuelPrice,
@@ -71,6 +80,9 @@ const entities = [
     NotamPoller,
     FboPoller,
     FuelPricePoller,
+    StormCellPoller,
+    LightningThreatPoller,
+    WeatherAlertPoller,
   ],
   exports: [DataSchedulerService, DataWorkerService, TypeOrmModule],
 })
@@ -87,6 +99,9 @@ export class DataPlatformModule implements OnModuleInit {
     private readonly notamPoller: NotamPoller,
     private readonly fboPoller: FboPoller,
     private readonly fuelPricePoller: FuelPricePoller,
+    private readonly stormCellPoller: StormCellPoller,
+    private readonly lightningThreatPoller: LightningThreatPoller,
+    private readonly weatherAlertPoller: WeatherAlertPoller,
   ) {}
 
   async onModuleInit() {
@@ -101,6 +116,9 @@ export class DataPlatformModule implements OnModuleInit {
     this.worker.registerPoller('notam_poll', this.notamPoller);
     this.worker.registerPoller('fbo_poll', this.fboPoller);
     this.worker.registerPoller('fuel_price_poll', this.fuelPricePoller);
+    this.worker.registerPoller('storm_cell_poll', this.stormCellPoller);
+    this.worker.registerPoller('lightning_threat_poll', this.lightningThreatPoller);
+    this.worker.registerPoller('weather_alert_poll', this.weatherAlertPoller);
 
     // Now start processing jobs (pollers are guaranteed registered)
     await this.worker.start();

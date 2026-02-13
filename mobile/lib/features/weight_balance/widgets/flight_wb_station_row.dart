@@ -44,11 +44,11 @@ class FlightWBStationRow extends StatelessWidget {
 
   Color get _categoryColor {
     if (_isSeat) {
-      return isPerson ? AppColors.info : Colors.amber;
+      return isPerson ? AppColors.info : AppColors.starred;
     }
     switch (station.category) {
       case 'baggage':
-        return Colors.amber;
+        return AppColors.starred;
       case 'other':
         return Colors.purple;
       default:
@@ -366,7 +366,7 @@ class FlightWBStationRow extends StatelessWidget {
                             size: 18,
                             color: personFlag
                                 ? AppColors.info
-                                : Colors.amber,
+                                : AppColors.starred,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -375,7 +375,7 @@ class FlightWBStationRow extends StatelessWidget {
                               fontSize: 12,
                               color: personFlag
                                   ? AppColors.info
-                                  : Colors.amber,
+                                  : AppColors.starred,
                             ),
                           ),
                         ],

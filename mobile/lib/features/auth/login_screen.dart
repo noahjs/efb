@@ -152,13 +152,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: auth.isLoading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
                     child: auth.isLoading
                         ? const SizedBox(
                             width: 20,
@@ -168,9 +161,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Sign In',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600)),
+                        : const Text('Sign In'),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -202,13 +193,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       icon: const Icon(Icons.apple, size: 24),
                       label: const Text('Sign in with Apple',
                           style: TextStyle(fontSize: 15)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: AppColors.divider),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -223,13 +207,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     icon: const Icon(Icons.g_mobiledata, size: 28),
                     label: const Text('Sign in with Google',
                         style: TextStyle(fontSize: 15)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: AppColors.divider),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 32),

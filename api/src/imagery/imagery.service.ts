@@ -7,6 +7,9 @@ import { IMAGERY } from '../config/constants';
 import { Advisory } from '../data-platform/entities/advisory.entity';
 import { Pirep } from '../data-platform/entities/pirep.entity';
 import { Tfr } from '../data-platform/entities/tfr.entity';
+import { StormCell } from '../data-platform/entities/storm-cell.entity';
+import { LightningThreat } from '../data-platform/entities/lightning-threat.entity';
+import { WeatherAlert } from '../data-platform/entities/weather-alert.entity';
 
 function dataMeta(
   updatedAt: Date | null,
@@ -40,6 +43,12 @@ export class ImageryService {
     private readonly pirepRepo: Repository<Pirep>,
     @InjectRepository(Tfr)
     private readonly tfrRepo: Repository<Tfr>,
+    @InjectRepository(StormCell)
+    private readonly stormCellRepo: Repository<StormCell>,
+    @InjectRepository(LightningThreat)
+    private readonly lightningRepo: Repository<LightningThreat>,
+    @InjectRepository(WeatherAlert)
+    private readonly weatherAlertRepo: Repository<WeatherAlert>,
   ) {}
 
   getCatalog() {
@@ -585,6 +594,155 @@ export class ImageryService {
         altitude: row.altitude ?? '',
         reason: row.reason ?? '',
         notamText: row.notam_text ?? '',
+      },
+    }));
+
+    return {
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
+  }
+
+  /**
+   * Get storm cells from database (populated by StormCellPoller).
+   */
+  async getStormCells(): Promise<any> {
+    const rows = await this.stormCellRepo.find();
+
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+
+    const features: any[] = [];
+    for (const row of rows) {
+      // Cell position (Point)
+      features.push({
+        type: 'Feature',
+        geometry: row.geometry,
+        properties: {
+          featureType: 'cell',
+          cell_id: row.cell_id,
+          trait: row.trait,
+          ...(row.properties ?? {}),
+        },
+      });
+
+      // Forecast track (LineString)
+      if (row.forecast_track) {
+        features.push({
+          type: 'Feature',
+          geometry: row.forecast_track,
+          properties: {
+            featureType: 'track',
+            cell_id: row.cell_id,
+            trait: row.trait,
+          },
+        });
+      }
+
+      // Error cone (Polygon)
+      if (row.forecast_cone) {
+        features.push({
+          type: 'Feature',
+          geometry: row.forecast_cone,
+          properties: {
+            featureType: 'cone',
+            cell_id: row.cell_id,
+            trait: row.trait,
+          },
+        });
+      }
+    }
+
+    return {
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
+  }
+
+  /**
+   * Get lightning threats from database (populated by LightningThreatPoller).
+   */
+  async getLightningThreats(): Promise<any> {
+    const rows = await this.lightningRepo.find();
+
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+
+    const features: any[] = [];
+    for (const row of rows) {
+      // Threat area (Polygon)
+      if (row.geometry) {
+        features.push({
+          type: 'Feature',
+          geometry: row.geometry,
+          properties: {
+            featureType: 'threat',
+            severity: row.severity,
+            ...(row.properties ?? {}),
+          },
+        });
+      }
+
+      // Forecast path (LineString)
+      if (row.forecast_path) {
+        features.push({
+          type: 'Feature',
+          geometry: row.forecast_path,
+          properties: {
+            featureType: 'path',
+            severity: row.severity,
+          },
+        });
+      }
+    }
+
+    return {
+      type: 'FeatureCollection',
+      features,
+      _meta: dataMeta(oldestUpdatedAt),
+    };
+  }
+
+  /**
+   * Get weather alerts from database (populated by WeatherAlertPoller).
+   */
+  async getWeatherAlerts(): Promise<any> {
+    const rows = await this.weatherAlertRepo.find();
+
+    const oldestUpdatedAt = rows.length
+      ? rows.reduce(
+          (oldest, r) =>
+            r.updated_at < oldest ? r.updated_at : oldest,
+          rows[0].updated_at,
+        )
+      : null;
+
+    const features = rows.map((row) => ({
+      type: 'Feature',
+      geometry: row.geometry,
+      properties: {
+        alert_id: row.alert_id,
+        event: row.event ?? '',
+        severity: row.severity ?? '',
+        urgency: row.urgency ?? '',
+        certainty: row.certainty ?? '',
+        headline: row.headline ?? '',
+        description: row.description ?? '',
+        effective: row.effective?.toISOString() ?? '',
+        expires: row.expires?.toISOString() ?? '',
+        ...(row.properties ?? {}),
       },
     }));
 

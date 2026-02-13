@@ -122,7 +122,7 @@ export class NotamPoller extends BasePoller {
 
       const rawList = data?.notamList ?? [];
       const notams: Notam[] = rawList
-        .filter((n: any) => !n.cancelledOrExpired && n.notamNumber)
+        .filter((n: any) => n.notamNumber)
         .map((n: any) => {
           const notam = new Notam();
           notam.notam_number = n.notamNumber;

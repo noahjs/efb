@@ -504,6 +504,7 @@ class ApiClient {
     int? trueAirspeed,
     double? fuelBurnRate,
     int? performanceProfileId,
+    int? aircraftId,
     required List<int> altitudes,
   }) async {
     final response = await _dio.post('/calculate/altitudes', data: {
@@ -516,6 +517,7 @@ class ApiClient {
       if (fuelBurnRate != null) 'fuel_burn_rate': fuelBurnRate,
       if (performanceProfileId != null)
         'performance_profile_id': performanceProfileId,
+      if (aircraftId != null) 'aircraft_id': aircraftId,
       'altitudes': altitudes,
     });
     return response.data;
@@ -1044,6 +1046,42 @@ class ApiClient {
           if (age != null) 'age': age,
         },
         options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getStormCells() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/storm-cells',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getLightningThreats() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/lightning-threats',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
+      );
+      return response.data;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getWeatherAlerts() async {
+    try {
+      final response = await _dio.get(
+        '/imagery/weather-alerts',
+        options: Options(receiveTimeout: const Duration(seconds: 30)),
       );
       return response.data;
     } catch (_) {

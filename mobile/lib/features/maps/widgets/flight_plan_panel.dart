@@ -195,7 +195,7 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
               feedback: Material(
                 color: Colors.transparent,
                 elevation: 6,
-                shadowColor: Colors.black54,
+                shadowColor: AppColors.scrim,
                 borderRadius: BorderRadius.circular(8),
                 child: _buildWaypointPill(wp, i, waypoints.length),
               ),
@@ -600,6 +600,7 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
       trueAirspeed: flight?.trueAirspeed,
       fuelBurnRate: flight?.fuelBurnRate,
       performanceProfileId: flight?.performanceProfileId,
+      aircraftId: flight?.aircraftId,
       flightRules: flight?.flightRules,
     );
     if (result != null) {
