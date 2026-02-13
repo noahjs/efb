@@ -4,8 +4,9 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
 import '../../../core/config/app_config.dart';
+import '../layers/map_layer_registry.dart';
 import 'airport_symbol_renderer.dart';
-import 'map_view.dart' show EfbMapController, MapBounds;
+import 'map_view.dart' show EfbMapController, MapBounds, MapFeatureTap, MapFeatureType;
 
 /// Web implementation using Mapbox GL JS directly via HtmlElementView.
 class PlatformMapView extends StatefulWidget {
@@ -19,6 +20,7 @@ class PlatformMapView extends StatefulWidget {
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final VoidCallback? onMapTapped;
+  final ValueChanged<MapFeatureTap>? onFeatureTapped;
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
@@ -37,6 +39,7 @@ class PlatformMapView extends StatefulWidget {
     this.onBoundsChanged,
     this.onMapLongPressed,
     this.onMapTapped,
+    this.onFeatureTapped,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
@@ -70,6 +73,9 @@ external set _onMapLongPressJs(JSFunction? fn);
 
 @JS('_efbOnUserPanned')
 external set _onUserPannedJs(JSFunction? fn);
+
+@JS('_efbOnFeatureTap')
+external set _onFeatureTapJs(JSFunction? fn);
 
 class _PlatformMapViewState extends State<PlatformMapView> {
   final String _viewType =
@@ -256,6 +262,27 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       widget.controller?.onUserPanned?.call();
     }).toJS;
 
+    _onFeatureTapJs = ((JSString typeStr, JSString id, JSNumber sx, JSNumber sy,
+        JSNumber lat, JSNumber lng, JSString propsJson) {
+      final type = switch (typeStr.toDart) {
+        'airport' => MapFeatureType.airport,
+        'navaid' => MapFeatureType.navaid,
+        'fix' => MapFeatureType.fix,
+        _ => MapFeatureType.airport,
+      };
+      final props = Map<String, dynamic>.from(
+          jsonDecode(propsJson.toDart) as Map);
+      widget.onFeatureTapped?.call(MapFeatureTap(
+        type: type,
+        identifier: id.toDart,
+        screenX: sx.toDartDouble,
+        screenY: sy.toDartDouble,
+        lat: lat.toDartDouble,
+        lng: lng.toDartDouble,
+        properties: props,
+      ));
+    }).toJS;
+
     _onMapLongPressJs =
         ((JSNumber lat, JSNumber lng, JSString propsJson, JSString layersJson) {
       final propsList = (jsonDecode(propsJson.toDart) as List)
@@ -270,6 +297,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         'airway-lines': 'airway',
         'tfr-fill': 'tfr',
         'advisory-fill': 'advisory',
+        'weather-alert-fill': 'weather_alert',
+        'storm-cell-cone-fill': 'storm_cell',
       };
 
       for (var i = 0; i < propsList.length; i++) {
@@ -306,10 +335,23 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       _updateRouteSource();
     }
     // Update overlays (including aeronautical sub-layers)
+    // Skip 'radar' and Xweather keys — they use raster tile sources, not GeoJSON.
+    final xwSourceKeys = kXweatherLayerNames.keys
+        .map((id) => kLayerById[id]!.sourceKey)
+        .toSet();
     final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
     for (final key in allKeys) {
+      if (key == 'radar' || xwSourceKeys.contains(key)) continue;
       if (oldWidget.overlays[key] != widget.overlays[key]) {
         _updateOverlaySource(key, widget.overlays[key]);
+      }
+    }
+    // Toggle Xweather raster layer visibility
+    for (final sourceKey in xwSourceKeys) {
+      final had = oldWidget.overlays.containsKey(sourceKey);
+      final has = widget.overlays.containsKey(sourceKey);
+      if (had != has) {
+        _setXweatherVisibility(sourceKey, has);
       }
     }
     // Toggle hillshade visibility with winds aloft overlay
@@ -318,6 +360,57 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (hadWinds != hasWinds) {
       _setHillshadeVisibility(hasWinds);
     }
+    // Toggle radar frame visibility
+    final hadRadar = oldWidget.overlays.containsKey('radar');
+    final hasRadar = widget.overlays.containsKey('radar');
+    if (!hasRadar && hadRadar) {
+      _hideAllRadarLayers();
+    } else if (hasRadar) {
+      final frameIndex = widget.overlays['radar']?['frameIndex'] as int? ?? 10;
+      _setRadarFrame(frameIndex);
+    }
+  }
+
+  /// Xweather radar time offsets, oldest to newest (11 frames, 6-min intervals).
+  static const _radarOffsets = [
+    '-60minutes', '-54minutes', '-48minutes', '-42minutes',
+    '-36minutes', '-30minutes', '-24minutes', '-18minutes',
+    '-12minutes', '-6minutes', 'current',
+  ];
+  int _currentRadarFrame = -1;
+
+  void _setRadarFrame(int frameIndex) {
+    if (frameIndex == _currentRadarFrame) return;
+    if (frameIndex < 0 || frameIndex >= _radarOffsets.length) return;
+
+    final hideLayer = _currentRadarFrame >= 0 && _currentRadarFrame < _radarOffsets.length
+        ? 'radar-layer-$_currentRadarFrame'
+        : '';
+    final showLayer = 'radar-layer-$frameIndex';
+    _currentRadarFrame = frameIndex;
+
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) return;
+        ${hideLayer.isNotEmpty ? "if (map.getLayer('$hideLayer')) map.setPaintProperty('$hideLayer', 'raster-opacity', 0);" : ''}
+        if (map.getLayer('$showLayer')) map.setPaintProperty('$showLayer', 'raster-opacity', 0.65);
+      })();
+    ''');
+  }
+
+  void _hideAllRadarLayers() {
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map) return;
+        for (var i = 0; i < ${_radarOffsets.length}; i++) {
+          var layerId = 'radar-layer-' + i;
+          if (map.getLayer(layerId)) map.setPaintProperty(layerId, 'raster-opacity', 0);
+        }
+      })();
+    ''');
+    _currentRadarFrame = -1;
   }
 
   void _setHillshadeVisibility(bool visible) {
@@ -346,19 +439,30 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   }
 
   void _setFlightCategoryMode(bool enabled) {
-    final haloVisibility = enabled ? 'visible' : 'none';
-    final labelsVisibility = enabled ? 'visible' : 'none';
+    final catVis = enabled ? 'visible' : 'none';
+    final symVis = enabled ? 'none' : 'visible';
+
+    debugPrint('[EFB] _setFlightCategoryMode($enabled) catVis=$catVis symVis=$symVis');
 
     _evalJs('''
       (function() {
         var map = window.$_mapVar;
-        if (!map) return;
+        if (!map) { console.log('[EFB] flightCatMode: no map'); return; }
+        console.log('[EFB] flightCatMode enabled=$enabled');
+        console.log('[EFB]   airport-cat-halos exists:', !!map.getLayer('airport-cat-halos'));
+        console.log('[EFB]   airport-dots exists:', !!map.getLayer('airport-dots'));
+        console.log('[EFB]   airport-labels exists:', !!map.getLayer('airport-labels'));
         if (map.getLayer('airport-cat-halos')) {
-          map.setLayoutProperty('airport-cat-halos', 'visibility', '$haloVisibility');
+          map.setLayoutProperty('airport-cat-halos', 'visibility', '$catVis');
         }
         if (map.getLayer('airport-labels')) {
-          map.setLayoutProperty('airport-labels', 'visibility', '$labelsVisibility');
+          map.setLayoutProperty('airport-labels', 'visibility', '$catVis');
         }
+        if (map.getLayer('airport-dots')) {
+          map.setLayoutProperty('airport-dots', 'visibility', '$symVis');
+        }
+        var allLayers = map.getStyle().layers.map(function(l) { return l.id; });
+        console.log('[EFB]   all map layers:', JSON.stringify(allLayers));
       })();
     ''');
   }
@@ -426,6 +530,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.setStyle('$newStyle');
           map.once('style.load', function() {
             ${_vfrTilesJs(vfrVisibility)}
+            ${_xweatherTilesJs()}
+            ${_radarTilesJs()}
             ${_airportLayersJs(widget.showFlightCategory)}
             ${_routeLayerJs()}
             ${_overlayLayersJs()}
@@ -436,11 +542,27 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         })();
       ''');
       // After style reload, push current data into the fresh sources
+      final xwKeys = kXweatherLayerNames.keys
+          .map((id) => kLayerById[id]!.sourceKey)
+          .toSet();
       Future.delayed(const Duration(milliseconds: 200), () {
         _updateAirportsSource();
         _updateRouteSource();
         for (final key in widget.overlays.keys) {
+          if (xwKeys.contains(key)) continue;
           _updateOverlaySource(key, widget.overlays[key]);
+        }
+        // Re-apply radar frame after style reload
+        if (widget.overlays.containsKey('radar')) {
+          final frameIndex = widget.overlays['radar']?['frameIndex'] as int? ?? 10;
+          _currentRadarFrame = -1;
+          _setRadarFrame(frameIndex);
+        }
+        // Re-apply Xweather layer visibility after style reload
+        for (final sourceKey in xwKeys) {
+          if (widget.overlays.containsKey(sourceKey)) {
+            _setXweatherVisibility(sourceKey, true);
+          }
         }
       });
     } else {
@@ -482,6 +604,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
         map.on('load', function() {
           ${_vfrTilesJs(vfrVisibility)}
+          ${_xweatherTilesJs()}
+          ${_radarTilesJs()}
           ${_airportLayersJs(widget.showFlightCategory)}
           ${_routeLayerJs()}
           ${_overlayLayersJs()}
@@ -500,11 +624,21 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
     _evalJs(script);
     // Mark map ready after init script runs (with margin for load event)
+    final xwKeysInit = kXweatherLayerNames.keys
+        .map((id) => kLayerById[id]!.sourceKey)
+        .toSet();
     Future.delayed(const Duration(milliseconds: 500), () {
       _mapReady = true;
       // Push any overlay data that arrived before map was ready
       for (final key in widget.overlays.keys) {
+        if (xwKeysInit.contains(key)) continue;
         _updateOverlaySource(key, widget.overlays[key]);
+      }
+      // Apply Xweather layer visibility for any active layers
+      for (final sourceKey in xwKeysInit) {
+        if (widget.overlays.containsKey(sourceKey)) {
+          _setXweatherVisibility(sourceKey, true);
+        }
       }
     });
   }
@@ -537,11 +671,82 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     ''';
   }
 
+  static String _radarTilesJs() {
+    final cid = AppConfig.xweatherClientId;
+    final cs = AppConfig.xweatherClientSecret;
+    return '''
+          var radarOffsets = ${jsonEncode(_radarOffsets)};
+          radarOffsets.forEach(function(offset, i) {
+            map.addSource('radar-' + i, {
+              type: 'raster',
+              tiles: ['https://maps.aerisapi.com/${cid}_$cs/radar/{z}/{x}/{y}/' + offset + '.png'],
+              tileSize: 256,
+              minzoom: 1,
+              maxzoom: 22,
+              attribution: 'Radar: Xweather / Vaisala'
+            });
+
+            map.addLayer({
+              id: 'radar-layer-' + i,
+              type: 'raster',
+              source: 'radar-' + i,
+              paint: {
+                'raster-opacity': 0
+              }
+            });
+          });
+    ''';
+  }
+
+  /// Adds Xweather raster tile sources and layers (visibility: none, opacity: 0.7).
+  static String _xweatherTilesJs() {
+    final cid = AppConfig.xweatherClientId;
+    final cs = AppConfig.xweatherClientSecret;
+    final entries = kXweatherLayerNames.entries.map((e) {
+      final sourceKey = kLayerById[e.key]!.sourceKey;
+      final xwLayer = e.value;
+      return "{ sourceKey: '$sourceKey', xwLayer: '$xwLayer' }";
+    }).join(',');
+    return '''
+          var xwLayers = [$entries];
+          xwLayers.forEach(function(entry) {
+            map.addSource(entry.sourceKey, {
+              type: 'raster',
+              tiles: ['https://maps.aerisapi.com/${cid}_$cs/' + entry.xwLayer + '/{z}/{x}/{y}/current.png'],
+              tileSize: 256,
+              minzoom: 1,
+              maxzoom: 22,
+              attribution: 'Xweather / Vaisala'
+            });
+            map.addLayer({
+              id: entry.sourceKey + '-layer',
+              type: 'raster',
+              source: entry.sourceKey,
+              layout: { 'visibility': 'none' },
+              paint: { 'raster-opacity': 0.7 }
+            });
+          });
+    ''';
+  }
+
+  /// Toggles an Xweather raster layer's visibility.
+  void _setXweatherVisibility(String sourceKey, bool visible) {
+    final vis = visible ? 'visible' : 'none';
+    _evalJs('''
+      (function() {
+        var map = window.$_mapVar;
+        if (!map || !map.getLayer('$sourceKey-layer')) return;
+        map.setLayoutProperty('$sourceKey-layer', 'visibility', '$vis');
+      })();
+    ''');
+  }
+
   /// Creates VFR chart-style airport symbol images, the airports GeoJSON
   /// source, and symbol/circle layers for rendering.
   static String _airportLayersJs(bool showFlightCategory) {
     final labelsVisibility = showFlightCategory ? 'visible' : 'none';
     final haloVisibility = showFlightCategory ? 'visible' : 'none';
+    final symbolVisibility = showFlightCategory ? 'none' : 'visible';
 
     return '''
           // ── Generate VFR chart-style airport symbol images ──
@@ -717,37 +922,34 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             data: { type: 'FeatureCollection', features: [] }
           });
 
-          // Flight category halo circles — behind symbols, hidden by default
-          map.addLayer({
-            id: 'airport-cat-halos',
-            type: 'circle',
-            source: 'airports',
-            layout: { 'visibility': '$haloVisibility' },
-            paint: {
-              'circle-radius': 12,
-              'circle-color': ['match', ['get', 'category'],
-                'VFR', '#00C853', 'MVFR', '#2196F3',
-                'IFR', '#FF1744', 'LIFR', '#E040FB',
-                'rgba(0,0,0,0)'],
-              'circle-opacity': 0.35,
-              'circle-stroke-width': 2,
-              'circle-stroke-color': ['match', ['get', 'category'],
-                'VFR', '#00C853', 'MVFR', '#2196F3',
-                'IFR', '#FF1744', 'LIFR', '#E040FB',
-                'rgba(0,0,0,0)']
-            }
-          });
-
           // VFR chart-style airport symbols — data-driven icon-image
           map.addLayer({
             id: 'airport-dots',
             type: 'symbol',
             source: 'airports',
             layout: {
+              'visibility': '$symbolVisibility',
               'icon-image': ['get', 'symbolType'],
-              'icon-size': 0.55,
+              'icon-size': 0.4,
               'icon-allow-overlap': true,
               'icon-ignore-placement': true
+            }
+          });
+
+          // Flight category filled dots — above symbols, hidden by default
+          map.addLayer({
+            id: 'airport-cat-halos',
+            type: 'circle',
+            source: 'airports',
+            layout: { 'visibility': '$haloVisibility' },
+            paint: {
+              'circle-radius': 8,
+              'circle-color': ['match', ['get', 'category'],
+                'VFR', '#00C853', 'MVFR', '#2196F3',
+                'IFR', '#FF1744', 'LIFR', '#E040FB',
+                'rgba(0,0,0,0)'],
+              'circle-opacity': 1,
+              'circle-stroke-width': 0
             }
           });
 
@@ -1150,6 +1352,125 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               'circle-color': 'transparent',
               'circle-stroke-width': 2,
               'circle-stroke-color': '#FF5252'
+            }
+          });
+
+          // ── Storm Cells overlay ──
+          map.addSource('storm_cells', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'storm-cell-cone-fill',
+            type: 'fill',
+            source: 'storm_cells',
+            filter: ['==', ['get', 'featureType'], 'cone'],
+            paint: {
+              'fill-color': ['coalesce', ['get', 'color'], '#FFC107'],
+              'fill-opacity': 0.08
+            }
+          });
+          map.addLayer({
+            id: 'storm-cell-cone-outline',
+            type: 'line',
+            source: 'storm_cells',
+            filter: ['==', ['get', 'featureType'], 'cone'],
+            paint: {
+              'line-color': ['coalesce', ['get', 'color'], '#FFC107'],
+              'line-width': 1.5,
+              'line-opacity': 0.4
+            }
+          });
+          map.addLayer({
+            id: 'storm-cell-track',
+            type: 'line',
+            source: 'storm_cells',
+            filter: ['==', ['get', 'featureType'], 'track'],
+            paint: {
+              'line-color': ['coalesce', ['get', 'color'], '#FFC107'],
+              'line-width': 2,
+              'line-opacity': 0.7,
+              'line-dasharray': [4, 3]
+            }
+          });
+          map.addLayer({
+            id: 'storm-cell-symbols',
+            type: 'symbol',
+            source: 'storm_cells',
+            filter: ['==', ['get', 'featureType'], 'cell'],
+            layout: {
+              'text-field': ['get', 'symbol'],
+              'text-size': 18,
+              'text-allow-overlap': true,
+              'text-ignore-placement': true
+            },
+            paint: {
+              'text-color': ['coalesce', ['get', 'color'], '#FFC107']
+            }
+          });
+
+          // ── Lightning overlay ──
+          map.addSource('lightning', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'lightning-threat-fill',
+            type: 'fill',
+            source: 'lightning',
+            filter: ['==', ['get', 'featureType'], 'threat'],
+            paint: {
+              'fill-color': '#FFD600',
+              'fill-opacity': 0.15
+            }
+          });
+          map.addLayer({
+            id: 'lightning-threat-outline',
+            type: 'line',
+            source: 'lightning',
+            filter: ['==', ['get', 'featureType'], 'threat'],
+            paint: {
+              'line-color': '#FFD600',
+              'line-width': 1.5,
+              'line-opacity': 0.5,
+              'line-dasharray': [4, 2]
+            }
+          });
+          map.addLayer({
+            id: 'lightning-path',
+            type: 'line',
+            source: 'lightning',
+            filter: ['==', ['get', 'featureType'], 'path'],
+            paint: {
+              'line-color': '#FF9100',
+              'line-width': 2,
+              'line-opacity': 0.7,
+              'line-dasharray': [4, 3]
+            }
+          });
+
+          // ── Weather Alerts overlay ──
+          map.addSource('weather_alerts', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: [] }
+          });
+          map.addLayer({
+            id: 'weather-alert-fill',
+            type: 'fill',
+            source: 'weather_alerts',
+            paint: {
+              'fill-color': ['coalesce', ['get', 'color'], '#B0B4BC'],
+              'fill-opacity': 0.2
+            }
+          });
+          map.addLayer({
+            id: 'weather-alert-outline',
+            type: 'line',
+            source: 'weather_alerts',
+            paint: {
+              'line-color': ['coalesce', ['get', 'color'], '#B0B4BC'],
+              'line-width': 2,
+              'line-opacity': 0.7
             }
           });
 
@@ -1636,20 +1957,33 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             }
           });
 
-          map.on('click', 'airport-dots', function(e) {
+          function _efbHandleAirportClick(e) {
             if (e.features && e.features.length > 0) {
               var id = e.features[0].properties.id;
-              if (window._efbOnAirportTap) {
+              if (id && window._efbOnFeatureTap) {
+                var props = JSON.stringify(e.features[0].properties);
+                window._efbOnFeatureTap('airport', id, e.point.x, e.point.y,
+                    e.lngLat.lat, e.lngLat.lng, props);
+              } else if (window._efbOnAirportTap) {
                 window._efbOnAirportTap(id);
               }
             }
-          });
+          }
+
+          map.on('click', 'airport-dots', _efbHandleAirportClick);
+          map.on('click', 'airport-cat-halos', _efbHandleAirportClick);
 
           map.on('mouseenter', 'airport-dots', function() {
             map.getCanvas().style.cursor = 'pointer';
           });
+          map.on('mouseenter', 'airport-cat-halos', function() {
+            map.getCanvas().style.cursor = 'pointer';
+          });
 
           map.on('mouseleave', 'airport-dots', function() {
+            map.getCanvas().style.cursor = '';
+          });
+          map.on('mouseleave', 'airport-cat-halos', function() {
             map.getCanvas().style.cursor = '';
           });
 
@@ -1673,7 +2007,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.on('click', 'navaid-symbols', function(e) {
             if (e.features && e.features.length > 0) {
               var id = e.features[0].properties.identifier;
-              if (id && window._efbOnNavaidTap) {
+              if (id && window._efbOnFeatureTap) {
+                var props = JSON.stringify(e.features[0].properties);
+                window._efbOnFeatureTap('navaid', id, e.point.x, e.point.y,
+                    e.lngLat.lat, e.lngLat.lng, props);
+              } else if (id && window._efbOnNavaidTap) {
                 window._efbOnNavaidTap(id);
               }
             }
@@ -1690,7 +2028,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.on('click', 'fix-symbols', function(e) {
             if (e.features && e.features.length > 0) {
               var id = e.features[0].properties.identifier;
-              if (id && window._efbOnFixTap) {
+              if (id && window._efbOnFeatureTap) {
+                var props = JSON.stringify(e.features[0].properties);
+                window._efbOnFeatureTap('fix', id, e.point.x, e.point.y,
+                    e.lngLat.lat, e.lngLat.lng, props);
+              } else if (id && window._efbOnFixTap) {
                 window._efbOnFixTap(id);
               }
             }
@@ -1711,7 +2053,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.on('contextmenu', function(e) {
             var pad = 20;
             var box = [[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]];
-            var layers = ['airspace-fill', 'artcc-lines', 'airway-lines', 'tfr-fill', 'advisory-fill'];
+            var layers = ['airspace-fill', 'artcc-lines', 'airway-lines', 'tfr-fill', 'advisory-fill', 'weather-alert-fill', 'storm-cell-cone-fill'];
             var existingLayers = layers.filter(function(l) { return map.getLayer(l); });
             var allFeatures = existingLayers.length > 0
               ? map.queryRenderedFeatures(box, { layers: existingLayers })

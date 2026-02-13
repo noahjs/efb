@@ -4,7 +4,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/config/app_config.dart';
-import 'map_view.dart' show EfbMapController, MapBounds;
+import 'map_view.dart' show EfbMapController, MapBounds, MapFeatureTap, MapFeatureType;
+import '../layers/map_layer_registry.dart';
 import 'airport_symbol_renderer.dart';
 import 'wind_barb_renderer.dart';
 import 'wind_arrow_renderer.dart';
@@ -23,6 +24,7 @@ class PlatformMapView extends StatefulWidget {
   final ValueChanged<MapBounds>? onBoundsChanged;
   final void Function(double lat, double lng, List<Map<String, dynamic>> aeroFeatures)? onMapLongPressed;
   final VoidCallback? onMapTapped;
+  final ValueChanged<MapFeatureTap>? onFeatureTapped;
   final List<Map<String, dynamic>> airports;
   final List<List<double>> routeCoordinates;
   final EfbMapController? controller;
@@ -40,6 +42,7 @@ class PlatformMapView extends StatefulWidget {
     this.onBoundsChanged,
     this.onMapLongPressed,
     this.onMapTapped,
+    this.onFeatureTapped,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
@@ -58,6 +61,14 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   final _particleAnimator = WindParticleAnimator();
 
   static const _vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
+
+  /// Xweather radar time offsets, oldest to newest (11 frames, 6-min intervals).
+  static const _radarOffsets = [
+    '-60minutes', '-54minutes', '-48minutes', '-42minutes',
+    '-36minutes', '-30minutes', '-24minutes', '-18minutes',
+    '-12minutes', '-6minutes', 'current',
+  ];
+  int _currentRadarFrame = -1;
 
   static String _styleForLayer(String layer) {
     switch (layer) {
@@ -104,10 +115,23 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       _updateRouteSource();
     }
     // Update any overlay sources that changed
+    // Skip 'radar' and Xweather keys — they use raster tile sources, not GeoJSON.
+    final xwSourceKeys = kXweatherLayerNames.keys
+        .map((id) => kLayerById[id]!.sourceKey)
+        .toSet();
     final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
     for (final key in allKeys) {
+      if (key == 'radar' || xwSourceKeys.contains(key)) continue;
       if (oldWidget.overlays[key] != widget.overlays[key]) {
         _updateOverlaySource(key);
+      }
+    }
+    // Toggle Xweather raster layer visibility
+    for (final sourceKey in xwSourceKeys) {
+      final had = oldWidget.overlays.containsKey(sourceKey);
+      final has = widget.overlays.containsKey(sourceKey);
+      if (had != has) {
+        _setXweatherVisibility(sourceKey, has);
       }
     }
     // Toggle hillshade visibility with winds aloft overlay
@@ -115,6 +139,15 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final hasWinds = widget.overlays.containsKey('winds-aloft');
     if (hadWinds != hasWinds) {
       _setHillshadeVisibility(hasWinds);
+    }
+    // Toggle radar frame visibility
+    final hadRadar = oldWidget.overlays.containsKey('radar');
+    final hasRadar = widget.overlays.containsKey('radar');
+    if (!hasRadar && hadRadar) {
+      _hideAllRadarLayers();
+    } else if (hasRadar) {
+      final frameIndex = widget.overlays['radar']?['frameIndex'] as int? ?? 10;
+      _setRadarFrame(frameIndex);
     }
   }
 
@@ -174,6 +207,131 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
+  static String _radarTileUrl(String offset) {
+    final cid = AppConfig.xweatherClientId;
+    final cs = AppConfig.xweatherClientSecret;
+    return 'https://maps.aerisapi.com/${cid}_$cs/radar/{z}/{x}/{y}/$offset.png';
+  }
+
+  Future<void> _addRadarTiles(MapboxMap map) async {
+    try {
+      for (int i = 0; i < _radarOffsets.length; i++) {
+        final offset = _radarOffsets[i];
+        await map.style.addSource(RasterSource(
+          id: 'radar-$i',
+          tiles: [_radarTileUrl(offset)],
+          tileSize: 256,
+          minzoom: 1,
+          maxzoom: 22,
+          attribution: 'Radar: Xweather / Vaisala',
+        ));
+
+        await map.style.addLayer(RasterLayer(
+          id: 'radar-layer-$i',
+          sourceId: 'radar-$i',
+          rasterOpacity: 0.0,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Failed to add radar tiles: $e');
+    }
+  }
+
+  Future<void> _setRadarFrame(int frameIndex) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    if (frameIndex == _currentRadarFrame) return;
+
+    try {
+      // Hide previous frame (set opacity to 0)
+      if (_currentRadarFrame >= 0 && _currentRadarFrame < _radarOffsets.length) {
+        await map.style.setStyleLayerProperty(
+          'radar-layer-$_currentRadarFrame',
+          'raster-opacity',
+          0.0,
+        );
+      }
+
+      // Show new frame (set opacity to 0.65)
+      if (frameIndex >= 0 && frameIndex < _radarOffsets.length) {
+        await map.style.setStyleLayerProperty(
+          'radar-layer-$frameIndex',
+          'raster-opacity',
+          0.65,
+        );
+      }
+
+      _currentRadarFrame = frameIndex;
+    } catch (e) {
+      debugPrint('Failed to set radar frame: $e');
+    }
+  }
+
+  Future<void> _hideAllRadarLayers() async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      for (int i = 0; i < _radarOffsets.length; i++) {
+        await map.style.setStyleLayerProperty(
+          'radar-layer-$i',
+          'raster-opacity',
+          0.0,
+        );
+      }
+      _currentRadarFrame = -1;
+    } catch (e) {
+      debugPrint('Failed to hide radar layers: $e');
+    }
+  }
+
+  /// Adds Xweather raster tile sources and layers (visibility: NONE, opacity: 0.7).
+  /// Called in _onStyleLoaded before _addRadarTiles so satellite renders below radar.
+  Future<void> _addXweatherTiles(MapboxMap map) async {
+    final cid = AppConfig.xweatherClientId;
+    final cs = AppConfig.xweatherClientSecret;
+    try {
+      for (final entry in kXweatherLayerNames.entries) {
+        final def = kLayerById[entry.key]!;
+        final sourceKey = def.sourceKey;
+        final xwLayer = entry.value;
+        final url = 'https://maps.aerisapi.com/${cid}_$cs/$xwLayer/{z}/{x}/{y}/current.png';
+
+        await map.style.addSource(RasterSource(
+          id: sourceKey,
+          tiles: [url],
+          tileSize: 256,
+          minzoom: 1,
+          maxzoom: 22,
+          attribution: 'Xweather / Vaisala',
+        ));
+
+        await map.style.addLayer(RasterLayer(
+          id: '$sourceKey-layer',
+          sourceId: sourceKey,
+          rasterOpacity: 0.7,
+          visibility: Visibility.NONE,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Failed to add Xweather tiles: $e');
+    }
+  }
+
+  /// Toggles an Xweather raster layer's visibility.
+  Future<void> _setXweatherVisibility(String sourceKey, bool visible) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      await map.style.setStyleLayerProperty(
+        '$sourceKey-layer',
+        'visibility',
+        visible ? 'visible' : 'none',
+      );
+    } catch (e) {
+      debugPrint('Failed to set Xweather visibility for $sourceKey: $e');
+    }
+  }
+
   Future<void> _applyFlightCategoryMode(bool enabled) async {
     final map = _mapboxMap;
     if (map == null || !_airportSourceReady) return;
@@ -181,17 +339,17 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final catVis = enabled ? 'visible' : 'none';
 
     try {
-      // Toggle colored category halo circles behind symbols
-      for (final cat in _flightCategoryColors.keys) {
-        await map.style.setStyleLayerProperty(
-          'airport-dots-${cat.toLowerCase()}', 'visibility', catVis,
-        );
-      }
+      // Toggle colored category dots (renders on top of airport symbols)
+      await map.style.setStyleLayerProperty(
+        'airport-cat-dots', 'visibility', catVis,
+      );
 
       // Toggle labels
       await map.style.setStyleLayerProperty(
         'airport-labels', 'visibility', catVis,
       );
+
+      // Keep airport symbols visible — they provide reliable tap targets
     } catch (e) {
       debugPrint('Failed to apply flight category mode: $e');
     }
@@ -308,13 +466,16 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     final map = _mapboxMap;
     if (map == null) return;
 
-    // Dismiss any open feature sheet before checking for new features
+    // Dismiss any open callout/sheet before checking for new features
     widget.onMapTapped?.call();
 
     final point = context.touchPosition;
     final screenCoord = ScreenCoordinate(x: point.x, y: point.y);
+    final geoCoords = context.point.coordinates;
+    final tapLat = geoCoords.lat.toDouble();
+    final tapLng = geoCoords.lng.toDouble();
 
-    // Check PIREPs first (smaller targets, higher priority)
+    // Check PIREPs first (smaller targets, higher priority) — always open sheet directly
     if (widget.onPirepTapped != null) {
       try {
         final pirepFeatures = await map.queryRenderedFeatures(
@@ -335,16 +496,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
 
     // Then check airports
-    if (widget.onAirportTapped != null) {
+    if (widget.onFeatureTapped != null || widget.onAirportTapped != null) {
       try {
         final airportLayerIds = [
-          // VFR symbol layers (one per airport type)
           for (final st in AirportSymbolRenderer.symbolTypes) 'airport-sym-$st',
-          // Flight category halo circles
-          'airport-dots-vfr',
-          'airport-dots-mvfr',
-          'airport-dots-ifr',
-          'airport-dots-lifr',
+          'airport-cat-dots',
         ];
         final features = await map.queryRenderedFeatures(
           RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
@@ -356,7 +512,19 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           final props = feature?.queriedFeature.feature['properties'];
           if (props is Map && props.containsKey('id')) {
             final id = props['id'] as String;
-            widget.onAirportTapped?.call(id);
+            if (widget.onFeatureTapped != null) {
+              widget.onFeatureTapped!(MapFeatureTap(
+                type: MapFeatureType.airport,
+                identifier: id,
+                screenX: point.x,
+                screenY: point.y,
+                lat: tapLat,
+                lng: tapLng,
+                properties: Map<String, dynamic>.from(props),
+              ));
+            } else {
+              widget.onAirportTapped?.call(id);
+            }
             return;
           }
         }
@@ -366,7 +534,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
 
     // Then check navaids
-    if (widget.onNavaidTapped != null) {
+    if (widget.onFeatureTapped != null || widget.onNavaidTapped != null) {
       try {
         final features = await map.queryRenderedFeatures(
           RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
@@ -375,7 +543,20 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         if (features.isNotEmpty) {
           final props = features.first?.queriedFeature.feature['properties'];
           if (props is Map && props.containsKey('identifier')) {
-            widget.onNavaidTapped?.call(props['identifier'] as String);
+            final id = props['identifier'] as String;
+            if (widget.onFeatureTapped != null) {
+              widget.onFeatureTapped!(MapFeatureTap(
+                type: MapFeatureType.navaid,
+                identifier: id,
+                screenX: point.x,
+                screenY: point.y,
+                lat: tapLat,
+                lng: tapLng,
+                properties: Map<String, dynamic>.from(props),
+              ));
+            } else {
+              widget.onNavaidTapped?.call(id);
+            }
             return;
           }
         }
@@ -385,7 +566,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
 
     // Then check fixes
-    if (widget.onFixTapped != null) {
+    if (widget.onFeatureTapped != null || widget.onFixTapped != null) {
       try {
         final features = await map.queryRenderedFeatures(
           RenderedQueryGeometry.fromScreenCoordinate(screenCoord),
@@ -394,7 +575,20 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         if (features.isNotEmpty) {
           final props = features.first?.queriedFeature.feature['properties'];
           if (props is Map && props.containsKey('identifier')) {
-            widget.onFixTapped?.call(props['identifier'] as String);
+            final id = props['identifier'] as String;
+            if (widget.onFeatureTapped != null) {
+              widget.onFeatureTapped!(MapFeatureTap(
+                type: MapFeatureType.fix,
+                identifier: id,
+                screenX: point.x,
+                screenY: point.y,
+                lat: tapLat,
+                lng: tapLng,
+                properties: Map<String, dynamic>.from(props),
+              ));
+            } else {
+              widget.onFixTapped?.call(id);
+            }
             return;
           }
         }
@@ -425,6 +619,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       'airway-lines': 'airway',
       'tfr-fill': 'tfr',
       'advisory-fill': 'advisory',
+      'weather-alert-fill': 'weather_alert',
+      'storm-cell-cone-fill': 'storm_cell',
     };
 
     final allFeatures = <Map<String, dynamic>>[];
@@ -471,6 +667,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (_mapboxMap == null) return;
     await _addVfrTiles(_mapboxMap!);
     await _addHillshadeLayer(_mapboxMap!);
+    await _addXweatherTiles(_mapboxMap!);
+    await _addRadarTiles(_mapboxMap!);
     // Register airport symbol images for VFR chart-style markers
     await _registerAirportSymbolImages(_mapboxMap!);
     // Register wind barb images and arrow for the symbol layer
@@ -479,6 +677,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     // Register own-position cone image and traffic chevron
     await _registerConeImage(_mapboxMap!);
     await _registerTrafficChevron(_mapboxMap!);
+    await _registerFlightCatDotImage(_mapboxMap!);
     // Wind heatmap raster layer — positioned above aero/hillshade,
     // below wind arrow overlays (which are added in the loop below).
     await WindHeatmapController.createHeatmapLayer(_mapboxMap!);
@@ -488,12 +687,27 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
     await _addRouteLayer(_mapboxMap!);
     await _addAirportLayers(_mapboxMap!);
+    // Flight category dots added last — topmost layer for reliable tap detection
+    await _addFlightCategoryLayers(_mapboxMap!);
     await _applyFlightCategoryMode(widget.showFlightCategory);
     // Push current data into the fresh sources
     _updateAirportsSource();
     _updateRouteSource();
     for (final key in _overlayRegistry.keys) {
       _updateOverlaySource(key);
+    }
+    // Re-apply radar frame visibility after style reload
+    if (widget.overlays.containsKey('radar')) {
+      final frameIndex = widget.overlays['radar']?['frameIndex'] as int? ?? 10;
+      _currentRadarFrame = -1; // Reset so _setRadarFrame applies
+      _setRadarFrame(frameIndex);
+    }
+    // Re-apply Xweather layer visibility after style reload
+    for (final id in kXweatherLayerNames.keys) {
+      final sourceKey = kLayerById[id]!.sourceKey;
+      if (widget.overlays.containsKey(sourceKey)) {
+        _setXweatherVisibility(sourceKey, true);
+      }
     }
     // Re-apply any custom overlays (e.g. approach plates)
     widget.controller?.onStyleReloaded?.call();
@@ -595,29 +809,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
 
   /// Creates the airports GeoJSON source and VFR chart-style symbol layers.
   /// One symbol layer per airport type (filtered by symbolType property).
-  /// Flight category colored circles sit behind the symbols when that mode
-  /// is active.
+  /// Flight category colored dots render above symbols when that mode is active.
   Future<void> _addAirportLayers(MapboxMap map) async {
     const emptyGeoJson = '{"type":"FeatureCollection","features":[]}';
 
     try {
       await map.style
           .addSource(GeoJsonSource(id: 'airports', data: emptyGeoJson));
-
-      // Flight category halo circles — behind symbols, hidden by default
-      for (final entry in _flightCategoryColors.entries) {
-        await map.style.addLayer(CircleLayer(
-          id: 'airport-dots-${entry.key.toLowerCase()}',
-          sourceId: 'airports',
-          circleRadius: 12.0,
-          circleColor: entry.value.toARGB32(),
-          circleOpacity: 0.35,
-          circleStrokeWidth: 2.0,
-          circleStrokeColor: entry.value.toARGB32(),
-          filter: ['==', ['get', 'category'], entry.key],
-          visibility: Visibility.NONE,
-        ));
-      }
 
       // One symbol layer per airport type, filtered by symbolType property
       debugPrint('[EFB] Adding ${AirportSymbolRenderer.symbolTypes.length} airport symbol layers');
@@ -626,7 +824,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           id: 'airport-sym-$symbolType',
           sourceId: 'airports',
           iconImage: symbolType,
-          iconSize: 0.55,
+          iconSize: 0.2,
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           filter: ['==', ['get', 'symbolType'], symbolType],
@@ -650,6 +848,63 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       _airportSourceReady = true;
     } catch (e) {
       debugPrint('Failed to add airport layers: $e');
+    }
+  }
+
+  /// Registers a small filled-circle SDF image for flight category dots.
+  Future<void> _registerFlightCatDotImage(MapboxMap map) async {
+    try {
+      const size = 24;
+      final pixels = Uint8List(size * size * 4);
+      final center = size / 2;
+      final radius = size / 2 - 1;
+      for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+          final dx = x - center;
+          final dy = y - center;
+          if (dx * dx + dy * dy <= radius * radius) {
+            final idx = (y * size + x) * 4;
+            pixels[idx] = 0xFF;
+            pixels[idx + 1] = 0xFF;
+            pixels[idx + 2] = 0xFF;
+            pixels[idx + 3] = 0xFF;
+          }
+        }
+      }
+      final mbxImage = MbxImage(width: size, height: size, data: pixels);
+      await map.style.addStyleImage(
+        'flight-cat-dot', 2.0, mbxImage,
+        true, // SDF — allows dynamic icon-color
+        <ImageStretches>[], <ImageStretches>[], null,
+      );
+    } catch (e) {
+      debugPrint('[EFB] Failed to register flight-cat-dot image: $e');
+    }
+  }
+
+  /// Flight category dots as a SymbolLayer (tappable, unlike CircleLayer).
+  Future<void> _addFlightCategoryLayers(MapboxMap map) async {
+    try {
+      await map.style.addLayer(SymbolLayer(
+        id: 'airport-cat-dots',
+        sourceId: 'airports',
+        iconImage: 'flight-cat-dot',
+        iconSize: 0.7,
+        iconAllowOverlap: true,
+        iconIgnorePlacement: true,
+        visibility: Visibility.NONE,
+      ));
+      // Data-driven color from category property
+      await map.style.setStyleLayerProperty('airport-cat-dots', 'icon-color', [
+        'match', ['get', 'category'],
+        'VFR', '#00C853',
+        'MVFR', '#2196F3',
+        'IFR', '#FF1744',
+        'LIFR', '#E040FB',
+        'rgba(0,0,0,0)',
+      ]);
+    } catch (e) {
+      debugPrint('Failed to add flight category layers: $e');
     }
   }
 
@@ -789,6 +1044,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     'advisories': _setupAdvisoryLayers,
     'pireps': _setupPirepLayers,
     'metar-overlay': _setupMetarOverlayLayers,
+    'storm_cells': _setupStormCellLayers,
+    'lightning': _setupLightningLayers,
+    'weather_alerts': _setupWeatherAlertLayers,
     'traffic': _setupTrafficLayers,
     'winds-aloft': _setupWindsAloftLayers,
     'wind-streamlines': _setupStreamlineLayers,
@@ -999,6 +1257,106 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textOffset: [0.0, -1.5],
       textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
     ));
+  }
+
+  static Future<void> _setupStormCellLayers(MapboxMap map, String srcId) async {
+    // Forecast error cone (Polygon, filter featureType=cone)
+    await map.style.addLayer(FillLayer(
+      id: 'storm-cell-cone-fill',
+      sourceId: srcId,
+      fillOpacity: 0.08,
+      fillColor: const Color(0xFFFFC107).toARGB32(),
+      filter: ['==', ['get', 'featureType'], 'cone'],
+    ));
+    await map.style.setStyleLayerProperty('storm-cell-cone-fill', 'fill-color', ['get', 'color']);
+
+    await map.style.addLayer(LineLayer(
+      id: 'storm-cell-cone-outline',
+      sourceId: srcId,
+      lineWidth: 1.5,
+      lineOpacity: 0.4,
+      lineColor: const Color(0xFFFFC107).toARGB32(),
+      filter: ['==', ['get', 'featureType'], 'cone'],
+    ));
+    await map.style.setStyleLayerProperty('storm-cell-cone-outline', 'line-color', ['get', 'color']);
+
+    // Forecast track (LineString, filter featureType=track)
+    await map.style.addLayer(LineLayer(
+      id: 'storm-cell-track',
+      sourceId: srcId,
+      lineWidth: 2.0,
+      lineOpacity: 0.7,
+      lineColor: const Color(0xFFFFC107).toARGB32(),
+      lineDasharray: [4.0, 3.0],
+      filter: ['==', ['get', 'featureType'], 'track'],
+    ));
+    await map.style.setStyleLayerProperty('storm-cell-track', 'line-color', ['get', 'color']);
+
+    // Cell position symbol (Point, filter featureType=cell)
+    await map.style.addLayer(SymbolLayer(
+      id: 'storm-cell-symbols',
+      sourceId: srcId,
+      textField: '{symbol}',
+      textSize: 18.0,
+      textAllowOverlap: true,
+      textIgnorePlacement: true,
+      textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+      filter: ['==', ['get', 'featureType'], 'cell'],
+    ));
+    await map.style.setStyleLayerProperty('storm-cell-symbols', 'text-color', ['get', 'color']);
+  }
+
+  static Future<void> _setupLightningLayers(MapboxMap map, String srcId) async {
+    // Threat polygon (filter featureType=threat)
+    await map.style.addLayer(FillLayer(
+      id: 'lightning-threat-fill',
+      sourceId: srcId,
+      fillOpacity: 0.15,
+      fillColor: const Color(0xFFFFD600).toARGB32(),
+      filter: ['==', ['get', 'featureType'], 'threat'],
+    ));
+
+    await map.style.addLayer(LineLayer(
+      id: 'lightning-threat-outline',
+      sourceId: srcId,
+      lineWidth: 1.5,
+      lineOpacity: 0.5,
+      lineColor: const Color(0xFFFFD600).toARGB32(),
+      lineDasharray: [4.0, 2.0],
+      filter: ['==', ['get', 'featureType'], 'threat'],
+    ));
+
+    // Forecast path (filter featureType=path)
+    await map.style.addLayer(LineLayer(
+      id: 'lightning-path',
+      sourceId: srcId,
+      lineWidth: 2.0,
+      lineOpacity: 0.7,
+      lineColor: const Color(0xFFFF9100).toARGB32(),
+      lineDasharray: [4.0, 3.0],
+      filter: ['==', ['get', 'featureType'], 'path'],
+    ));
+  }
+
+  static Future<void> _setupWeatherAlertLayers(MapboxMap map, String srcId) async {
+    // Alert fill (colored by severity via data-driven property)
+    await map.style.addLayer(FillLayer(
+      id: 'weather-alert-fill',
+      sourceId: srcId,
+      fillOpacity: 0.2,
+      fillColor: const Color(0xFFB0B4BC).toARGB32(),
+    ));
+    await map.style.setStyleLayerProperty('weather-alert-fill', 'fill-color', ['get', 'color']);
+
+    // Alert outline
+    await map.style.addLayer(LineLayer(
+      id: 'weather-alert-outline',
+      sourceId: srcId,
+      lineWidth: 2.0,
+      lineOpacity: 0.7,
+      lineColor: const Color(0xFFB0B4BC).toARGB32(),
+    ));
+    await map.style.setStyleLayerProperty('weather-alert-outline', 'line-color', ['get', 'color']);
   }
 
   static Future<void> _setupTrafficLayers(MapboxMap map, String srcId) async {

@@ -413,9 +413,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               onPressed: _runImport,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 32, vertical: 14),
               ),
               child: Text('Import $importCount Entries',
                   style: const TextStyle(fontSize: 16)),

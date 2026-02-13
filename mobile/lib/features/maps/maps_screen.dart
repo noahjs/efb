@@ -3,11 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../models/flight.dart';
 import '../../services/airport_providers.dart';
 import '../../services/api_client.dart';
+import '../../services/flight_providers.dart';
 import '../../services/map_flight_provider.dart';
 import '../../services/windy_providers.dart';
 import '../adsb/providers/adsb_providers.dart';
@@ -36,6 +39,8 @@ import 'widgets/map_toolbar.dart';
 import 'widgets/map_view.dart';
 import 'widgets/navaid_bottom_sheet.dart';
 import 'widgets/pirep_bottom_sheet.dart';
+import 'widgets/waypoint_callout.dart';
+import 'widgets/radar_playback_control.dart';
 import 'widgets/wind_altitude_slider.dart';
 import 'widgets/wind_heatmap_controller.dart';
 import 'widgets/wx_station_bottom_sheet.dart';
@@ -68,6 +73,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
   bool _isFeatureSheetOpen = false;
   int _featureSheetGen = 0;
 
+  // Waypoint callout state (Garmin-style concentric circle popup)
+  MapFeatureTap? _activeCallout;
+
   // Search state
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
@@ -91,6 +99,10 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     };
     _mapController.onUserPanned = () {
       ref.read(followModeProvider.notifier).set(FollowMode.off);
+      // Dismiss callout on pan
+      if (_activeCallout != null) {
+        setState(() => _activeCallout = null);
+      }
     };
   }
 
@@ -191,6 +203,234 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     if (_isFeatureSheetOpen && mounted) {
       Navigator.of(context).pop();
       _isFeatureSheetOpen = false;
+    }
+  }
+
+  /// Dismiss the callout and any open sheet. Called on empty map taps.
+  void _dismissCalloutAndSheet() {
+    if (_activeCallout != null) {
+      setState(() => _activeCallout = null);
+    }
+    _dismissFeatureSheet();
+  }
+
+  /// Called when an airport/navaid/fix is tapped on the map.
+  /// Shows the Garmin-style callout instead of immediately opening a sheet.
+  void _onFeatureTapped(MapFeatureTap feature) {
+    // Enrich airport features with data from the airports list
+    var enriched = feature;
+    if (feature.type == MapFeatureType.airport) {
+      final airports = ref.read(airportListProvider).airports;
+      final match = airports.cast<Map<String, dynamic>?>().firstWhere(
+            (a) =>
+                (a?['icao_identifier'] ?? a?['identifier']) ==
+                feature.identifier,
+            orElse: () => null,
+          );
+      if (match != null) {
+        enriched = feature.copyWith(properties: {
+          ...feature.properties,
+          'name': match['name'] ?? '',
+          'elevation': match['elevation'],
+          'city': match['city'] ?? '',
+          'state': match['state'] ?? '',
+        });
+      }
+    }
+    setState(() => _activeCallout = enriched);
+  }
+
+  /// Build the action buttons for the callout based on the feature type.
+  List<CalloutAction> _buildCalloutActions(MapFeatureTap feature) {
+    switch (feature.type) {
+      case MapFeatureType.airport:
+        return [
+          CalloutAction(
+            label: 'Details',
+            icon: Icons.info_outline,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _onAirportTapped(feature.identifier);
+            },
+          ),
+          CalloutAction(
+            label: 'Weather',
+            icon: Icons.cloud_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              context.push('/airports/${feature.identifier}?tab=weather');
+            },
+          ),
+          CalloutAction(
+            label: 'Direct To',
+            icon: Icons.near_me_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _directTo(feature.identifier);
+            },
+          ),
+          CalloutAction(
+            label: 'Add Route',
+            icon: Icons.add_location_alt_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _addToRoute(feature.identifier);
+            },
+          ),
+        ];
+      case MapFeatureType.navaid:
+        return [
+          CalloutAction(
+            label: 'Details',
+            icon: Icons.info_outline,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _showNavaidSheet(feature.identifier);
+            },
+          ),
+          CalloutAction(
+            label: 'Direct To',
+            icon: Icons.near_me_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _directTo(feature.identifier);
+            },
+          ),
+          CalloutAction(
+            label: 'Add Route',
+            icon: Icons.add_location_alt_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _addToRoute(feature.identifier);
+            },
+          ),
+        ];
+      case MapFeatureType.fix:
+        return [
+          CalloutAction(
+            label: 'Details',
+            icon: Icons.info_outline,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _showFixSheetById(feature.identifier);
+            },
+          ),
+          CalloutAction(
+            label: 'Direct To',
+            icon: Icons.near_me_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _directTo(feature.identifier);
+            },
+          ),
+          CalloutAction(
+            label: 'Add Route',
+            icon: Icons.add_location_alt_outlined,
+            onTap: () {
+              setState(() => _activeCallout = null);
+              _addToRoute(feature.identifier);
+            },
+          ),
+        ];
+      case MapFeatureType.pirep:
+        return [
+          CalloutAction(
+            label: 'Details',
+            icon: Icons.info_outline,
+            onTap: () {
+              final props = feature.properties;
+              setState(() => _activeCallout = null);
+              _onPirepTapped(props);
+            },
+          ),
+        ];
+    }
+  }
+
+  /// Set this identifier as the sole destination (Direct To).
+  void _directTo(String identifier) {
+    final flight = ref.read(activeFlightProvider);
+    final id = identifier.toUpperCase();
+    final updated = (flight ?? const Flight()).copyWith(
+      destinationIdentifier: id,
+      routeString: id,
+      departureIdentifier: flight?.departureIdentifier ?? '',
+    );
+    _saveFlightUpdate(updated);
+  }
+
+  /// Append this identifier to the active route.
+  void _addToRoute(String identifier) {
+    final flight = ref.read(activeFlightProvider);
+    final f = flight ?? const Flight();
+    final existing = f.routeString?.trim() ?? '';
+    final id = identifier.toUpperCase();
+    final newRoute = existing.isEmpty ? id : '$existing $id';
+    final waypoints = newRoute.split(RegExp(r'\s+'));
+    final updated = f.copyWith(
+      routeString: newRoute,
+      departureIdentifier: waypoints.first,
+      destinationIdentifier:
+          waypoints.length > 1 ? waypoints.last : waypoints.first,
+    );
+    _saveFlightUpdate(updated);
+  }
+
+  /// Persist flight update and recalculate.
+  Future<void> _saveFlightUpdate(Flight updated) async {
+    ref.read(activeFlightProvider.notifier).set(updated);
+    try {
+      if (updated.id != null) {
+        final service = ref.read(flightServiceProvider);
+        final saved =
+            await service.updateFlight(updated.id!, updated.toJson());
+        ref.read(activeFlightProvider.notifier).set(saved);
+      } else {
+        final api = ref.read(apiClientProvider);
+        final result = await api.calculateFlight(
+          departureIdentifier: updated.departureIdentifier,
+          destinationIdentifier: updated.destinationIdentifier,
+          routeString: updated.routeString,
+          cruiseAltitude: updated.cruiseAltitude,
+          trueAirspeed: updated.trueAirspeed,
+          fuelBurnRate: updated.fuelBurnRate,
+          etd: updated.etd,
+          performanceProfileId: updated.performanceProfileId,
+        );
+        ref.read(activeFlightProvider.notifier).set(Flight(
+              id: updated.id,
+              aircraftId: updated.aircraftId,
+              performanceProfileId: updated.performanceProfileId,
+              departureIdentifier: updated.departureIdentifier,
+              destinationIdentifier: updated.destinationIdentifier,
+              alternateIdentifier: updated.alternateIdentifier,
+              etd: updated.etd,
+              aircraftIdentifier: updated.aircraftIdentifier,
+              aircraftType: updated.aircraftType,
+              performanceProfile: updated.performanceProfile,
+              trueAirspeed: updated.trueAirspeed,
+              flightRules: updated.flightRules,
+              routeString: updated.routeString,
+              cruiseAltitude: updated.cruiseAltitude,
+              peopleCount: updated.peopleCount,
+              avgPersonWeight: updated.avgPersonWeight,
+              cargoWeight: updated.cargoWeight,
+              fuelPolicy: updated.fuelPolicy,
+              startFuelGallons: updated.startFuelGallons,
+              reserveFuelGallons: updated.reserveFuelGallons,
+              fuelBurnRate: updated.fuelBurnRate,
+              fuelAtShutdownGallons: updated.fuelAtShutdownGallons,
+              filingStatus: updated.filingStatus,
+              distanceNm: (result['distance_nm'] as num?)?.toDouble(),
+              eteMinutes: result['ete_minutes'] as int?,
+              flightFuelGallons:
+                  (result['flight_fuel_gallons'] as num?)?.toDouble(),
+              eta: result['eta'] as String?,
+              calculatedAt: result['calculated_at'] as String?,
+            ));
+      }
+    } catch (_) {
+      // Calculation may fail for incomplete flights — that's ok
     }
   }
 
@@ -443,6 +683,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
     final baseLayerKey = baseLayerDef?.sourceKey ?? 'dark';
     final showFlightCategory = layerState.isActive(MapLayerId.flightCategory);
     final showWindsAloft = layerState.isActive(MapLayerId.windsAloft);
+    final showRadar = layerState.isActive(MapLayerId.radar);
     final showTraffic = layerState.isActive(MapLayerId.traffic);
 
     // Assembled overlays from all layer data providers
@@ -566,7 +807,9 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               baseLayer: baseLayerKey,
               showFlightCategory: showFlightCategory,
               interactive: !showOverlay,
-              onMapTapped: _dismissFeatureSheet,
+              onMapTapped: _dismissCalloutAndSheet,
+              onFeatureTapped: _onFeatureTapped,
+              // Fallbacks for web (which doesn't use onFeatureTapped yet)
               onAirportTapped: _onAirportTapped,
               onNavaidTapped: _showNavaidSheet,
               onFixTapped: _showFixSheetById,
@@ -579,6 +822,22 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               overlays: overlays,
             ),
           ),
+
+          // Waypoint callout (Garmin-style concentric circles)
+          if (_activeCallout != null)
+            Positioned(
+              left: _activeCallout!.screenX,
+              top: _activeCallout!.screenY,
+              child: FractionalTranslation(
+                translation: const Offset(-0.5, -0.5),
+                child: WaypointCallout(
+                  feature: _activeCallout!,
+                  ownshipLat: activePos?.latitude,
+                  ownshipLng: activePos?.longitude,
+                  actions: _buildCalloutActions(_activeCallout!),
+                ),
+              ),
+            ),
 
           // Left sidebar controls
           Positioned(
@@ -636,6 +895,15 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               ),
             ),
 
+          // Radar playback control (above ADS-B status bar)
+          if (showRadar)
+            const Positioned(
+              bottom: 68,
+              left: 0,
+              right: 0,
+              child: RadarPlaybackControl(),
+            ),
+
           // ADS-B status bar
           Positioned(
             bottom: 36,
@@ -663,7 +931,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                 child: GestureDetector(
                   onTap: _toggleLayerPicker,
                   child: Container(
-                    color: Colors.black38,
+                    color: AppColors.scrim,
                     child: Align(
                       alignment: Alignment.topCenter,
                       child: LayerPicker(
@@ -725,13 +993,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(10),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black45,
-                          blurRadius: 12,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
+                      boxShadow: AppShadows.elevated,
                     ),
                     child: _buildSearchResults(),
                   ),

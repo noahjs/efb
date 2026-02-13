@@ -203,7 +203,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/airports/:id',
         builder: (context, state) {
           final airportId = state.pathParameters['id']!;
-          return AirportDetailScreen(airportId: airportId);
+          final tabParam = state.uri.queryParameters['tab'];
+          const tabMap = {'info': 0, 'weather': 1, 'runway': 2, 'procedure': 3, 'notam': 4};
+          final initialTab = tabMap[tabParam] ?? 0;
+          return AirportDetailScreen(airportId: airportId, initialTab: initialTab);
         },
       ),
 

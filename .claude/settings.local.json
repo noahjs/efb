@@ -112,7 +112,18 @@
       "WebFetch(domain:localhost)",
       "Bash(npx:*)",
       "Bash(node test-weather.mjs:*)",
-      "Bash(npm run seed:aircraft:*)"
+      "Bash(npm run seed:aircraft:*)",
+      "WebFetch(domain:www.rainviewer.com)",
+      "WebFetch(domain:docs.tomorrow.io)",
+      "WebFetch(domain:www.aopa.org)",
+      "WebFetch(domain:api.rainviewer.com)",
+      "WebFetch(domain:rainviewer.com)",
+      "WebFetch(domain:mrms.ncep.noaa.gov)",
+      "WebFetch(domain:www.aerisweather.com)",
+      "WebFetch(domain:www.xweather.com)",
+      "WebFetch(domain:maps.api.xweather.com)",
+      "WebFetch(domain:maps.aerisapi.com)",
+      "Bash(npm run start:dev:*)"
     ]
   }
 }

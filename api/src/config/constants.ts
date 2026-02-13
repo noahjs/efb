@@ -176,6 +176,13 @@ export const DATA_PLATFORM = {
   },
 };
 
+// --- Xweather ---
+export const XWEATHER = {
+  API_BASE_URL: 'https://data.api.xweather.com',
+  TIMEOUT_MS: 15_000,
+  CONUS_BOUNDS: '24,-125,50,-66',
+};
+
 // --- FBO / Fuel Price Scraping ---
 export const FBO = {
   AIRNAV_BASE_URL: 'https://www.airnav.com/airport',

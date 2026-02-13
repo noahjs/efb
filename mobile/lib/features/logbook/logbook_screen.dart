@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../models/logbook_entry.dart';
 import '../../services/logbook_providers.dart';
 
@@ -111,25 +112,10 @@ class _LogbookScreenState extends ConsumerState<LogbookScreen> {
               ),
               data: (entries) {
                 if (entries.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.book_outlined,
-                            size: 64, color: AppColors.textMuted),
-                        const SizedBox(height: 16),
-                        const Text('No Logbook Entries',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            )),
-                        const SizedBox(height: 8),
-                        const Text('Tap + to log a flight',
-                            style:
-                                TextStyle(color: AppColors.textSecondary)),
-                      ],
-                    ),
+                  return const EmptyState(
+                    icon: Icons.book_outlined,
+                    title: 'No Logbook Entries',
+                    subtitle: 'Tap + to log a flight',
                   );
                 }
                 return _buildGroupedList(entries);

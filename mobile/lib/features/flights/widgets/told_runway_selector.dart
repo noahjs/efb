@@ -205,7 +205,7 @@ class _RunwayEndTile extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.amber.shade700,
+                  color: AppColors.warning,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Text(

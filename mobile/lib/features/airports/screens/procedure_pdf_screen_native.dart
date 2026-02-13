@@ -400,7 +400,7 @@ class _PlatformPdfScreenState extends ConsumerState<PlatformPdfScreen> {
                       child: GestureDetector(
                         onTap: () {},
                         child: Container(
-                          color: Colors.black54,
+                          color: AppColors.scrim,
                           child: Column(
                             children: [
                               Flexible(

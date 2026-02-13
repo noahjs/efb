@@ -80,7 +80,7 @@ class _TabOrderScreenState extends ConsumerState<TabOrderScreen> {
                 return Material(
                   color: AppColors.surfaceLight,
                   elevation: 4,
-                  shadowColor: Colors.black54,
+                  shadowColor: AppColors.scrim,
                   borderRadius: BorderRadius.circular(8),
                   child: child,
                 );

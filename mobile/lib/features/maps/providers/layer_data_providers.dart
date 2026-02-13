@@ -117,6 +117,53 @@ final windsAloftOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   return ref.watch(windGridProvider(windParams)).value;
 });
 
+// ── Radar overlay (activation sentinel + frame index) ───────────────────
+
+final radarOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
+  final layerState = ref.watch(mapLayerStateProvider).value;
+  if (layerState == null || !layerState.isActive(MapLayerId.radar)) return null;
+  return {'frameIndex': layerState.radarFrameIndex};
+});
+
+// ── Storm Cell overlay ──────────────────────────────────────────────────────
+
+final stormCellOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
+  final layerState = ref.watch(mapLayerStateProvider).value;
+  if (layerState == null || !layerState.isActive(MapLayerId.stormCells)) return null;
+  final data = ref.watch(stormCellsProvider).value;
+  if (data == null) return null;
+  return enrichStormCellGeoJson(data);
+});
+
+// ── Lightning overlay ───────────────────────────────────────────────────────
+
+final lightningOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
+  final layerState = ref.watch(mapLayerStateProvider).value;
+  if (layerState == null || !layerState.isActive(MapLayerId.lightning)) return null;
+  final data = ref.watch(lightningThreatsProvider).value;
+  if (data == null) return null;
+  return enrichLightningGeoJson(data);
+});
+
+// ── Weather Alert overlay ───────────────────────────────────────────────────
+
+final weatherAlertOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
+  final layerState = ref.watch(mapLayerStateProvider).value;
+  if (layerState == null || !layerState.isActive(MapLayerId.weatherAlerts)) return null;
+  final data = ref.watch(weatherAlertsProvider).value;
+  if (data == null) return null;
+  return enrichWeatherAlertGeoJson(data);
+});
+
+// ── Xweather raster tile overlays (activation sentinel) ─────────────────
+
+final xweatherOverlayProvider =
+    Provider.family<Map<String, dynamic>?, MapLayerId>((ref, id) {
+  final layerState = ref.watch(mapLayerStateProvider).value;
+  if (layerState == null || !layerState.isActive(id)) return null;
+  return const {'active': true};
+});
+
 // ── Traffic overlay ─────────────────────────────────────────────────────────
 
 final trafficOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
@@ -255,8 +302,8 @@ final airportListProvider = Provider<AirportListResult>((ref) {
 
   var airports = <Map<String, dynamic>>[];
 
-  // Fetch airports when aeronautical overlay is active
-  if (showAeronautical && aero.showAirports && bounds != null) {
+  // Fetch airports when aeronautical overlay or flight category is active
+  if ((showAeronautical && aero.showAirports || showFlightCategory) && bounds != null) {
     final airportsAsync = ref.watch(mapAirportsProvider(bounds));
     airports = airportsAsync.value
             ?.cast<Map<String, dynamic>>()

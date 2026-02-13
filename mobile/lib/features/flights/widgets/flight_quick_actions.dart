@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/theme/app_theme.dart';
 
 class FlightQuickActions extends StatelessWidget {
   final int? flightId;
@@ -66,11 +65,6 @@ class _ActionButton extends StatelessWidget {
         icon: Icon(icon, size: 16),
         label: Text(label, style: const TextStyle(fontSize: 12)),
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.textPrimary,
-          side: const BorderSide(color: AppColors.divider),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
           padding: const EdgeInsets.symmetric(vertical: 8),
         ),
       ),

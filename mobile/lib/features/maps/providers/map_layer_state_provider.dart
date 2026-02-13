@@ -13,6 +13,7 @@ class MapLayerState {
   final AeroSettings aeroSettings;
   final TrafficSettings trafficSettings;
   final int windsAloftAltitude;
+  final int radarFrameIndex;
 
   const MapLayerState({
     this.baseLayer = MapLayerId.dark,
@@ -20,6 +21,7 @@ class MapLayerState {
     this.aeroSettings = const AeroSettings(),
     this.trafficSettings = const TrafficSettings(),
     this.windsAloftAltitude = 9000,
+    this.radarFrameIndex = 10,
   });
 
   MapLayerState copyWith({
@@ -28,6 +30,7 @@ class MapLayerState {
     AeroSettings? aeroSettings,
     TrafficSettings? trafficSettings,
     int? windsAloftAltitude,
+    int? radarFrameIndex,
   }) {
     return MapLayerState(
       baseLayer: baseLayer ?? this.baseLayer,
@@ -35,6 +38,7 @@ class MapLayerState {
       aeroSettings: aeroSettings ?? this.aeroSettings,
       trafficSettings: trafficSettings ?? this.trafficSettings,
       windsAloftAltitude: windsAloftAltitude ?? this.windsAloftAltitude,
+      radarFrameIndex: radarFrameIndex ?? this.radarFrameIndex,
     );
   }
 
@@ -129,6 +133,14 @@ class MapLayerStateNotifier extends AsyncNotifier<MapLayerState> {
     final current = state.value;
     if (current == null) return;
     state = AsyncData(current.copyWith(windsAloftAltitude: altitude));
+  }
+
+  // ── Radar frame ───────────────────────────────────────────────────────
+
+  void setRadarFrame(int index) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(radarFrameIndex: index));
   }
 
   // ── Persistence ─────────────────────────────────────────────────────────

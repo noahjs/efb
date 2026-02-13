@@ -11,6 +11,42 @@ typedef MapBounds = ({
   double maxLng,
 });
 
+/// Type of map feature tapped.
+enum MapFeatureType { airport, navaid, fix, pirep }
+
+/// Data from a map feature tap, including screen position for callout placement.
+class MapFeatureTap {
+  final MapFeatureType type;
+  final String identifier;
+  final double screenX;
+  final double screenY;
+  final double lat;
+  final double lng;
+  final Map<String, dynamic> properties;
+
+  const MapFeatureTap({
+    required this.type,
+    required this.identifier,
+    required this.screenX,
+    required this.screenY,
+    required this.lat,
+    required this.lng,
+    this.properties = const {},
+  });
+
+  MapFeatureTap copyWith({Map<String, dynamic>? properties}) {
+    return MapFeatureTap(
+      type: type,
+      identifier: identifier,
+      screenX: screenX,
+      screenY: screenY,
+      lat: lat,
+      lng: lng,
+      properties: properties ?? this.properties,
+    );
+  }
+}
+
 /// Controller to programmatically zoom/fly the map.
 /// Platform views bind callbacks to their map instances.
 class EfbMapController {
@@ -90,6 +126,12 @@ class EfbMapView extends StatelessWidget {
   /// Fires on every map tap, before feature-specific callbacks.
   /// Use this to dismiss open sheets before a new one might open.
   final VoidCallback? onMapTapped;
+
+  /// Unified callback for tapping airports, navaids, and fixes.
+  /// Includes screen position and geo coordinates for callout placement.
+  /// When set, takes priority over individual onAirportTapped/onNavaidTapped/onFixTapped.
+  final ValueChanged<MapFeatureTap>? onFeatureTapped;
+
   final List<Map<String, dynamic>> airports;
   final EfbMapController? controller;
 
@@ -114,6 +156,7 @@ class EfbMapView extends StatelessWidget {
     this.onBoundsChanged,
     this.onMapLongPressed,
     this.onMapTapped,
+    this.onFeatureTapped,
     this.airports = const [],
     this.routeCoordinates = const [],
     this.controller,
@@ -133,6 +176,7 @@ class EfbMapView extends StatelessWidget {
       onBoundsChanged: onBoundsChanged,
       onMapLongPressed: onMapLongPressed,
       onMapTapped: onMapTapped,
+      onFeatureTapped: onFeatureTapped,
       airports: airports,
       routeCoordinates: routeCoordinates,
       controller: controller,

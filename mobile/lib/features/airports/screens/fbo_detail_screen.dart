@@ -79,13 +79,13 @@ class _HeaderSection extends StatelessWidget {
                   final starValue = i + 1;
                   if (fbo.rating! >= starValue) {
                     return const Icon(Icons.star,
-                        size: 18, color: Colors.amber);
+                        size: 18, color: AppColors.starred);
                   } else if (fbo.rating! >= starValue - 0.5) {
                     return const Icon(Icons.star_half,
-                        size: 18, color: Colors.amber);
+                        size: 18, color: AppColors.starred);
                   }
                   return Icon(Icons.star_border,
-                      size: 18, color: Colors.amber.withValues(alpha: 0.4));
+                      size: 18, color: AppColors.starred.withValues(alpha: 0.4));
                 }),
                 const SizedBox(width: 8),
                 Text(
