@@ -103,10 +103,11 @@ export interface JobStatus {
 export type AdminLogsQuery = {
   q?: string;
   context?: string;
-  errorsOnly?: boolean;
+  minLevel?: 'warning' | 'error';
   sinceMinutes?: number;
   limit?: number;
   pageToken?: string;
+  serviceName?: string;
 };
 
 type AdminLogEntry = {
@@ -114,6 +115,7 @@ type AdminLogEntry = {
   severity?: string;
   insertId?: string;
   logName?: string;
+  serviceName?: string;
   // Common fields from our JsonLogger payload (when running on Cloud Run/Cloud Logging).
   context?: string;
   event?: string;
@@ -426,8 +428,8 @@ export class AdminService {
     nextPageToken?: string;
     error?: string;
   }> {
-    // Cloud Run exposes the service name as K_SERVICE.
-    const serviceName = process.env.K_SERVICE;
+    // If no serviceName filter was provided, show logs from ALL Cloud Run services.
+    const serviceName = query.serviceName || undefined;
 
     try {
       const auth = new GoogleAuth({
@@ -461,7 +463,7 @@ export class AdminService {
       const filter = buildCloudLoggingFilter({
         q: query.q,
         context: query.context,
-        errorsOnly: !!query.errorsOnly,
+        minLevel: query.minLevel,
         sinceMinutes,
         serviceName,
         sinceIso,
@@ -505,6 +507,7 @@ export class AdminService {
           severity: e.severity,
           insertId: e.insertId,
           logName: e.logName,
+          serviceName: e.resource?.labels?.service_name,
           context: jsonPayload?.context,
           event: jsonPayload?.event,
           message: jsonPayload?.message ?? (typeof e.textPayload === 'string' ? e.textPayload : undefined),
@@ -516,7 +519,7 @@ export class AdminService {
       return {
         enabled: true,
         projectId,
-        serviceName,
+        serviceName: serviceName || 'all',
         filter,
         entries,
         nextPageToken: resp.data?.nextPageToken,

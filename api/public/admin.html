@@ -624,7 +624,7 @@
     }
     .log-line {
       display: grid;
-      grid-template-columns: 160px 86px 180px 1fr;
+      grid-template-columns: 160px 86px 82px 180px 1fr;
       gap: 10px;
       padding: 4px 0;
       border-bottom: 1px solid rgba(33, 38, 45, 0.7);
@@ -637,10 +637,12 @@
     .log-sev.WARNING { color: #d29922; }
     .log-sev.INFO, .log-sev.DEFAULT { color: #58a6ff; }
     .log-sev.DEBUG { color: #8b949e; }
+    .log-svc { color: #bc8cff; white-space: nowrap; font-size: 10px; }
     .log-ctx { color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .log-msg { color: #c9d1d9; overflow: hidden; text-overflow: ellipsis; }
     @media (max-width: 820px) {
       .log-line { grid-template-columns: 120px 74px 1fr; }
+      .log-svc { display: none; }
       .log-msg { grid-column: 1 / -1; }
     }
   </style>
@@ -1004,7 +1006,16 @@
         <div class="logs-controls">
           <input id="logsQuery" type="text" placeholder="Search (message/event/context)" style="min-width: 260px; flex: 1;">
           <input id="logsContext" type="text" placeholder="Part of app (context), e.g. BriefingService" style="min-width: 280px; flex: 1;">
-          <label><input id="logsErrorsOnly" type="checkbox"> Errors only</label>
+          <select id="logsService">
+            <option value="" selected>All services</option>
+            <option value="efb-api">efb-api</option>
+            <option value="efb-worker">efb-worker</option>
+          </select>
+          <select id="logsMinLevel">
+            <option value="" selected>All levels</option>
+            <option value="warning">Warnings+</option>
+            <option value="error">Errors only</option>
+          </select>
           <select id="logsSince">
             <option value="15">Last 15m</option>
             <option value="60" selected>Last 1h</option>
@@ -1685,9 +1696,10 @@ async function refreshQueueStatus() {
 function readLogsParams() {
   const q = document.getElementById('logsQuery').value.trim();
   const context = document.getElementById('logsContext').value.trim();
-  const errorsOnly = document.getElementById('logsErrorsOnly').checked;
+  const minLevel = document.getElementById('logsMinLevel').value;
   const sinceMinutes = Number(document.getElementById('logsSince').value || '60');
-  return { q: q || '', context: context || '', errorsOnly, sinceMinutes };
+  const serviceName = document.getElementById('logsService').value;
+  return { q: q || '', context: context || '', minLevel: minLevel || '', sinceMinutes, serviceName: serviceName || '' };
 }
 
 function setLogsMeta(text) {
@@ -1712,12 +1724,14 @@ function renderLogs(entries, append = false) {
   const html = entries.map(e => {
     const ts = e.timestamp ? new Date(e.timestamp).toLocaleString() : '';
     const sev = (e.severity || 'DEFAULT').toUpperCase();
+    const svc = e.serviceName || '--';
     const ctx = e.context || (e.jsonPayload && e.jsonPayload.context) || '--';
     const msg = e.message || e.textPayload || (e.jsonPayload && e.jsonPayload.message) || JSON.stringify(e.jsonPayload || {}).slice(0, 200);
     return `
       <div class="log-line" title="${escapeHtml(JSON.stringify(e.jsonPayload || e, null, 0))}">
         <div class="log-ts">${escapeHtml(ts)}</div>
         <div class="log-sev ${escapeHtml(sev)}">${escapeHtml(sev)}</div>
+        <div class="log-svc">${escapeHtml(String(svc))}</div>
         <div class="log-ctx">${escapeHtml(String(ctx))}</div>
         <div class="log-msg">${escapeHtml(String(msg))}</div>
       </div>
@@ -1745,8 +1759,9 @@ async function refreshLogs(reset = true) {
     const qs = new URLSearchParams();
     if (p.q) qs.set('q', p.q);
     if (p.context) qs.set('context', p.context);
-    if (p.errorsOnly) qs.set('errorsOnly', 'true');
+    if (p.minLevel) qs.set('minLevel', p.minLevel);
     if (p.sinceMinutes) qs.set('sinceMinutes', String(p.sinceMinutes));
+    if (p.serviceName) qs.set('serviceName', p.serviceName);
     qs.set('limit', '50');
     if (!reset && logsNextPageToken) qs.set('pageToken', logsNextPageToken);
 

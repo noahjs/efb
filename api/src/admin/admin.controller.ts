@@ -141,27 +141,34 @@ export class AdminController {
    * Query params:
    * - q: free-text search (message/event/context/text payload)
    * - context: JsonLogger context (service/class name)
-   * - errorsOnly: "true" to filter jsonPayload.level in (error,fatal)
+   * - minLevel: "error" (error+fatal) or "warning" (warn+error+fatal)
    * - sinceMinutes: default 60
    * - limit: default 50 (max 200)
    * - pageToken: Cloud Logging page token for pagination
+   * - serviceName: filter to a specific Cloud Run service (omit for all)
    */
   @Get('logs')
   async getLogs(
     @Query('q') q?: string,
     @Query('context') context?: string,
-    @Query('errorsOnly') errorsOnly?: string,
+    @Query('minLevel') minLevel?: string,
     @Query('sinceMinutes') sinceMinutes?: string,
     @Query('limit') limit?: string,
     @Query('pageToken') pageToken?: string,
+    @Query('serviceName') serviceName?: string,
   ) {
+    const validLevels = ['warning', 'error'] as const;
+    const level = validLevels.includes(minLevel as any)
+      ? (minLevel as 'warning' | 'error')
+      : undefined;
     return await this.adminService.getLogs({
       q,
       context,
-      errorsOnly: errorsOnly === 'true' || errorsOnly === '1',
+      minLevel: level,
       sinceMinutes: sinceMinutes ? Number(sinceMinutes) : undefined,
       limit: limit ? Number(limit) : undefined,
       pageToken,
+      serviceName,
     });
   }
 

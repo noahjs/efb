@@ -1,7 +1,8 @@
 export type AdminLogsQuery = {
   q?: string;
   context?: string;
-  errorsOnly?: boolean;
+  /** 'error' = error+fatal, 'warning' = warn+error+fatal, undefined = all */
+  minLevel?: 'warning' | 'error';
   sinceMinutes?: number;
   serviceName?: string;
 };
@@ -29,10 +30,10 @@ export function buildCloudLoggingFilter(params: AdminLogsQuery & { sinceIso: str
     parts.push(`resource.type="cloud_run_revision"`);
   }
 
-  if (params.errorsOnly) {
-    // Our JsonLogger includes `level` (Nest log level).
-    // Filter for application-level errors without relying on Cloud Logging `severity` mapping.
+  if (params.minLevel === 'error') {
     parts.push('(jsonPayload.level="error" OR jsonPayload.level="fatal")');
+  } else if (params.minLevel === 'warning') {
+    parts.push('(jsonPayload.level="warn" OR jsonPayload.level="error" OR jsonPayload.level="fatal")');
   }
 
   if (params.context) {
