@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(open:*)",
+      "WebSearch",
+      "WebFetch(domain:developer.boeing.com)",
+      "WebFetch(domain:developers.navigraph.com)",
+      "WebFetch(domain:aeronav.faa.gov)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:grokipedia.com)",
+      "WebFetch(domain:s8f1feefd4f70cc50.jimcontent.com)",
+      "WebFetch(domain:arincinsider.com)",
+      "WebFetch(domain:www.pilotsofamerica.com)",
+      "WebFetch(domain:www.faa.gov)",
+      "WebFetch(domain:aixm.aero)",
+      "WebFetch(domain:airm.aero)",
+      "WebFetch(domain:ext.eurocontrol.int)",
+      "WebFetch(domain:maartenuijtdehaag.com)",
+      "WebFetch(domain:specstechdb.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:wiki.flightgear.org)",
+      "Bash(python3:*)",
+      "Bash(pip3 install pymupdf)",
+      "Bash(ls:*)",
+      "Bash(find:*)"
+    ]
+  }
+}

@@ -11,6 +11,7 @@ import { PgBoss } from 'pg-boss';
 import { DataSource } from './entities/data-source.entity';
 import { DataCleanupService } from './data-cleanup.service';
 import { dbConfig } from '../db.config';
+import { isWorkerRuntimeEnabled, serviceRole } from '../config/runtime-role';
 
 const INITIAL_SOURCES = [
   {
@@ -74,12 +75,24 @@ const INITIAL_SOURCES = [
     name: 'Weather Alert Poller (NWS)',
     interval_seconds: 300,
   },
+  {
+    key: 'hrrr_poll',
+    name: 'HRRR Weather Pipeline (NOAA S3)',
+    interval_seconds: 3600,
+  },
+  {
+    key: 'notification_dispatch',
+    name: 'Notification Dispatch',
+    interval_seconds: 120,
+  },
 ];
 
 @Injectable()
 export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DataSchedulerService.name);
   boss: PgBoss;
+  private readonly workerRuntimeEnabled = isWorkerRuntimeEnabled();
+  private readonly role = serviceRole();
   private readyPromise: Promise<void>;
   private resolveReady: () => void;
 
@@ -107,10 +120,20 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    if (!this.workerRuntimeEnabled) {
+      this.resolveReady();
+      this.logger.log({
+        event: 'pgboss_disabled',
+        role: this.role,
+        nodeEnv: process.env.NODE_ENV || 'development',
+      });
+      return;
+    }
+
     await this.boss.start();
     await this.boss.createQueue('data-poll');
     this.resolveReady();
-    this.logger.log('pg-boss started');
+    this.logger.log({ event: 'pgboss_started', queue: 'data-poll' });
     await this.seedDataSources();
 
     // Crash recovery: reset any jobs stuck in 'running' from a prior crash
@@ -119,15 +142,19 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
       { status: 'idle', last_error: 'Reset after server restart' },
     );
     if ((stuck.affected ?? 0) > 0) {
-      this.logger.warn(
-        `Reset ${stuck.affected} stuck 'running' jobs to 'idle'`,
-      );
+      this.logger.warn({
+        event: 'poller_stuck_jobs_reset',
+        resetCount: stuck.affected,
+      });
     }
   }
 
   async onModuleDestroy() {
+    if (!this.workerRuntimeEnabled) {
+      return;
+    }
     await this.boss.stop({ graceful: true, timeout: 10000 });
-    this.logger.log('pg-boss stopped');
+    this.logger.log({ event: 'pgboss_stopped', queue: 'data-poll' });
   }
 
   private async seedDataSources() {
@@ -143,19 +170,30 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
           status: 'idle',
           enabled: true,
         });
-        this.logger.log(`Seeded data source: ${src.key}`);
+        this.logger.log({
+          event: 'poller_source_seeded',
+          key: src.key,
+          intervalSeconds: src.interval_seconds,
+        });
       }
     }
 
     // Remove deprecated data sources that no longer have pollers
     const removed = await this.dataSourceRepo.delete({ key: 'nws_grid_poll' });
     if ((removed.affected ?? 0) > 0) {
-      this.logger.log('Removed deprecated data source: nws_grid_poll');
+      this.logger.log({
+        event: 'poller_source_removed',
+        key: 'nws_grid_poll',
+      });
     }
   }
 
   @Cron('*/60 * * * * *') // Every 60 seconds
   async checkAndEnqueue() {
+    if (!this.workerRuntimeEnabled) {
+      return;
+    }
+
     const sources = await this.dataSourceRepo.find({
       where: { enabled: true, status: In(['idle', 'failed']) },
     });
@@ -193,7 +231,11 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
               expireInSeconds: Math.min(source.interval_seconds * 2, 86400),
             },
           );
-          this.logger.log(`Enqueued job: ${source.key}`);
+          this.logger.log({
+            event: 'poller_job_enqueued',
+            key: source.key,
+            intervalSeconds: source.interval_seconds,
+          });
         }
       }
     }
@@ -201,6 +243,9 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
 
   @Cron('0 */15 * * * *') // Every 15 minutes
   async cleanupStaleData() {
+    if (!this.workerRuntimeEnabled) {
+      return;
+    }
     await this.cleanupService.cleanup();
   }
 
@@ -209,6 +254,12 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async restartPoller(key: string) {
+    if (!this.workerRuntimeEnabled) {
+      throw new Error(
+        `Poller restart unavailable when SERVICE_ROLE='${this.role}' in production`,
+      );
+    }
+
     const source = await this.dataSourceRepo.findOne({ where: { key } });
     if (!source) {
       throw new Error(`Data source not found: ${key}`);
@@ -216,13 +267,17 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
 
     // Cancel any existing pg-boss jobs for this key
     const activeJobs: { id: string }[] = await this.dataSourceRepo.query(
-      `SELECT id FROM pgboss.job WHERE name = 'data-poll' AND singletonkey = $1 AND state IN ('created', 'active', 'retry')`,
+      `SELECT id FROM pgboss.job WHERE name = 'data-poll' AND singleton_key = $1 AND state IN ('created', 'active', 'retry')`,
       [key],
     );
     if (activeJobs.length > 0) {
       const ids = activeJobs.map((j) => j.id);
       await this.boss.cancel('data-poll', ids);
-      this.logger.log(`Cancelled ${ids.length} existing job(s) for ${key}`);
+      this.logger.log({
+        event: 'poller_jobs_cancelled',
+        key,
+        cancelledCount: ids.length,
+      });
     }
 
     // Reset data source and enqueue a fresh job
@@ -241,6 +296,6 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
       },
     );
 
-    this.logger.log(`Restarted poller: ${key}`);
+    this.logger.log({ event: 'poller_restarted', key });
   }
 }

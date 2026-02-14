@@ -3,9 +3,18 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { JsonLogger } from './logging/json-logger.service';
+import { requestIdMiddleware } from './logging/request-id.middleware';
+import { HttpExceptionFilter } from './logging/http-exception.filter';
+import { RequestLoggingInterceptor } from './logging/request-logging.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const logger = new JsonLogger('Bootstrap');
+  app.useLogger(logger);
+  app.use(requestIdMiddleware);
+  app.useGlobalFilters(new HttpExceptionFilter());
+  app.useGlobalInterceptors(new RequestLoggingInterceptor());
 
   // Security headers
   app.use(
@@ -71,6 +80,11 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`EFB API running on http://localhost:${port}`);
+  logger.log({
+    event: 'app_started',
+    message: 'EFB API started',
+    port: Number(port),
+    environment: process.env.NODE_ENV || 'development',
+  });
 }
 bootstrap();

@@ -6,4 +6,6 @@ export interface FilingResponse {
   filedAt?: string;
   message?: string;
   errors?: string[];
+  beaconCode?: string;
+  leidosState?: string;
 }

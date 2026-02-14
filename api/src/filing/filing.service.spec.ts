@@ -80,32 +80,41 @@ describe('FilingService', () => {
     mockLeidosClient = {
       fileFlightPlan: jest.fn().mockResolvedValue({
         success: true,
-        flightIdentifier: 'FP1001',
-        versionStamp: 'v123',
+        flightIdentifier: '1001_20260213_140000',
+        versionStamp: '20260213140000001',
         message: 'Filed successfully',
+        beaconCode: '4521',
       }),
       amendFlightPlan: jest.fn().mockResolvedValue({
         success: true,
-        flightIdentifier: 'FP1001',
-        versionStamp: 'v124',
+        flightIdentifier: '1001_20260213_140000',
+        versionStamp: '20260213140100001',
         message: 'Amended successfully',
+        beaconCode: '4521',
       }),
       cancelFlightPlan: jest.fn().mockResolvedValue({
         success: true,
-        flightIdentifier: 'FP1001',
+        flightIdentifier: '1001_20260213_140000',
         versionStamp: '',
         message: 'Cancelled',
       }),
       closeFlightPlan: jest.fn().mockResolvedValue({
         success: true,
-        flightIdentifier: 'FP1001',
+        flightIdentifier: '1001_20260213_140000',
         versionStamp: '',
         message: 'Closed',
       }),
       getFlightPlanStatus: jest.fn().mockResolvedValue({
-        flightIdentifier: 'FP1001',
-        status: 'filed',
-        versionStamp: 'v123',
+        flightIdentifier: '1001_20260213_140000',
+        status: 'proposed',
+        versionStamp: '20260213140000001',
+        currentState: 'PROPOSED',
+        beaconCode: '4521',
+        flightPlan: {
+          aircraftIdentifier: 'N12345',
+          departurePoint: 'KAPA',
+          destinationPoint: 'KDEN',
+        },
       }),
     };
 
@@ -572,13 +581,13 @@ describe('FilingService', () => {
 
       expect(result.success).toBe(true);
       expect(result.filingStatus).toBe('filed');
-      expect(result.filingReference).toBe('FP1001');
+      expect(result.filingReference).toBe('1001_20260213_140000');
       expect(mockLeidosClient.fileFlightPlan).toHaveBeenCalledTimes(1);
       expect(mockFlightsService.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
           filing_status: 'filed',
-          filing_reference: 'FP1001',
+          filing_reference: '1001_20260213_140000',
         }),
         userId,
       );
@@ -696,8 +705,8 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
-        filing_version_stamp: 'v123',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
       });
 
       const result = await service.amendFlight(1, userId);
@@ -711,8 +720,8 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'accepted',
-        filing_reference: 'FP1001',
-        filing_version_stamp: 'v123',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
       });
 
       const result = await service.amendFlight(1, userId);
@@ -741,16 +750,16 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
-        filing_version_stamp: 'v123',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
       });
 
       await service.amendFlight(1, userId);
 
       expect(mockLeidosClient.amendFlightPlan).toHaveBeenCalledWith(
         expect.objectContaining({
-          flightIdentifier: 'FP1001',
-          versionStamp: 'v123',
+          flightIdentifier: '1001_20260213_140000',
+          versionStamp: '20260213140000001',
         }),
       );
     });
@@ -759,8 +768,8 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
-        filing_version_stamp: 'v123',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
       });
 
       await service.amendFlight(1, userId);
@@ -768,7 +777,7 @@ describe('FilingService', () => {
       expect(mockFlightsService.update).toHaveBeenCalledWith(
         1,
         expect.objectContaining({
-          filing_version_stamp: 'v124',
+          filing_version_stamp: '20260213140100001',
         }),
         userId,
       );
@@ -778,8 +787,8 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
-        filing_version_stamp: 'v123',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
       });
 
       mockLeidosClient.amendFlightPlan.mockResolvedValue({
@@ -800,7 +809,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       const result = await service.cancelFiling(1, userId);
@@ -814,7 +823,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'accepted',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       const result = await service.cancelFiling(1, userId);
@@ -844,7 +853,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       await service.cancelFiling(1, userId);
@@ -865,7 +874,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       mockLeidosClient.cancelFlightPlan.mockResolvedValue({
@@ -886,7 +895,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       const result = await service.closeFiling(1, userId);
@@ -900,7 +909,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'accepted',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       const result = await service.closeFiling(1, userId);
@@ -930,7 +939,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       mockLeidosClient.closeFlightPlan.mockResolvedValue({
@@ -953,16 +962,16 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
 
       const result = await service.getFilingStatus(1, userId);
 
       expect(result.success).toBe(true);
-      expect(result.filingReference).toBe('FP1001');
+      expect(result.filingReference).toBe('1001_20260213_140000');
       expect(mockLeidosClient.getFlightPlanStatus).toHaveBeenCalledWith(
         'jdoe',
-        'FP1001',
+        '1001_20260213_140000',
       );
     });
 
@@ -973,6 +982,51 @@ describe('FilingService', () => {
       expect(result.filingStatus).toBe('not_filed');
       expect(result.message).toContain('not been filed');
       expect(mockLeidosClient.getFlightPlanStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- New field pass-through ---
+
+  describe('beacon code pass-through', () => {
+    it('should include beaconCode in file response', async () => {
+      const result = await service.fileFlight(1, userId);
+      expect(result.beaconCode).toBe('4521');
+    });
+
+    it('should include beaconCode in amend response', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
+      });
+
+      const result = await service.amendFlight(1, userId);
+      expect(result.beaconCode).toBe('4521');
+    });
+  });
+
+  describe('Leidos state pass-through in status', () => {
+    it('should include leidosState from status response', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: '1001_20260213_140000',
+      });
+
+      const result = await service.getFilingStatus(1, userId);
+      expect(result.leidosState).toBe('PROPOSED');
+    });
+
+    it('should include beaconCode from status response', async () => {
+      (mockFlightsService.findById as jest.Mock).mockResolvedValue({
+        ...mockFlight,
+        filing_status: 'filed',
+        filing_reference: '1001_20260213_140000',
+      });
+
+      const result = await service.getFilingStatus(1, userId);
+      expect(result.beaconCode).toBe('4521');
     });
   });
 
@@ -988,8 +1042,8 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
-        filing_version_stamp: 'v123',
+        filing_reference: '1001_20260213_140000',
+        filing_version_stamp: '20260213140000001',
       });
       const amendResult = await service.amendFlight(1, userId);
       expect(amendResult.success).toBe(true);
@@ -1009,7 +1063,7 @@ describe('FilingService', () => {
       (mockFlightsService.findById as jest.Mock).mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
-        filing_reference: 'FP1001',
+        filing_reference: '1001_20260213_140000',
       });
       const closeResult = await service.closeFiling(1, userId);
       expect(closeResult.success).toBe(true);

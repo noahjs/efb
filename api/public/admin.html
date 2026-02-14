@@ -224,6 +224,124 @@
     .ds-card-meta { font-size: 12px; color: #8b949e; margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
     .ds-card-meta .val { color: #c9d1d9; font-weight: 500; font-family: monospace; }
 
+    /* Health summary bar */
+    .health-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .health-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .health-pill .count { font-size: 18px; }
+    .health-pill-healthy { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63, 185, 80, 0.3); }
+    .health-pill-degraded { background: rgba(210, 153, 34, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.3); }
+    .health-pill-failed { background: rgba(248, 81, 73, 0.15); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.3); }
+    .health-pill-overdue { background: rgba(88, 166, 255, 0.15); color: #58a6ff; border: 1px solid rgba(88, 166, 255, 0.3); }
+
+    /* Overdue badge */
+    .badge-overdue {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-weight: 600;
+      background: rgba(88, 166, 255, 0.2);
+      color: #58a6ff;
+      border: 1px solid rgba(88, 166, 255, 0.3);
+    }
+
+    /* Consecutive failures badge */
+    .badge-failures {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      font-weight: 600;
+      background: rgba(248, 81, 73, 0.2);
+      color: #f85149;
+      border: 1px solid rgba(248, 81, 73, 0.3);
+    }
+
+    /* Toggle switch */
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #30363d;
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #8b949e;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .toggle-switch input:checked + .toggle-slider { background-color: #238636; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); background-color: #fff; }
+
+    /* Success rate bar */
+    .success-rate-bar {
+      height: 4px;
+      background: #21262d;
+      border-radius: 2px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .success-rate-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    /* Run history table */
+    .run-history {
+      display: none;
+      margin-top: 10px;
+    }
+    .run-history.open { display: block; }
+    .run-history table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+    }
+    .run-history th {
+      text-align: left;
+      padding: 4px 8px;
+      color: #8b949e;
+      font-weight: 500;
+      border-bottom: 1px solid #21262d;
+    }
+    .run-history td {
+      padding: 4px 8px;
+      border-bottom: 1px solid #161b22;
+      color: #c9d1d9;
+    }
+    .run-history tr:last-child td { border-bottom: none; }
+    .run-status-success { color: #3fb950; }
+    .run-status-partial { color: #d29922; }
+    .run-status-failed { color: #f85149; }
+
     /* Empty state */
     .empty { text-align: center; padding: 32px; color: #484f58; font-size: 14px; }
 
@@ -314,6 +432,7 @@
       </div>
     </div>
     <div class="section-body">
+      <div class="health-bar" id="healthBar"></div>
       <div class="api-grid" id="dataSourcesGrid">
         <div class="empty">Loading...</div>
       </div>
@@ -426,6 +545,49 @@
     </div>
   </div>
 
+  <!-- Master W&B Profiles -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Master W&B Profiles</h2>
+      <button class="btn btn-primary" onclick="showCreateMasterProfile()">New Profile</button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e; margin-bottom: 12px;">
+        System-level weight &amp; balance templates keyed by ICAO type code. When a user creates an
+        aircraft with a matching type, fuel tanks, performance profiles, and W&B data are auto-cloned.
+      </p>
+      <div id="masterProfilesList">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Master Profile Editor Modal -->
+  <div id="masterProfileModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); z-index:200; overflow-y:auto;">
+    <div style="max-width:700px; margin:40px auto; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 id="masterProfileModalTitle" style="font-size:16px;">Create Master Profile</h3>
+        <button class="btn btn-sm" onclick="closeMasterProfileModal()">Close</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="font-size:12px; color:#8b949e; display:block; margin-bottom:4px;">ICAO Type Code</label>
+          <input id="mpIcaoCode" type="text" style="width:100%; padding:8px; background:#0d1117; border:1px solid #30363d; border-radius:4px; color:#c9d1d9; font-size:14px;" placeholder="e.g. TBM9">
+        </div>
+        <div>
+          <label style="font-size:12px; color:#8b949e; display:block; margin-bottom:4px;">Display Name</label>
+          <input id="mpDisplayName" type="text" style="width:100%; padding:8px; background:#0d1117; border:1px solid #30363d; border-radius:4px; color:#c9d1d9; font-size:14px;" placeholder="e.g. TBM 960">
+        </div>
+      </div>
+      <label style="font-size:12px; color:#8b949e; display:block; margin-bottom:4px;">Profile Data (JSON)</label>
+      <textarea id="mpJsonData" style="width:100%; height:300px; padding:8px; background:#0d1117; border:1px solid #30363d; border-radius:4px; color:#c9d1d9; font-family:monospace; font-size:12px; resize:vertical;" placeholder='{ "aircraft_defaults": {}, "fuel_tanks": [], "performance_profiles": [], "wb_profiles": [] }'></textarea>
+      <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn" onclick="closeMasterProfileModal()">Cancel</button>
+        <button class="btn btn-primary" id="mpSaveBtn" onclick="saveMasterProfile()">Save</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Disk Usage -->
   <div class="section">
     <div class="section-header">
@@ -473,6 +635,7 @@ let currentFilter = 'all';
 let allCharts = [];
 let installedCharts = [];
 let pollingInterval = null;
+let dsAutoRefresh = null;
 
 async function fetchJSON(url, opts = {}) {
   const res = await fetch(url, opts);
@@ -534,10 +697,11 @@ function renderApiServices(services) {
   }).join('');
 }
 
-function dsStatusDot(status) {
-  if (status === 'running') return 'api-dot-green';
-  if (status === 'failed') return 'api-dot-red';
-  if (status === 'queued') return 'api-dot-yellow';
+function dsStatusDot(ds) {
+  if (ds.status === 'running') return 'api-dot-green';
+  if (ds.status === 'failed' || ds.consecutive_failures >= 3) return 'api-dot-red';
+  if (ds.consecutive_failures > 0) return 'api-dot-yellow';
+  if (ds.status === 'queued') return 'api-dot-yellow';
   return 'api-dot-green'; // idle
 }
 
@@ -555,6 +719,34 @@ function formatInterval(seconds) {
   return `${seconds}s`;
 }
 
+function isOverdue(ds) {
+  if (!ds.last_completed_at || !ds.enabled) return false;
+  const age = Date.now() - new Date(ds.last_completed_at).getTime();
+  return age > ds.interval_seconds * 1000 * 3;
+}
+
+function successRate(ds) {
+  if (!ds.total_runs || ds.total_runs === 0) return null;
+  return Math.round((ds.total_successes / ds.total_runs) * 100);
+}
+
+function successRateColor(pct) {
+  if (pct >= 95) return '#3fb950';
+  if (pct >= 80) return '#d29922';
+  return '#f85149';
+}
+
+function renderHealthBar(summary) {
+  const bar = document.getElementById('healthBar');
+  if (!summary) { bar.innerHTML = ''; return; }
+  bar.innerHTML = `
+    <div class="health-pill health-pill-healthy"><span class="count">${summary.healthy}</span> Healthy</div>
+    <div class="health-pill health-pill-degraded"><span class="count">${summary.degraded}</span> Degraded</div>
+    <div class="health-pill health-pill-failed"><span class="count">${summary.failed}</span> Failed</div>
+    <div class="health-pill health-pill-overdue"><span class="count">${summary.overdue}</span> Overdue</div>
+  `;
+}
+
 function renderDataSources(sources) {
   const grid = document.getElementById('dataSourcesGrid');
   if (!sources || sources.length === 0) {
@@ -562,7 +754,7 @@ function renderDataSources(sources) {
     return;
   }
   grid.innerHTML = sources.map(ds => {
-    const dot = dsStatusDot(ds.status);
+    const dot = dsStatusDot(ds);
     const statusCls = dsStatusClass(ds.status);
     const lastCompleted = ds.last_completed_at ? timeAgo(new Date(ds.last_completed_at).getTime()) : 'never';
     const duration = ds.last_duration_ms != null ? `${(ds.last_duration_ms / 1000).toFixed(1)}s` : '--';
@@ -574,32 +766,139 @@ function renderDataSources(sources) {
     const errorHtml = ds.last_error
       ? `<div class="api-card-error" title="${escapeHtml(ds.last_error)}">${escapeHtml(ds.last_error)}</div>`
       : '';
+
+    // Overdue badge
+    const overdueHtml = isOverdue(ds)
+      ? ' <span class="badge-overdue">OVERDUE</span>'
+      : '';
+
+    // Consecutive failures badge
+    const failBadge = ds.consecutive_failures > 0
+      ? ` <span class="badge-failures">${ds.consecutive_failures} consecutive failure${ds.consecutive_failures > 1 ? 's' : ''}</span>`
+      : '';
+
+    // Success rate
+    const rate = successRate(ds);
+    const rateHtml = rate !== null
+      ? `<div class="success-rate-bar"><div class="success-rate-fill" style="width: ${rate}%; background: ${successRateColor(rate)};"></div></div>
+         <div style="font-size: 11px; color: #8b949e; margin-top: 2px;">${rate}% success (${ds.total_successes}/${ds.total_runs} runs)</div>`
+      : '';
+
+    // Toggle switch
+    const toggleHtml = `
+      <label class="toggle-switch" title="${ds.enabled ? 'Enabled' : 'Disabled'} — click to toggle">
+        <input type="checkbox" ${ds.enabled ? 'checked' : ''} onchange="toggleDataSource('${ds.key}')">
+        <span class="toggle-slider"></span>
+      </label>`;
+
     return `
       <div class="api-card">
         <div class="api-card-header">
           <div class="api-dot ${dot}"></div>
           <span class="api-card-name">${escapeHtml(ds.name)}</span>
+          ${overdueHtml}${failBadge}
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
           <span class="job-status ${statusCls}">${ds.status.toUpperCase()}</span>
           <span style="font-size: 11px; color: #484f58;">every ${formatInterval(ds.interval_seconds)}</span>
-          <button class="btn btn-sm" onclick="restartDataSource('${ds.key}')" style="margin-left: auto;" title="Cancel and re-enqueue this poller">Restart</button>
+          <span style="flex: 1;"></span>
+          ${toggleHtml}
+          <button class="btn btn-sm" onclick="restartDataSource('${ds.key}')" title="Cancel and re-enqueue this poller">Restart</button>
         </div>
         <div class="ds-card-meta">
           <div>Last run: <span class="val">${lastCompleted}</span></div>
           <div>Duration: <span class="val">${duration}</span></div>
           <div>Records: <span class="val">${recordsHtml}</span></div>
-          <div>Enabled: <span class="val">${ds.enabled ? 'Yes' : 'No'}</span></div>
+          <div>Total runs: <span class="val">${ds.total_runs ?? 0}</span></div>
         </div>
+        ${rateHtml}
         ${errorHtml}
+        <div style="margin-top: 8px;">
+          <button class="job-toggle" onclick="toggleHistory('${ds.key}')">Run History</button>
+        </div>
+        <div class="run-history" id="history-${ds.key}"></div>
       </div>
     `;
   }).join('');
 }
 
+async function loadSummary() {
+  try {
+    const summary = await fetchJSON(`${API}/data-sources/summary`);
+    renderHealthBar(summary);
+  } catch (e) {
+    // silently fail
+  }
+}
+
+async function toggleHistory(key) {
+  const el = document.getElementById(`history-${key}`);
+  if (!el) return;
+  if (el.classList.contains('open')) {
+    el.classList.remove('open');
+    return;
+  }
+  el.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #8b949e;">Loading...</div>';
+  el.classList.add('open');
+  try {
+    const runs = await fetchJSON(`${API}/data-sources/${key}/history`);
+    if (!runs || runs.length === 0) {
+      el.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #484f58;">No run history yet</div>';
+      return;
+    }
+    // Show last 20
+    const display = runs.slice(0, 20);
+    el.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Time</th>
+            <th>Duration</th>
+            <th>Records</th>
+            <th>Errors</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${display.map(r => {
+            const statusCls = `run-status-${r.status}`;
+            const time = new Date(r.completed_at).toLocaleString();
+            const dur = `${(r.duration_ms / 1000).toFixed(1)}s`;
+            const errMsg = r.error_message ? escapeHtml(r.error_message).substring(0, 60) : '--';
+            return `<tr>
+              <td class="${statusCls}">${r.status}</td>
+              <td>${time}</td>
+              <td>${dur}</td>
+              <td>${r.records_updated}</td>
+              <td>${r.error_count}</td>
+              <td title="${r.error_message ? escapeHtml(r.error_message) : ''}">${errMsg}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    el.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #f85149;">Failed to load history</div>';
+  }
+}
+
+async function toggleDataSource(key) {
+  try {
+    const result = await fetchJSON(`${API}/data-sources/${key}/toggle`, { method: 'POST' });
+    toast(`${key}: ${result.enabled ? 'enabled' : 'disabled'}`);
+    setTimeout(refreshDataSources, 300);
+  } catch (e) {
+    toast(`Failed to toggle ${key}`);
+  }
+}
+
 async function refreshDataSources() {
   try {
-    const sources = await fetchJSON(`${API}/data-sources`);
+    const [sources] = await Promise.all([
+      fetchJSON(`${API}/data-sources`),
+      loadSummary(),
+    ]);
     renderDataSources(sources);
     document.getElementById('dataSourcesAge').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   } catch (e) {
@@ -864,8 +1163,169 @@ async function deleteChart(name) {
   setTimeout(refreshData, 500);
 }
 
+// --- Master W&B Profiles ---
+let editingMasterProfileId = null;
+
+async function loadMasterProfiles() {
+  try {
+    const profiles = await fetchJSON(`${API}/master-profiles`);
+    renderMasterProfiles(profiles);
+  } catch (e) {
+    document.getElementById('masterProfilesList').innerHTML =
+      '<div class="empty">Failed to load master profiles</div>';
+  }
+}
+
+function renderMasterProfiles(profiles) {
+  const el = document.getElementById('masterProfilesList');
+  if (!profiles || profiles.length === 0) {
+    el.innerHTML = '<div class="empty">No master profiles. Click "New Profile" or run <code>npm run seed:master-profiles</code>.</div>';
+    return;
+  }
+  el.innerHTML = profiles.map(p => {
+    const tanks = (p.fuel_tanks || []).length;
+    const perfs = (p.performance_profiles || []).length;
+    const wbs = (p.wb_profiles || []).length;
+    const stations = (p.wb_profiles || []).reduce((sum, wp) => sum + (wp.stations || []).length, 0);
+    const envs = (p.wb_profiles || []).reduce((sum, wp) => sum + (wp.envelopes || []).length, 0);
+    const defaults = p.aircraft_defaults || {};
+    const defEntries = Object.entries(defaults).filter(([,v]) => v != null);
+    const defSummary = defEntries.length > 0
+      ? defEntries.map(([k,v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(', ')
+      : 'none';
+
+    return `
+      <div class="api-card" style="margin-bottom: 10px;">
+        <div class="api-card-header">
+          <span class="api-card-name">${escapeHtml(p.icao_type_code)}</span>
+          <span style="color: #8b949e; font-size: 13px; margin-left: 8px;">${escapeHtml(p.display_name)}</span>
+        </div>
+        <div class="ds-card-meta" style="margin-top: 6px;">
+          <div>Fuel tanks: <span class="val">${tanks}</span></div>
+          <div>Perf profiles: <span class="val">${perfs}</span></div>
+          <div>W&B profiles: <span class="val">${wbs}</span></div>
+          <div>Stations: <span class="val">${stations}</span></div>
+          <div>Envelopes: <span class="val">${envs}</span></div>
+        </div>
+        <div style="font-size: 11px; color: #484f58; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(defSummary)}">
+          Defaults: ${escapeHtml(defSummary)}
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 6px;">
+          <button class="btn btn-sm" onclick="editMasterProfile(${p.id})">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMasterProfile(${p.id}, '${escapeHtml(p.icao_type_code)}')">Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function showCreateMasterProfile() {
+  editingMasterProfileId = null;
+  document.getElementById('masterProfileModalTitle').textContent = 'Create Master Profile';
+  document.getElementById('mpIcaoCode').value = '';
+  document.getElementById('mpIcaoCode').disabled = false;
+  document.getElementById('mpDisplayName').value = '';
+  document.getElementById('mpJsonData').value = JSON.stringify({
+    aircraft_defaults: {},
+    fuel_tanks: [],
+    performance_profiles: [],
+    wb_profiles: []
+  }, null, 2);
+  document.getElementById('masterProfileModal').style.display = 'block';
+}
+
+async function editMasterProfile(id) {
+  try {
+    const profile = await fetchJSON(`${API}/master-profiles/${id}`);
+    editingMasterProfileId = id;
+    document.getElementById('masterProfileModalTitle').textContent = `Edit: ${profile.icao_type_code}`;
+    document.getElementById('mpIcaoCode').value = profile.icao_type_code;
+    document.getElementById('mpIcaoCode').disabled = true;
+    document.getElementById('mpDisplayName').value = profile.display_name;
+    document.getElementById('mpJsonData').value = JSON.stringify({
+      aircraft_defaults: profile.aircraft_defaults || {},
+      fuel_tanks: profile.fuel_tanks || [],
+      performance_profiles: profile.performance_profiles || [],
+      wb_profiles: profile.wb_profiles || [],
+    }, null, 2);
+    document.getElementById('masterProfileModal').style.display = 'block';
+  } catch (e) {
+    toast('Failed to load profile');
+  }
+}
+
+function closeMasterProfileModal() {
+  document.getElementById('masterProfileModal').style.display = 'none';
+  editingMasterProfileId = null;
+}
+
+async function saveMasterProfile() {
+  const icaoCode = document.getElementById('mpIcaoCode').value.trim();
+  const displayName = document.getElementById('mpDisplayName').value.trim();
+  const jsonStr = document.getElementById('mpJsonData').value.trim();
+
+  if (!icaoCode || !displayName) {
+    toast('ICAO code and display name are required');
+    return;
+  }
+
+  let jsonData;
+  try {
+    jsonData = JSON.parse(jsonStr);
+  } catch (e) {
+    toast('Invalid JSON: ' + e.message);
+    return;
+  }
+
+  const payload = {
+    icao_type_code: icaoCode,
+    display_name: displayName,
+    aircraft_defaults: jsonData.aircraft_defaults || {},
+    fuel_tanks: jsonData.fuel_tanks || [],
+    performance_profiles: jsonData.performance_profiles || [],
+    wb_profiles: jsonData.wb_profiles || [],
+  };
+
+  try {
+    if (editingMasterProfileId) {
+      await fetchJSON(`${API}/master-profiles/${editingMasterProfileId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      toast(`Updated master profile: ${icaoCode}`);
+    } else {
+      await fetchJSON(`${API}/master-profiles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      toast(`Created master profile: ${icaoCode}`);
+    }
+    closeMasterProfileModal();
+    loadMasterProfiles();
+  } catch (e) {
+    toast('Failed to save profile');
+  }
+}
+
+async function deleteMasterProfile(id, code) {
+  if (!confirm(`Delete master profile "${code}"? This does not affect existing aircraft.`)) return;
+  try {
+    await fetchJSON(`${API}/master-profiles/${id}`, { method: 'DELETE' });
+    toast(`Deleted master profile: ${code}`);
+    loadMasterProfiles();
+  } catch (e) {
+    toast('Failed to delete profile');
+  }
+}
+
 // Initial load
 refreshData();
+loadMasterProfiles();
+
+// Auto-refresh data sources every 30s
+dsAutoRefresh = setInterval(refreshDataSources, 30000);
 </script>
 </body>
 </html>

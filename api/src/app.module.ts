@@ -33,6 +33,7 @@ import { Aircraft } from './aircraft/entities/aircraft.entity';
 import { PerformanceProfile } from './aircraft/entities/performance-profile.entity';
 import { FuelTank } from './aircraft/entities/fuel-tank.entity';
 import { Equipment } from './aircraft/entities/equipment.entity';
+import { MasterWBProfile } from './aircraft/entities/master-wb-profile.entity';
 import { AirspacesModule } from './airspaces/airspaces.module';
 import { Airspace } from './airspaces/entities/airspace.entity';
 import { AirwaySegment } from './airspaces/entities/airway-segment.entity';
@@ -66,6 +67,11 @@ import { TrafficModule } from './traffic/traffic.module';
 import { AuthModule } from './auth/auth.module';
 import { BriefingModule } from './briefing/briefing.module';
 import { DataPlatformModule } from './data-platform/data-platform.module';
+import { HrrrModule } from './hrrr/hrrr.module';
+import { HrrrCycle } from './data-platform/entities/hrrr-cycle.entity';
+import { HrrrSurface } from './data-platform/entities/hrrr-surface.entity';
+import { HrrrPressure } from './data-platform/entities/hrrr-pressure.entity';
+import { HrrrTileMeta } from './data-platform/entities/hrrr-tile-meta.entity';
 import { Metar } from './data-platform/entities/metar.entity';
 import { Taf } from './data-platform/entities/taf.entity';
 import { Advisory } from './data-platform/entities/advisory.entity';
@@ -76,7 +82,15 @@ import { WindGrid } from './data-platform/entities/wind-grid.entity';
 import { Notam } from './data-platform/entities/notam.entity';
 import { NwsForecast } from './data-platform/entities/nws-forecast.entity';
 import { Atis } from './data-platform/entities/atis.entity';
+import { WeatherAlert } from './data-platform/entities/weather-alert.entity';
+import { StormCell } from './data-platform/entities/storm-cell.entity';
+import { LightningThreat } from './data-platform/entities/lightning-threat.entity';
 import { DataSource as DataSourceEntity } from './data-platform/entities/data-source.entity';
+import { PollerRun } from './data-platform/entities/poller-run.entity';
+import { NotificationsModule } from './notifications/notifications.module';
+import { DeviceToken } from './notifications/entities/device-token.entity';
+import { NotificationLog } from './notifications/entities/notification-log.entity';
+import { MetarCategoryCache } from './notifications/entities/metar-category-cache.entity';
 import { dbConfig } from './db.config';
 
 @Module({
@@ -102,6 +116,7 @@ import { dbConfig } from './db.config';
         PerformanceProfile,
         FuelTank,
         Equipment,
+        MasterWBProfile,
         Airspace,
         AirwaySegment,
         ArtccBoundary,
@@ -135,6 +150,17 @@ import { dbConfig } from './db.config';
         Notam,
         NwsForecast,
         Atis,
+        WeatherAlert,
+        StormCell,
+        LightningThreat,
+        HrrrCycle,
+        HrrrSurface,
+        HrrrPressure,
+        HrrrTileMeta,
+        PollerRun,
+        DeviceToken,
+        NotificationLog,
+        MetarCategoryCache,
       ],
     }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
@@ -163,6 +189,8 @@ import { dbConfig } from './db.config';
     AuthModule,
     BriefingModule,
     DataPlatformModule,
+    HrrrModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

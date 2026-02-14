@@ -9,8 +9,33 @@ import '../../imagery/imagery_providers.dart';
 import '../../traffic/providers/traffic_providers.dart';
 import '../layers/map_layer_def.dart';
 import '../layers/geojson_enrichment.dart';
+import '../../../services/map_flight_provider.dart';
+import '../config/declutter_config.dart';
 import '../widgets/map_view.dart';
 import 'map_layer_state_provider.dart';
+
+/// Returns true if [airport] should be visible at the given [zoom] level.
+/// Uses tiered visibility so small airports only appear at close zoom.
+bool airportVisibleAtZoom(Map<String, dynamic> airport, double zoom) {
+  final type = airport['facility_type'] ?? 'A';
+  final use = airport['facility_use'] ?? 'PU';
+  final hasTower = airport['has_tower'] == true;
+  final hasHard = airport['has_hard_surface'] == true;
+
+  // Tier 1: Towered + hard surface (major airports)
+  if (hasTower && hasHard) return zoom >= DeclutterConfig.airportZoomToweredHard;
+  // Tier 2: Non-towered hard surface public
+  if (hasHard && use == 'PU' && type == 'A') return zoom >= DeclutterConfig.airportZoomHardPublic;
+  // Tier 3: Soft surface, heliports, seaplane bases
+  if (type == 'H' || type == 'S' || !hasHard) return zoom >= DeclutterConfig.airportZoomSoftHeliSea;
+  // Tier 4: Private, military, other
+  return zoom >= DeclutterConfig.airportZoomOther;
+}
+
+/// Strips [zoom] from a [MapBounds] for passing to API providers that
+/// only need the lat/lng box.
+({double minLat, double maxLat, double minLng, double maxLng}) _box(MapBounds b) =>
+    (minLat: b.minLat, maxLat: b.maxLat, minLng: b.minLng, maxLng: b.maxLng);
 
 /// Current visible map bounds, updated by MapsScreen on pan/zoom.
 class MapBoundsNotifier extends Notifier<MapBounds?> {
@@ -88,7 +113,7 @@ final metarOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   final active = layerState.activeOverlays.intersection(metarTypes);
   if (active.isEmpty) return null;
 
-  final metars = ref.watch(mapMetarsProvider(bounds)).value;
+  final metars = ref.watch(mapMetarsProvider(_box(bounds))).value;
   if (metars == null) return null;
 
   // Map the enum back to the overlay type string used by buildMetarOverlayGeoJson
@@ -164,6 +189,18 @@ final xweatherOverlayProvider =
   return const {'active': true};
 });
 
+// ── HRRR forecast tile overlays (activation sentinel) ─────────────────────
+
+final hrrrOverlayProvider =
+    Provider.family<Map<String, dynamic>?, MapLayerId>((ref, id) {
+  final layerState = ref.watch(mapLayerStateProvider).value;
+  if (layerState == null || !layerState.isActive(id)) return null;
+  if (id == MapLayerId.hrrrClouds) {
+    return {'active': true, 'level': layerState.cloudsAltitude};
+  }
+  return const {'active': true};
+});
+
 // ── Traffic overlay ─────────────────────────────────────────────────────────
 
 final trafficOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
@@ -196,18 +233,30 @@ final ownPositionOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
 });
 
 // ── Aeronautical sub-layers ─────────────────────────────────────────────────
+//
+// Each aeronautical overlay uses stale-while-revalidate: when new bounds
+// trigger a fresh API fetch, the previous data stays visible until the new
+// data arrives. The cache is cleared when the layer is disabled.
+
+Map<String, dynamic>? _airspaceCache;
 
 final airspaceOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   final layerState = ref.watch(mapLayerStateProvider).value;
   final bounds = ref.watch(mapBoundsProvider);
   if (layerState == null || bounds == null) return null;
-  if (!layerState.isActive(MapLayerId.aeronautical)) return null;
-  if (!layerState.aeroSettings.showAirspaces) return null;
+  if (!layerState.isActive(MapLayerId.aeronautical)) {
+    _airspaceCache = null;
+    return null;
+  }
+  if (!layerState.aeroSettings.showAirspaces) {
+    _airspaceCache = null;
+    return null;
+  }
 
   final classes = <String>['B', 'C', 'D'];
   if (layerState.aeroSettings.showClassE) classes.add('E');
 
-  return ref
+  final raw = ref
       .watch(mapAirspacesProvider((
         minLat: bounds.minLat,
         maxLat: bounds.maxLat,
@@ -216,21 +265,34 @@ final airspaceOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
         classes: classes.join(','),
       )))
       .value;
+  if (raw == null) return _airspaceCache;
+  final flight = ref.watch(activeFlightProvider);
+  final result = enrichAirspaceRelevance(raw, flight?.cruiseAltitude);
+  _airspaceCache = result;
+  return result;
 });
+
+Map<String, dynamic>? _airwayCache;
 
 final airwayOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   final layerState = ref.watch(mapLayerStateProvider).value;
   final bounds = ref.watch(mapBoundsProvider);
   if (layerState == null || bounds == null) return null;
-  if (!layerState.isActive(MapLayerId.aeronautical)) return null;
-  if (!layerState.aeroSettings.showAirways) return null;
+  if (!layerState.isActive(MapLayerId.aeronautical)) {
+    _airwayCache = null;
+    return null;
+  }
+  if (!layerState.aeroSettings.showAirways) {
+    _airwayCache = null;
+    return null;
+  }
 
   final types = <String>[];
   if (layerState.aeroSettings.showLowAirways) types.addAll(['V', 'T']);
   if (layerState.aeroSettings.showHighAirways) types.addAll(['J', 'Q']);
   final typesStr = types.isNotEmpty ? types.join(',') : null;
 
-  return ref
+  final result = ref
       .watch(mapAirwaysProvider((
         minLat: bounds.minLat,
         maxLat: bounds.maxLat,
@@ -239,40 +301,112 @@ final airwayOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
         types: typesStr,
       )))
       .value;
+  if (result == null) return _airwayCache;
+  _airwayCache = result;
+  return result;
 });
+
+Map<String, dynamic>? _artccCache;
 
 final artccOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   final layerState = ref.watch(mapLayerStateProvider).value;
   final bounds = ref.watch(mapBoundsProvider);
   if (layerState == null || bounds == null) return null;
-  if (!layerState.isActive(MapLayerId.aeronautical)) return null;
-  if (!layerState.aeroSettings.showArtcc) return null;
+  if (!layerState.isActive(MapLayerId.aeronautical)) {
+    _artccCache = null;
+    return null;
+  }
+  if (!layerState.aeroSettings.showArtcc) {
+    _artccCache = null;
+    return null;
+  }
 
-  return ref.watch(mapArtccProvider(bounds)).value;
+  final result = ref.watch(mapArtccProvider(_box(bounds))).value;
+  if (result == null) return _artccCache;
+  _artccCache = result;
+  return result;
 });
+
+/// When a flight plan is active, returns the set of waypoint identifiers
+/// on the route (departure, destination, alternate, and all route fixes).
+/// Empty set means no flight plan — show everything.
+final routeWaypointIdsProvider = Provider<Set<String>>((ref) {
+  final flight = ref.watch(activeFlightProvider);
+  if (flight == null) return {};
+  final route = flight.routeString?.trim() ?? '';
+  if (route.isEmpty) return {};
+  return {
+    if (flight.departureIdentifier != null) flight.departureIdentifier!.toUpperCase(),
+    if (flight.destinationIdentifier != null) flight.destinationIdentifier!.toUpperCase(),
+    if (flight.alternateIdentifier != null) flight.alternateIdentifier!.toUpperCase(),
+    ...route.split(RegExp(r'\s+')).map((w) => w.toUpperCase()),
+  };
+});
+
+Map<String, dynamic>? _navaidCache;
 
 final navaidOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   final layerState = ref.watch(mapLayerStateProvider).value;
   final bounds = ref.watch(mapBoundsProvider);
   if (layerState == null || bounds == null) return null;
-  if (!layerState.isActive(MapLayerId.aeronautical)) return null;
-  if (!layerState.aeroSettings.showNavaids) return null;
+  if (!layerState.isActive(MapLayerId.aeronautical)) {
+    _navaidCache = null;
+    return null;
+  }
+  if (!layerState.aeroSettings.showNavaids) {
+    _navaidCache = null;
+    return null;
+  }
 
-  final navaids = ref.watch(mapNavaidsProvider(bounds)).value;
-  if (navaids == null) return null;
-  return navaidsToGeoJson(navaids);
+  final navaids = ref.watch(mapNavaidsProvider(_box(bounds))).value;
+  if (navaids == null) return _navaidCache;
+
+  // When a flight plan is active, only show navaids on the route
+  final routeIds = ref.watch(routeWaypointIdsProvider);
+  final filtered = routeIds.isEmpty
+      ? navaids
+      : navaids.where((n) => routeIds.contains(
+          (n['identifier'] ?? '').toString().toUpperCase())).toList();
+  if (filtered.isEmpty) {
+    _navaidCache = null;
+    return null;
+  }
+  final result = navaidsToGeoJson(filtered);
+  _navaidCache = result;
+  return result;
 });
+
+Map<String, dynamic>? _fixCache;
 
 final fixOverlayProvider = Provider<Map<String, dynamic>?>((ref) {
   final layerState = ref.watch(mapLayerStateProvider).value;
   final bounds = ref.watch(mapBoundsProvider);
   if (layerState == null || bounds == null) return null;
-  if (!layerState.isActive(MapLayerId.aeronautical)) return null;
-  if (!layerState.aeroSettings.showFixes) return null;
+  if (!layerState.isActive(MapLayerId.aeronautical)) {
+    _fixCache = null;
+    return null;
+  }
+  if (!layerState.aeroSettings.showFixes) {
+    _fixCache = null;
+    return null;
+  }
 
-  final fixes = ref.watch(mapFixesProvider(bounds)).value;
-  if (fixes == null) return null;
-  return fixesToGeoJson(fixes);
+  final fixes = ref.watch(mapFixesProvider(_box(bounds))).value;
+  if (fixes == null) return _fixCache;
+
+  // When a flight plan is active, only show fixes on the route
+  final routeIds = ref.watch(routeWaypointIdsProvider);
+  final filtered = routeIds.isEmpty
+      ? fixes
+      : fixes.where((f) => routeIds.contains(
+          (f['identifier'] ?? '').toString().toUpperCase())).toList();
+  if (filtered.isEmpty) {
+    _fixCache = null;
+    return null;
+  }
+  final result = fixesToGeoJson(filtered);
+  _fixCache = result;
+  return result;
 });
 
 // ── Airport list (with flight category merge + weather stations) ────────────
@@ -287,6 +421,8 @@ class AirportListResult {
     required this.weatherStations,
   });
 }
+
+AirportListResult _airportListCache = const AirportListResult(airports: [], weatherStations: {});
 
 final airportListProvider = Provider<AirportListResult>((ref) {
   final layerState = ref.watch(mapLayerStateProvider).value;
@@ -304,7 +440,11 @@ final airportListProvider = Provider<AirportListResult>((ref) {
 
   // Fetch airports when aeronautical overlay or flight category is active
   if ((showAeronautical && aero.showAirports || showFlightCategory) && bounds != null) {
-    final airportsAsync = ref.watch(mapAirportsProvider(bounds));
+    final airportsAsync = ref.watch(mapAirportsProvider(_box(bounds)));
+    // Stale-while-revalidate: keep previous airports while loading new bounds
+    if (airportsAsync.isLoading && _airportListCache.airports.isNotEmpty) {
+      return _airportListCache;
+    }
     airports = airportsAsync.value
             ?.cast<Map<String, dynamic>>()
             .toList() ??
@@ -320,13 +460,20 @@ final airportListProvider = Provider<AirportListResult>((ref) {
       if (use == 'PR' && !aero.showPrivateAirports) return false;
       return true;
     }).toList();
+
+    // TODO: re-enable zoom-dependent airport declutter
+    // final zoom = bounds.zoom;
+    // airports = airports.where((a) {
+    //   if (a['isWeatherStation'] == true) return true;
+    //   return airportVisibleAtZoom(a, zoom);
+    // }).toList();
   }
 
   final wxStations = <String, Map<String, dynamic>>{};
 
   // Merge flight category data
   if (showFlightCategory && bounds != null) {
-    final metarsAsync = ref.watch(mapMetarsProvider(bounds));
+    final metarsAsync = ref.watch(mapMetarsProvider(_box(bounds)));
     final metars = metarsAsync.value;
     if (metars != null) {
       final metarMap = <String, Map<dynamic, dynamic>>{};
@@ -346,7 +493,9 @@ final airportListProvider = Provider<AirportListResult>((ref) {
         if (metar != null) {
           matched.add(icao.toString());
           final cat = metar['fltCat'] as String?;
-          if (cat != null) return {...a, 'category': cat};
+          if (cat != null) {
+            return {...a, 'category': cat, 'staleness': computeStaleness(metar)};
+          }
         }
         return a;
       }).toList();
@@ -367,6 +516,7 @@ final airportListProvider = Provider<AirportListResult>((ref) {
           'latitude': lat.toDouble(),
           'longitude': lon.toDouble(),
           'category': cat,
+          'staleness': computeStaleness(m),
           'isWeatherStation': true,
           '_metarData': m,
         };
@@ -378,5 +528,7 @@ final airportListProvider = Provider<AirportListResult>((ref) {
     }
   }
 
-  return AirportListResult(airports: airports, weatherStations: wxStations);
+  final result = AirportListResult(airports: airports, weatherStations: wxStations);
+  _airportListCache = result;
+  return result;
 });

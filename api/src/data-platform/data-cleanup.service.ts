@@ -8,6 +8,7 @@ import { WindsAloft } from './entities/winds-aloft.entity';
 import { Notam } from './entities/notam.entity';
 import { NwsForecast } from './entities/nws-forecast.entity';
 import { WindGrid } from './entities/wind-grid.entity';
+import { PollerRun } from './entities/poller-run.entity';
 
 @Injectable()
 export class DataCleanupService {
@@ -26,6 +27,8 @@ export class DataCleanupService {
     private readonly nwsForecastRepo: Repository<NwsForecast>,
     @InjectRepository(WindGrid)
     private readonly windGridRepo: Repository<WindGrid>,
+    @InjectRepository(PollerRun)
+    private readonly pollerRunRepo: Repository<PollerRun>,
   ) {}
 
   async cleanup(): Promise<void> {
@@ -51,12 +54,23 @@ export class DataCleanupService {
         this.windGridRepo,
         now - thresholds.WIND_GRID_MS,
       ),
+      this.cleanupPollerRuns(now),
     ]);
 
     for (const result of results) {
       if (result.status === 'rejected') {
         this.logger.error(`Cleanup error: ${result.reason}`);
       }
+    }
+  }
+
+  private async cleanupPollerRuns(nowMs: number): Promise<void> {
+    const cutoff = new Date(nowMs - 7 * 24 * 60 * 60 * 1000);
+    const result = await this.pollerRunRepo.delete({
+      completed_at: LessThan(cutoff),
+    });
+    if ((result.affected ?? 0) > 0) {
+      this.logger.log(`Cleaned ${result.affected} old PollerRun rows`);
     }
   }
 

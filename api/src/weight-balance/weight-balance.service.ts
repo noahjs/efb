@@ -338,6 +338,25 @@ export class WeightBalanceService {
 
   // --- Flight W&B Integration ---
 
+  async removeScenarioForFlight(
+    flightId: number,
+    userId?: string,
+  ): Promise<void> {
+    const where: Record<string, any> = { flight_id: flightId };
+    const scenario = await this.scenarioRepo.findOne({ where });
+    if (!scenario) return;
+
+    // Verify ownership via the flight
+    if (userId) {
+      const flight = await this.flightRepo.findOne({
+        where: { id: flightId, user_id: userId },
+      });
+      if (!flight) return;
+    }
+
+    await this.scenarioRepo.remove(scenario);
+  }
+
   async findOrCreateScenarioForFlight(flightId: number, userId?: string) {
     // 1. Check for existing scenario linked to this flight
     const existing = await this.scenarioRepo.findOne({

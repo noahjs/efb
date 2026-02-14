@@ -40,7 +40,9 @@ import 'widgets/map_view.dart';
 import 'widgets/navaid_bottom_sheet.dart';
 import 'widgets/pirep_bottom_sheet.dart';
 import 'widgets/waypoint_callout.dart';
-import 'widgets/radar_playback_control.dart';
+import 'widgets/time_playback_control.dart';
+import 'widgets/flight_filing_ribbon.dart';
+import 'widgets/cloud_altitude_slider.dart';
 import 'widgets/wind_altitude_slider.dart';
 import 'widgets/wind_heatmap_controller.dart';
 import 'widgets/wx_station_bottom_sheet.dart';
@@ -775,6 +777,11 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
 
     // Route line from active flight
     final activeFlight = ref.watch(activeFlightProvider);
+    final showFilingRibbon = activeFlight != null &&
+        activeFlight.id != null &&
+        activeFlight.filingStatus != 'not_filed';
+    final ribbonHeight = showFilingRibbon ? 36.0 : 0.0;
+
     final routeCoordinates = <List<double>>[];
     final routeStr = activeFlight?.routeString;
     final routeWaypoints = (routeStr != null && routeStr.trim().isNotEmpty)
@@ -842,7 +849,7 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
           // Left sidebar controls
           Positioned(
             left: 0,
-            bottom: 80,
+            bottom: 80 + ribbonHeight,
             child: MapSidebar(
               onZoomIn: _mapController.zoomIn,
               onZoomOut: _mapController.zoomOut,
@@ -883,6 +890,21 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
               ),
             ),
 
+          // Cloud altitude slider (right edge, only when HRRR clouds active)
+          if (layerState.isActive(MapLayerId.hrrrClouds))
+            Positioned(
+              right: 8,
+              top: MediaQuery.of(context).padding.top + 100,
+              child: CloudAltitudeSlider(
+                level: layerState.cloudsAltitude,
+                onChanged: (level) {
+                  ref
+                      .read(mapLayerStateProvider.notifier)
+                      .setCloudsAltitude(level);
+                },
+              ),
+            ),
+
           // Traffic proximity alert banner
           if (showTraffic && ref.watch(trafficAlertProvider) != null)
             Positioned(
@@ -897,16 +919,33 @@ class _MapsScreenState extends ConsumerState<MapsScreen> {
 
           // Radar playback control (above ADS-B status bar)
           if (showRadar)
-            const Positioned(
-              bottom: 68,
+            Positioned(
+              bottom: 68 + ribbonHeight,
               left: 0,
               right: 0,
-              child: RadarPlaybackControl(),
+              child: PointerInterceptor(
+                child: TimePlaybackControl(
+                  config: TimePlaybackConfig.radar,
+                  currentIndex: layerState.radarFrameIndex,
+                  onFrameChanged: (i) => ref
+                      .read(mapLayerStateProvider.notifier)
+                      .setRadarFrame(i),
+                ),
+              ),
+            ),
+
+          // Flight filing status ribbon
+          if (showFilingRibbon)
+            const Positioned(
+              bottom: 36,
+              left: 0,
+              right: 0,
+              child: FlightFilingRibbon(),
             ),
 
           // ADS-B status bar
           Positioned(
-            bottom: 36,
+            bottom: 36 + ribbonHeight,
             left: 0,
             right: 0,
             child: Center(child: AdsbStatusBar()),

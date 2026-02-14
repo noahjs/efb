@@ -62,11 +62,16 @@ export class LeidosService implements LeidosClient {
       );
 
       this._lastFetchAt = Date.now();
+      const message = Array.isArray(data.returnMessage)
+        ? data.returnMessage.join('; ')
+        : data.returnMessage || data.message;
       return {
-        success: true,
+        success: !!data.returnStatus,
         flightIdentifier: data.flightIdentifier,
         versionStamp: data.versionStamp,
-        message: data.message,
+        message,
+        beaconCode: data.beaconCode,
+        returnCodedMessage: data.returnCodedMessage,
       };
     } catch (error) {
       this._totalErrors++;
@@ -98,11 +103,16 @@ export class LeidosService implements LeidosClient {
       );
 
       this._lastFetchAt = Date.now();
+      const message = Array.isArray(data.returnMessage)
+        ? data.returnMessage.join('; ')
+        : data.returnMessage || data.message;
       return {
-        success: true,
+        success: !!data.returnStatus,
         flightIdentifier: data.flightIdentifier,
         versionStamp: data.versionStamp,
-        message: data.message,
+        message,
+        beaconCode: data.beaconCode,
+        returnCodedMessage: data.returnCodedMessage,
       };
     } catch (error) {
       this._totalErrors++;
@@ -134,11 +144,14 @@ export class LeidosService implements LeidosClient {
       );
 
       this._lastFetchAt = Date.now();
+      const message = Array.isArray(data.returnMessage)
+        ? data.returnMessage.join('; ')
+        : data.returnMessage || data.message;
       return {
-        success: true,
+        success: !!data.returnStatus,
         flightIdentifier: data.flightIdentifier || request.flightIdentifier,
         versionStamp: '',
-        message: data.message,
+        message,
       };
     } catch (error) {
       this._totalErrors++;
@@ -170,11 +183,14 @@ export class LeidosService implements LeidosClient {
       );
 
       this._lastFetchAt = Date.now();
+      const message = Array.isArray(data.returnMessage)
+        ? data.returnMessage.join('; ')
+        : data.returnMessage || data.message;
       return {
-        success: true,
+        success: !!data.returnStatus,
         flightIdentifier: data.flightIdentifier || request.flightIdentifier,
         versionStamp: '',
-        message: data.message,
+        message,
       };
     } catch (error) {
       this._totalErrors++;
@@ -212,6 +228,10 @@ export class LeidosService implements LeidosClient {
         status: data.status,
         versionStamp: data.versionStamp,
         message: data.message,
+        currentState: data.currentState,
+        flightPlan: data.icaoFlightPlan || data.nasFlightPlan,
+        beaconCode: data.beaconCode,
+        expectedRoute: data.expectedRoute,
       };
     } catch (error) {
       this._totalErrors++;

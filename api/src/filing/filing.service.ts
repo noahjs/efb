@@ -334,6 +334,7 @@ export class FilingService {
       filingVersionStamp: result.versionStamp,
       filedAt: new Date().toISOString(),
       message: result.message,
+      beaconCode: result.beaconCode,
     };
   }
 
@@ -411,6 +412,7 @@ export class FilingService {
       filingVersionStamp: result.versionStamp,
       filedAt: new Date().toISOString(),
       message: result.message,
+      beaconCode: result.beaconCode,
     };
   }
 
@@ -544,6 +546,8 @@ export class FilingService {
       filingReference: flight.filing_reference,
       filingVersionStamp: result.versionStamp,
       message: result.message,
+      leidosState: result.currentState,
+      beaconCode: result.beaconCode,
     };
   }
 

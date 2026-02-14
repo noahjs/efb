@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart' hide Visibility;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/config/app_config.dart';
 import 'map_view.dart' show EfbMapController, MapBounds, MapFeatureTap, MapFeatureType;
+import '../layers/map_layer_def.dart';
 import '../layers/map_layer_registry.dart';
 import 'airport_symbol_renderer.dart';
 import 'wind_barb_renderer.dart';
@@ -60,7 +64,49 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   final Set<String> _overlaySourcesReady = {};
   final _particleAnimator = WindParticleAnimator();
 
-  static const _vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
+  /// Converts raw RGBA pixel data to PNG-encoded bytes.
+  /// Required on iOS because mapbox_maps_flutter uses UIImage(data:) which
+  /// expects encoded image data (PNG/JPEG), not raw RGBA pixels.
+  static Future<Uint8List> _rgbaToPng(int width, int height, Uint8List rgba) async {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      rgba,
+      width,
+      height,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    final image = await completer.future;
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return byteData!.buffer.asUint8List();
+  }
+
+  // All FAA VFR Sectional Charts (full CONUS + Alaska + Hawaii)
+  static const _vfrCharts = [
+    'Albuquerque', 'Anchorage', 'Atlanta', 'Bethel', 'Billings',
+    'Brownsville', 'Cape_Lisburne', 'Charlotte', 'Cheyenne', 'Chicago',
+    'Cincinnati', 'Cold_Bay', 'Dallas-Ft_Worth', 'Dawson', 'Denver',
+    'Detroit', 'Dutch_Harbor', 'El_Paso', 'Fairbanks', 'Great_Falls',
+    'Green_Bay', 'Halifax', 'Hawaiian_Islands', 'Houston', 'Jacksonville',
+    'Juneau', 'Kansas_City', 'Ketchikan', 'Lake_Huron', 'Las_Vegas',
+    'Los_Angeles', 'McGrath', 'Memphis', 'Miami', 'Minneapolis',
+    'Montreal', 'New_Orleans', 'New_York', 'Nome', 'Omaha', 'Phoenix',
+    'Point_Barrow', 'Salt_Lake_City', 'San_Antonio', 'San_Francisco',
+    'Seattle', 'Seward', 'St_Louis', 'Twin_Cities', 'Washington',
+    'Western_Aleutian_Islands', 'Wichita',
+  ];
+
+  // All FAA Terminal Area Charts (Class B airspace areas, 1:250,000 scale)
+  static const _tacCharts = [
+    'Anchorage-Fairbanks', 'Atlanta', 'Baltimore-Washington', 'Boston',
+    'Charlotte', 'Chicago', 'Cincinnati', 'Cleveland', 'Dallas-Ft_Worth',
+    'Denver', 'Detroit', 'Houston', 'Kansas_City', 'Las_Vegas',
+    'Los_Angeles', 'Memphis', 'Miami', 'Minneapolis-St_Paul', 'New_Orleans',
+    'New_York', 'Philadelphia', 'Phoenix', 'Pittsburgh', 'Puerto_Rico-VI',
+    'Salt_Lake_City', 'San_Diego', 'San_Francisco', 'Seattle', 'St_Louis',
+    'Tampa-Orlando',
+  ];
 
   /// Xweather radar time offsets, oldest to newest (11 frames, 6-min intervals).
   static const _radarOffsets = [
@@ -74,9 +120,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     switch (layer) {
       case 'street':
         return MapboxStyles.MAPBOX_STREETS;
+      case 'vfr':
       case 'dark':
         return MapboxStyles.DARK;
-      case 'vfr':
       case 'satellite':
       default:
         return MapboxStyles.SATELLITE_STREETS;
@@ -115,13 +161,16 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       _updateRouteSource();
     }
     // Update any overlay sources that changed
-    // Skip 'radar' and Xweather keys — they use raster tile sources, not GeoJSON.
+    // Skip 'radar', Xweather, and HRRR keys — they use raster tile sources, not GeoJSON.
     final xwSourceKeys = kXweatherLayerNames.keys
+        .map((id) => kLayerById[id]!.sourceKey)
+        .toSet();
+    final hrrrSourceKeys = kHrrrTileProducts.keys
         .map((id) => kLayerById[id]!.sourceKey)
         .toSet();
     final allKeys = {...oldWidget.overlays.keys, ...widget.overlays.keys};
     for (final key in allKeys) {
-      if (key == 'radar' || xwSourceKeys.contains(key)) continue;
+      if (key == 'radar' || xwSourceKeys.contains(key) || hrrrSourceKeys.contains(key)) continue;
       if (oldWidget.overlays[key] != widget.overlays[key]) {
         _updateOverlaySource(key);
       }
@@ -133,6 +182,21 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       if (had != has) {
         _setXweatherVisibility(sourceKey, has);
       }
+    }
+    // Toggle HRRR forecast tile layer visibility
+    for (final sourceKey in hrrrSourceKeys) {
+      final had = oldWidget.overlays.containsKey(sourceKey);
+      final has = widget.overlays.containsKey(sourceKey);
+      if (had != has) {
+        _setHrrrVisibility(sourceKey, has);
+      }
+    }
+    // Detect cloud altitude changes and swap tile source URL
+    final cloudsKey = kLayerById[MapLayerId.hrrrClouds]!.sourceKey;
+    final oldLevel = oldWidget.overlays[cloudsKey]?['level'] as int?;
+    final newLevel = widget.overlays[cloudsKey]?['level'] as int?;
+    if (newLevel != null && oldLevel != null && newLevel != oldLevel) {
+      _swapHrrrCloudsLevel(newLevel);
     }
     // Toggle hillshade visibility with winds aloft overlay
     final hadWinds = oldWidget.overlays.containsKey('winds-aloft');
@@ -198,6 +262,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       for (final chart in _vfrCharts) {
         await map.style.setStyleLayerProperty(
           'vfr-layer-$chart',
+          'visibility',
+          value.name.toLowerCase(),
+        );
+      }
+      for (final chart in _tacCharts) {
+        await map.style.setStyleLayerProperty(
+          'tac-layer-$chart',
           'visibility',
           value.name.toLowerCase(),
         );
@@ -332,6 +403,85 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
+  /// Adds HRRR forecast raster tile sources and layers (visibility: NONE, opacity: 0.7).
+  /// Called in _onStyleLoaded after _addHillshadeLayer, before _addXweatherTiles.
+  Future<void> _addHrrrTiles(MapboxMap map) async {
+    try {
+      for (final entry in kHrrrTileProducts.entries) {
+        final def = kLayerById[entry.key]!;
+        final sourceKey = def.sourceKey;
+        final product = entry.value;
+        var url =
+            '${AppConfig.apiBaseUrl}/api/hrrr/tiles/$product/{z}/{x}/{y}.png?fh=1';
+        if (product == 'clouds') {
+          url += '&level=850';
+        }
+
+        await map.style.addSource(RasterSource(
+          id: sourceKey,
+          tiles: [url],
+          tileSize: 256,
+          minzoom: 2,
+          maxzoom: 8,
+          attribution: 'HRRR / NOAA',
+        ));
+
+        await map.style.addLayer(RasterLayer(
+          id: '$sourceKey-layer',
+          sourceId: sourceKey,
+          rasterOpacity: 0.7,
+          visibility: Visibility.NONE,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Failed to add HRRR tiles: $e');
+    }
+  }
+
+  /// Swaps the HRRR clouds raster source URL to reflect a new pressure level.
+  Future<void> _swapHrrrCloudsLevel(int level) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    final sourceKey = kLayerById[MapLayerId.hrrrClouds]!.sourceKey;
+    try {
+      await map.style.removeStyleLayer('$sourceKey-layer');
+      await map.style.removeStyleSource(sourceKey);
+
+      final url =
+          '${AppConfig.apiBaseUrl}/api/hrrr/tiles/clouds/{z}/{x}/{y}.png?fh=1&level=$level';
+      await map.style.addSource(RasterSource(
+        id: sourceKey,
+        tiles: [url],
+        tileSize: 256,
+        minzoom: 2,
+        maxzoom: 8,
+      ));
+      await map.style.addLayer(RasterLayer(
+        id: '$sourceKey-layer',
+        sourceId: sourceKey,
+        rasterOpacity: 0.7,
+        visibility: Visibility.VISIBLE,
+      ));
+    } catch (e) {
+      debugPrint('Failed to swap HRRR clouds level: $e');
+    }
+  }
+
+  /// Toggles an HRRR forecast raster layer's visibility.
+  Future<void> _setHrrrVisibility(String sourceKey, bool visible) async {
+    final map = _mapboxMap;
+    if (map == null) return;
+    try {
+      await map.style.setStyleLayerProperty(
+        '$sourceKey-layer',
+        'visibility',
+        visible ? 'visible' : 'none',
+      );
+    } catch (e) {
+      debugPrint('Failed to set HRRR visibility for $sourceKey: $e');
+    }
+  }
+
   Future<void> _applyFlightCategoryMode(bool enabled) async {
     final map = _mapboxMap;
     if (map == null || !_airportSourceReady) return;
@@ -456,6 +606,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         maxLat: bounds.northeast.coordinates.lat.toDouble(),
         minLng: bounds.southwest.coordinates.lng.toDouble(),
         maxLng: bounds.northeast.coordinates.lng.toDouble(),
+        zoom: cam.zoom,
       ));
     } catch (e) {
       debugPrint('Failed to get map bounds: $e');
@@ -667,6 +818,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     if (_mapboxMap == null) return;
     await _addVfrTiles(_mapboxMap!);
     await _addHillshadeLayer(_mapboxMap!);
+    await _addHrrrTiles(_mapboxMap!);
     await _addXweatherTiles(_mapboxMap!);
     await _addRadarTiles(_mapboxMap!);
     // Register airport symbol images for VFR chart-style markers
@@ -678,6 +830,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await _registerConeImage(_mapboxMap!);
     await _registerTrafficChevron(_mapboxMap!);
     await _registerFlightCatDotImage(_mapboxMap!);
+    // Register navaid (VOR/NDB) and fix symbol images
+    await _registerNavaidImages(_mapboxMap!);
     // Wind heatmap raster layer — positioned above aero/hillshade,
     // below wind arrow overlays (which are added in the loop below).
     await WindHeatmapController.createHeatmapLayer(_mapboxMap!);
@@ -707,6 +861,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       final sourceKey = kLayerById[id]!.sourceKey;
       if (widget.overlays.containsKey(sourceKey)) {
         _setXweatherVisibility(sourceKey, true);
+      }
+    }
+    // Re-apply HRRR forecast tile visibility after style reload
+    for (final id in kHrrrTileProducts.keys) {
+      final sourceKey = kLayerById[id]!.sourceKey;
+      if (widget.overlays.containsKey(sourceKey)) {
+        _setHrrrVisibility(sourceKey, true);
       }
     }
     // Re-apply any custom overlays (e.g. approach plates)
@@ -744,6 +905,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           'id': id,
           'category': category,
           'symbolType': symbolType,
+          'staleness': a['staleness'] ?? 1.0,
         },
       };
     }).toList();
@@ -783,6 +945,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         ? Visibility.VISIBLE
         : Visibility.NONE;
     try {
+      // Sectional charts (1:500,000 scale, zoom 5-11)
       for (final chart in _vfrCharts) {
         await map.style.addSource(RasterSource(
           id: 'vfr-$chart',
@@ -798,6 +961,27 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         await map.style.addLayer(RasterLayer(
           id: 'vfr-layer-$chart',
           sourceId: 'vfr-$chart',
+          rasterOpacity: 0.85,
+          visibility: visibility,
+        ));
+      }
+
+      // Terminal Area Charts on top (1:250,000 scale, zoom 7-13)
+      for (final chart in _tacCharts) {
+        await map.style.addSource(RasterSource(
+          id: 'tac-$chart',
+          tiles: [
+            '${AppConfig.apiBaseUrl}/api/tiles/vfr-tac/$chart/{z}/{x}/{y}.png'
+          ],
+          tileSize: 256,
+          minzoom: 7,
+          maxzoom: 13,
+          attribution: 'FAA TAC: $chart',
+        ));
+
+        await map.style.addLayer(RasterLayer(
+          id: 'tac-layer-$chart',
+          sourceId: 'tac-$chart',
           rasterOpacity: 0.85,
           visibility: visibility,
         ));
@@ -824,7 +1008,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           id: 'airport-sym-$symbolType',
           sourceId: 'airports',
           iconImage: symbolType,
-          iconSize: 0.2,
+          iconSize: 0.52,
           iconAllowOverlap: true,
           iconIgnorePlacement: true,
           filter: ['==', ['get', 'symbolType'], symbolType],
@@ -871,7 +1055,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           }
         }
       }
-      final mbxImage = MbxImage(width: size, height: size, data: pixels);
+      final pngData = await _rgbaToPng(size, size, pixels);
+      final mbxImage = MbxImage(width: size, height: size, data: pngData);
       await map.style.addStyleImage(
         'flight-cat-dot', 2.0, mbxImage,
         true, // SDF — allows dynamic icon-color
@@ -882,6 +1067,179 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }
   }
 
+  /// Register VOR hexagon, NDB circle, and fix triangle images.
+  Future<void> _registerNavaidImages(MapboxMap map) async {
+    const size = 32;
+    final cx = size / 2;
+    final cy = size / 2;
+
+    // ── VOR: hexagonal compass rose with tick marks ──
+    try {
+      final pixels = Uint8List(size * size * 4);
+      const vorColor = (r: 0x33, g: 0x66, b: 0xFF, a: 0xFF);
+      const vorFill = (r: 0x33, g: 0x66, b: 0xFF, a: 0x26); // 15% opacity
+      const radius = 10.0;
+
+      // Fill hexagon
+      for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+          if (_isInsideHexagon(x.toDouble(), y.toDouble(), cx, cy, radius)) {
+            final idx = (y * size + x) * 4;
+            pixels[idx] = vorFill.r;
+            pixels[idx + 1] = vorFill.g;
+            pixels[idx + 2] = vorFill.b;
+            pixels[idx + 3] = vorFill.a;
+          }
+        }
+      }
+
+      // Stroke hexagon edges
+      for (int i = 0; i < 6; i++) {
+        final a1 = (math.pi / 3) * i - math.pi / 2;
+        final a2 = (math.pi / 3) * (i + 1) - math.pi / 2;
+        _drawLineOnPixels(pixels, size,
+            cx + radius * math.cos(a1), cy + radius * math.sin(a1),
+            cx + radius * math.cos(a2), cy + radius * math.sin(a2),
+            vorColor, 2);
+      }
+
+      // Center dot
+      _fillCircleOnPixels(pixels, size, cx.round(), cy.round(), 2, vorColor);
+
+      // Tick marks at cardinal directions
+      const tickLen = 4.0;
+      _drawLineOnPixels(pixels, size, cx, cy - radius, cx, cy - radius - tickLen, vorColor, 2);
+      _drawLineOnPixels(pixels, size, cx, cy + radius, cx, cy + radius + tickLen, vorColor, 2);
+      _drawLineOnPixels(pixels, size, cx - radius, cy, cx - radius - tickLen, cy, vorColor, 2);
+      _drawLineOnPixels(pixels, size, cx + radius, cy, cx + radius + tickLen, cy, vorColor, 2);
+
+      final pngData = await _rgbaToPng(size, size, pixels);
+      await map.style.addStyleImage(
+        'navaid-vor', 2.0, MbxImage(width: size, height: size, data: pngData),
+        false, <ImageStretches>[], <ImageStretches>[], null,
+      );
+    } catch (e) {
+      debugPrint('[EFB] Failed to register navaid-vor image: $e');
+    }
+
+    // ── NDB: filled circle with radiating dots ──
+    try {
+      final pixels = Uint8List(size * size * 4);
+      const ndbColor = (r: 0x99, g: 0x33, b: 0xCC, a: 0xFF);
+
+      // Center filled circle
+      _fillCircleOnPixels(pixels, size, cx.round(), cy.round(), 5, ndbColor);
+
+      // Radiating dots (12 evenly spaced)
+      for (int d = 0; d < 12; d++) {
+        final angle = (math.pi / 6) * d;
+        final dotX = (cx + 11 * math.cos(angle)).round();
+        final dotY = (cy + 11 * math.sin(angle)).round();
+        _fillCircleOnPixels(pixels, size, dotX, dotY, 1, ndbColor);
+      }
+
+      final pngData = await _rgbaToPng(size, size, pixels);
+      await map.style.addStyleImage(
+        'navaid-ndb', 2.0, MbxImage(width: size, height: size, data: pngData),
+        false, <ImageStretches>[], <ImageStretches>[], null,
+      );
+    } catch (e) {
+      debugPrint('[EFB] Failed to register navaid-ndb image: $e');
+    }
+
+    // ── Fix: cyan triangle outline ──
+    try {
+      const fixSize = 24;
+      final pixels = Uint8List(fixSize * fixSize * 4);
+      const fixColor = (r: 0x00, g: 0xE5, b: 0xFF, a: 0xFF);
+      final fcx = fixSize / 2;
+      final fcy = fixSize / 2;
+      const triH = 10.0;
+      const triW = 11.0;
+
+      // Triangle: tip top-center, base at bottom
+      final tipX = fcx;
+      final tipY = fcy - triH / 2 - 1;
+      final leftX = fcx - triW / 2;
+      final leftY = fcy + triH / 2 - 1;
+      final rightX = fcx + triW / 2;
+      final rightY = fcy + triH / 2 - 1;
+
+      _drawLineOnPixels(pixels, fixSize, tipX, tipY, leftX, leftY, fixColor, 2);
+      _drawLineOnPixels(pixels, fixSize, leftX, leftY, rightX, rightY, fixColor, 2);
+      _drawLineOnPixels(pixels, fixSize, rightX, rightY, tipX, tipY, fixColor, 2);
+
+      final pngData = await _rgbaToPng(fixSize, fixSize, pixels);
+      await map.style.addStyleImage(
+        'fix-triangle', 2.0, MbxImage(width: fixSize, height: fixSize, data: pngData),
+        false, <ImageStretches>[], <ImageStretches>[], null,
+      );
+    } catch (e) {
+      debugPrint('[EFB] Failed to register fix-triangle image: $e');
+    }
+
+    debugPrint('[EFB] Registered navaid/fix symbol images');
+  }
+
+  /// Check if point is inside a regular hexagon centered at (cx, cy).
+  static bool _isInsideHexagon(double x, double y, double cx, double cy, double r) {
+    final dx = (x - cx).abs();
+    final dy = (y - cy).abs();
+    return dy <= r * math.sqrt(3) / 2 && dx <= r && dy + dx * math.sqrt(3) <= r * math.sqrt(3);
+  }
+
+  /// Draw a line with Bresenham's algorithm and thickness.
+  static void _drawLineOnPixels(Uint8List buf, int size,
+      double x0d, double y0d, double x1d, double y1d,
+      ({int r, int g, int b, int a}) color, int thickness) {
+    int x0 = x0d.round(), y0 = y0d.round();
+    int x1 = x1d.round(), y1 = y1d.round();
+    final dx = (x1 - x0).abs();
+    final dy = (y1 - y0).abs();
+    final sx = x0 < x1 ? 1 : -1;
+    final sy = y0 < y1 ? 1 : -1;
+    var err = dx - dy;
+    final half = thickness ~/ 2;
+    while (true) {
+      for (int py = y0 - half; py <= y0 + half; py++) {
+        for (int px = x0 - half; px <= x0 + half; px++) {
+          if (px >= 0 && px < size && py >= 0 && py < size) {
+            final idx = (py * size + px) * 4;
+            buf[idx] = color.r;
+            buf[idx + 1] = color.g;
+            buf[idx + 2] = color.b;
+            buf[idx + 3] = color.a;
+          }
+        }
+      }
+      if (x0 == x1 && y0 == y1) break;
+      final e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  }
+
+  /// Fill a circle on a pixel buffer.
+  static void _fillCircleOnPixels(Uint8List buf, int size,
+      int cx, int cy, int radius, ({int r, int g, int b, int a}) color) {
+    final r2 = radius * radius;
+    for (int dy = -radius; dy <= radius; dy++) {
+      for (int dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy <= r2) {
+          final px = cx + dx;
+          final py = cy + dy;
+          if (px >= 0 && px < size && py >= 0 && py < size) {
+            final idx = (py * size + px) * 4;
+            buf[idx] = color.r;
+            buf[idx + 1] = color.g;
+            buf[idx + 2] = color.b;
+            buf[idx + 3] = color.a;
+          }
+        }
+      }
+    }
+  }
+
   /// Flight category dots as a SymbolLayer (tappable, unlike CircleLayer).
   Future<void> _addFlightCategoryLayers(MapboxMap map) async {
     try {
@@ -889,7 +1247,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         id: 'airport-cat-dots',
         sourceId: 'airports',
         iconImage: 'flight-cat-dot',
-        iconSize: 0.7,
+        iconSize: 1.0,
         iconAllowOverlap: true,
         iconIgnorePlacement: true,
         visibility: Visibility.NONE,
@@ -903,6 +1261,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         'LIFR', '#E040FB',
         'rgba(0,0,0,0)',
       ]);
+      // Dim stale observations
+      await map.style.setStyleLayerProperty(
+        'airport-cat-dots', 'icon-opacity', ['coalesce', ['get', 'staleness'], 1.0]);
     } catch (e) {
       debugPrint('Failed to add flight category layers: $e');
     }
@@ -1113,6 +1474,9 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       fillOpacity: 0.1,
       fillColor: const Color(0xFF2196F3).toARGB32(),
     ));
+    // Altitude-aware opacity: base * per-feature altOpacity
+    await map.style.setStyleLayerProperty('airspace-fill', 'fill-opacity',
+      ['*', 0.1, ['coalesce', ['get', 'altOpacity'], 1.0]]);
     await map.style.addLayer(LineLayer(
       id: 'airspace-border',
       sourceId: srcId,
@@ -1120,6 +1484,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       lineColor: const Color(0xFF2196F3).toARGB32(),
       lineOpacity: 0.8,
     ));
+    await map.style.setStyleLayerProperty('airspace-border', 'line-opacity',
+      ['*', 0.8, ['coalesce', ['get', 'altOpacity'], 1.0]]);
   }
 
   static Future<void> _setupNavaidLayers(MapboxMap map, String srcId) async {
@@ -1128,15 +1494,23 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       sourceId: srcId,
       textField: '{identifier}',
       textSize: 10.0,
-      textColor: const Color(0xFF90CAF9).toARGB32(),
+      textColor: const Color(0xFFCCCCCC).toARGB32(),
       textHaloColor: const Color(0xFF000000).toARGB32(),
       textHaloWidth: 1.0,
-      textOffset: [0.0, 1.2],
+      textOffset: [0.0, 1.4],
       textOptional: true,
-      iconImage: 'airport-dot', // reuse existing small dot
-      iconSize: 0.5,
-      iconColor: const Color(0xFF90CAF9).toARGB32(),
+      iconImage: 'navaid-vor', // default; overridden below for NDB types
+      iconSize: 1.0,
+      iconAllowOverlap: true,
     ));
+    // Data-driven icon: NDB types get navaid-ndb, all others get navaid-vor
+    await map.style.setStyleLayerProperty('navaid-symbols', 'icon-image', [
+      'match', ['get', 'navType'],
+      'NDB', 'navaid-ndb',
+      'NDB/DME', 'navaid-ndb',
+      'MARINE NDB', 'navaid-ndb',
+      'navaid-vor',
+    ]);
   }
 
   static Future<void> _setupFixLayers(MapboxMap map, String srcId) async {
@@ -1145,14 +1519,14 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       sourceId: srcId,
       textField: '{identifier}',
       textSize: 9.0,
-      textColor: const Color(0xFF80CBC4).toARGB32(),
+      textColor: const Color(0xFFAAAAAA).toARGB32(),
       textHaloColor: const Color(0xFF000000).toARGB32(),
       textHaloWidth: 1.0,
       textOffset: [0.0, 1.2],
       textOptional: true,
-      iconImage: 'airport-dot', // reuse existing small dot
-      iconSize: 0.4,
-      iconColor: const Color(0xFF80CBC4).toARGB32(),
+      iconImage: 'fix-triangle',
+      iconSize: 1.0,
+      iconAllowOverlap: true,
     ));
   }
 
@@ -1221,6 +1595,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     await map.style.setStyleLayerProperty(
       'pirep-symbols', 'text-color', ['get', 'color'],
     );
+    await map.style.setStyleLayerProperty(
+      'pirep-symbols', 'text-opacity', ['coalesce', ['get', 'staleness'], 1.0]);
 
     // Urgent PIREPs get a red outer ring
     await map.style.addLayer(CircleLayer(
@@ -1245,6 +1621,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       circleStrokeColor: Colors.white.withValues(alpha: 0.3).toARGB32(),
     ));
     await map.style.setStyleLayerProperty('metar-overlay-dots', 'circle-color', ['get', 'color']);
+    await map.style.setStyleLayerProperty(
+      'metar-overlay-dots', 'circle-opacity', ['coalesce', ['get', 'staleness'], 1.0]);
 
     await map.style.addLayer(SymbolLayer(
       id: 'metar-overlay-labels',
@@ -1257,6 +1635,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
       textOffset: [0.0, -1.5],
       textFont: ['DIN Pro Medium', 'Arial Unicode MS Regular'],
     ));
+    await map.style.setStyleLayerProperty(
+      'metar-overlay-labels', 'text-opacity', ['coalesce', ['get', 'staleness'], 1.0]);
   }
 
   static Future<void> _setupStormCellLayers(MapboxMap map, String srcId) async {
@@ -1643,7 +2023,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           pixels[idx + 3] = 0xDD; // A
         }
       }
-      final mbxImage = MbxImage(width: w, height: h, data: pixels);
+      final pngData = await _rgbaToPng(w, h, pixels);
+      final mbxImage = MbxImage(width: w, height: h, data: pngData);
       await map.style.addStyleImage(
         'own-position-cone', 2.0, mbxImage,
         false, <ImageStretches>[], <ImageStretches>[], null,
@@ -1675,7 +2056,8 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           pixels[idx + 3] = 0xFF; // A
         }
       }
-      final mbxImage = MbxImage(width: w, height: h, data: pixels);
+      final pngData = await _rgbaToPng(w, h, pixels);
+      final mbxImage = MbxImage(width: w, height: h, data: pngData);
       await map.style.addStyleImage(
         'traffic-chevron', 2.0, mbxImage,
         true, // SDF — allows dynamic icon-color
@@ -1701,10 +2083,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           continue;
         }
         try {
+          final pngData = await _rgbaToPng(img.width, img.height, Uint8List.fromList(img.data));
           final mbxImage = MbxImage(
             width: img.width,
             height: img.height,
-            data: Uint8List.fromList(img.data),
+            data: pngData,
           );
           await map.style.addStyleImage(
             name, 2.0, mbxImage, false, <ImageStretches>[], <ImageStretches>[], null,
@@ -1735,10 +2118,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           continue;
         }
         try {
+          final pngData = await _rgbaToPng(img.width, img.height, Uint8List.fromList(img.data));
           final mbxImage = MbxImage(
             width: img.width,
             height: img.height,
-            data: Uint8List.fromList(img.data),
+            data: pngData,
           );
           await map.style.addStyleImage(
               name, 2.0, mbxImage, false, <ImageStretches>[], <ImageStretches>[], null);
@@ -1757,10 +2141,11 @@ class _PlatformMapViewState extends State<PlatformMapView> {
   Future<void> _registerWindArrowImage(MapboxMap map) async {
     try {
       final arrow = WindArrowRenderer.generateArrow(scale: 2.0);
+      final pngData = await _rgbaToPng(arrow.width, arrow.height, Uint8List.fromList(arrow.data));
       final mbxImage = MbxImage(
         width: arrow.width,
         height: arrow.height,
-        data: Uint8List.fromList(arrow.data),
+        data: pngData,
       );
       await map.style.addStyleImage(
         'wind-arrow',

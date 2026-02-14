@@ -90,7 +90,7 @@ export class LightningThreatPoller extends BasePoller {
 
     // Full replace in a transaction
     await this.lightningRepo.manager.transaction(async (em) => {
-      await em.createQueryBuilder().delete().from(LightningThreat).execute();
+      await em.query('DELETE FROM a_lightning_threats');
       if (threats.length > 0) {
         await em.save(LightningThreat, threats);
       }

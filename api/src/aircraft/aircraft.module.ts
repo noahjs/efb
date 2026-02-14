@@ -6,6 +6,10 @@ import { Aircraft } from './entities/aircraft.entity';
 import { PerformanceProfile } from './entities/performance-profile.entity';
 import { FuelTank } from './entities/fuel-tank.entity';
 import { Equipment } from './entities/equipment.entity';
+import { MasterWBProfile } from './entities/master-wb-profile.entity';
+import { WBProfile } from '../weight-balance/entities/wb-profile.entity';
+import { WBStation } from '../weight-balance/entities/wb-station.entity';
+import { WBEnvelope } from '../weight-balance/entities/wb-envelope.entity';
 
 @Module({
   imports: [
@@ -14,6 +18,10 @@ import { Equipment } from './entities/equipment.entity';
       PerformanceProfile,
       FuelTank,
       Equipment,
+      MasterWBProfile,
+      WBProfile,
+      WBStation,
+      WBEnvelope,
     ]),
   ],
   controllers: [AircraftController],

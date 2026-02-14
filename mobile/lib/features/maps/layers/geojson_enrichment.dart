@@ -1,4 +1,25 @@
+import '../config/declutter_config.dart';
 import '../../imagery/widgets/pirep_symbols.dart';
+
+// ── Staleness computation ────────────────────────────────────────────────────
+
+/// Computes an opacity value (0.0–1.0) based on observation age.
+/// Used for METARs, PIREPs, and flight category dots.
+double computeStaleness(Map<dynamic, dynamic> data) {
+  DateTime? obs;
+  final rt = data['reportTime'];
+  final ot = data['obsTime'];
+  if (rt is String) obs = DateTime.tryParse(rt);
+  obs ??= (ot is String) ? DateTime.tryParse(ot) : null;
+  if (obs == null && ot is num) {
+    obs = DateTime.fromMillisecondsSinceEpoch(ot.toInt() * 1000, isUtc: true);
+  }
+  if (obs == null) return DeclutterConfig.stalenessFreshOpacity;
+  final age = DateTime.now().toUtc().difference(obs).inMinutes;
+  if (age > DeclutterConfig.stalenessStaleMinutes) return DeclutterConfig.stalenessStaleOpacity;
+  if (age > DeclutterConfig.stalenessAgingMinutes) return DeclutterConfig.stalenessAgingOpacity;
+  return DeclutterConfig.stalenessFreshOpacity;
+}
 
 // ── Advisory enrichment ─────────────────────────────────────────────────────
 
@@ -47,6 +68,7 @@ Map<String, dynamic> enrichPirepGeoJson(Map<String, dynamic> original) {
     props['symbol'] = pirepSymbolChar(iconName);
     props['color'] = pirepSymbolColorHex(iconName);
     props['isUrgent'] = airepType == 'URGENT PIREP';
+    props['staleness'] = computeStaleness(props);
     feature['properties'] = props;
     return feature;
   }).toList();
@@ -202,6 +224,7 @@ Map<String, dynamic> buildMetarOverlayGeoJson(
       'properties': {
         'color': color,
         'label': label ?? '',
+        'staleness': computeStaleness(m),
       },
     });
   }
@@ -317,6 +340,40 @@ Map<String, dynamic> enrichWeatherAlertGeoJson(Map<String, dynamic> original) {
     return feature;
   }).toList();
   return {'type': 'FeatureCollection', 'features': enrichedFeatures};
+}
+
+// ── Airspace altitude relevance ──────────────────────────────────────────────
+
+/// Enriches airspace GeoJSON with an `altOpacity` property based on how
+/// relevant each airspace is to the given [cruiseAltitude].
+/// If [cruiseAltitude] is null, all airspaces get full opacity.
+Map<String, dynamic> enrichAirspaceRelevance(
+  Map<String, dynamic> geojson,
+  int? cruiseAltitude,
+) {
+  if (cruiseAltitude == null) return geojson;
+  final features = (geojson['features'] as List?) ?? [];
+  return {
+    'type': 'FeatureCollection',
+    'features': features.map((f) {
+      final feature = Map<String, dynamic>.from(f as Map);
+      final props = Map<String, dynamic>.from(feature['properties'] as Map? ?? {});
+      final lower = props['lower_alt'] as int?;
+      final upper = props['upper_alt'] as int?;
+      if (lower == null || upper == null) {
+        props['altOpacity'] = DeclutterConfig.airspaceRelevantOpacity;
+      } else {
+        final buffer = DeclutterConfig.airspaceAltitudeBuffer;
+        final relevant = cruiseAltitude >= (lower - buffer) &&
+            cruiseAltitude <= (upper + buffer);
+        props['altOpacity'] = relevant
+            ? DeclutterConfig.airspaceRelevantOpacity
+            : DeclutterConfig.airspaceIrrelevantOpacity;
+      }
+      feature['properties'] = props;
+      return feature;
+    }).toList(),
+  };
 }
 
 /// Extract the features list from a GeoJSON FeatureCollection, or null.

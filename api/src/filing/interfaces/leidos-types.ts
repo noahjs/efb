@@ -39,12 +39,19 @@ export interface LeidosFlightPlanPayload {
   remarks?: string;
 }
 
+export interface LeidosCodedMessage {
+  code: string;
+  message: string;
+}
+
 export interface LeidosFileResponse {
   success: boolean;
   flightIdentifier: string;
   versionStamp: string;
   message?: string;
   errors?: string[];
+  beaconCode?: string;
+  returnCodedMessage?: LeidosCodedMessage[];
 }
 
 export interface LeidosAmendRequest extends LeidosFileRequest {
@@ -67,6 +74,10 @@ export interface LeidosStatusResponse {
   status: string;
   versionStamp?: string;
   message?: string;
+  currentState?: string;
+  flightPlan?: LeidosFlightPlanPayload;
+  beaconCode?: string;
+  expectedRoute?: string;
 }
 
 export interface LeidosClient {

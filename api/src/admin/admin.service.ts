@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { MasterWBProfile } from '../aircraft/entities/master-wb-profile.entity';
 import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
@@ -13,6 +14,8 @@ import { Fbo } from '../fbos/entities/fbo.entity';
 import { FuelPrice } from '../fbos/entities/fuel-price.entity';
 import { Metar } from '../data-platform/entities/metar.entity';
 import { Taf } from '../data-platform/entities/taf.entity';
+import { DataSource as DataSourceEntity } from '../data-platform/entities/data-source.entity';
+import { PollerRun } from '../data-platform/entities/poller-run.entity';
 import { WeatherService } from '../weather/weather.service';
 import { ImageryService } from '../imagery/imagery.service';
 import { WindyService } from '../windy/windy.service';
@@ -113,6 +116,12 @@ export class AdminService {
     @InjectRepository(FuelPrice) private fuelPriceRepo: Repository<FuelPrice>,
     @InjectRepository(Metar) private metarRepo: Repository<Metar>,
     @InjectRepository(Taf) private tafRepo: Repository<Taf>,
+    @InjectRepository(DataSourceEntity)
+    private dsRepo: Repository<DataSourceEntity>,
+    @InjectRepository(PollerRun)
+    private pollerRunRepo: Repository<PollerRun>,
+    @InjectRepository(MasterWBProfile)
+    private masterProfileRepo: Repository<MasterWBProfile>,
     private readonly weatherService: WeatherService,
     private readonly imageryService: ImageryService,
     private readonly windyService: WindyService,
@@ -500,6 +509,54 @@ export class AdminService {
     return { restarted: true, key };
   }
 
+  async getDataSourceHistory(key: string) {
+    return this.pollerRunRepo.find({
+      where: { data_source_key: key },
+      order: { completed_at: 'DESC' },
+      take: 50,
+    });
+  }
+
+  async getDataSourcesSummary() {
+    const sources = await this.dsRepo.find();
+    const now = Date.now();
+    let healthy = 0,
+      degraded = 0,
+      failed = 0,
+      overdue = 0;
+
+    for (const ds of sources) {
+      if (!ds.enabled) continue;
+
+      const isOverdue =
+        ds.last_completed_at &&
+        now - new Date(ds.last_completed_at).getTime() >
+          ds.interval_seconds * 1000 * 3;
+
+      if (isOverdue) {
+        overdue++;
+      }
+
+      if (ds.consecutive_failures >= 3 || ds.status === 'failed') {
+        failed++;
+      } else if (ds.consecutive_failures > 0) {
+        degraded++;
+      } else {
+        healthy++;
+      }
+    }
+
+    return { total: sources.length, healthy, degraded, failed, overdue };
+  }
+
+  async toggleDataSource(key: string) {
+    const ds = await this.dsRepo.findOneBy({ key });
+    if (!ds) throw new NotFoundException(`Data source not found: ${key}`);
+    ds.enabled = !ds.enabled;
+    await this.dsRepo.save(ds);
+    return { key, enabled: ds.enabled };
+  }
+
   // --- Weather Coverage ---
 
   async getWeatherCoverage() {
@@ -619,6 +676,42 @@ export class AdminService {
       },
       airports: airportList,
     };
+  }
+
+  // --- Master W&B Profiles ---
+
+  async getMasterProfiles(): Promise<MasterWBProfile[]> {
+    return this.masterProfileRepo.find({
+      order: { icao_type_code: 'ASC' },
+    });
+  }
+
+  async getMasterProfile(id: number): Promise<MasterWBProfile> {
+    const profile = await this.masterProfileRepo.findOne({ where: { id } });
+    if (!profile)
+      throw new NotFoundException(`Master profile #${id} not found`);
+    return profile;
+  }
+
+  async createMasterProfile(
+    data: Partial<MasterWBProfile>,
+  ): Promise<MasterWBProfile> {
+    const profile = this.masterProfileRepo.create(data);
+    return this.masterProfileRepo.save(profile);
+  }
+
+  async updateMasterProfile(
+    id: number,
+    data: Partial<MasterWBProfile>,
+  ): Promise<MasterWBProfile> {
+    const profile = await this.getMasterProfile(id);
+    Object.assign(profile, data);
+    return this.masterProfileRepo.save(profile);
+  }
+
+  async deleteMasterProfile(id: number): Promise<void> {
+    const profile = await this.getMasterProfile(id);
+    await this.masterProfileRepo.remove(profile);
   }
 
   // --- Helpers ---

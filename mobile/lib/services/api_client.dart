@@ -809,6 +809,10 @@ class ApiClient {
     return response.data;
   }
 
+  Future<void> deleteFlightWBScenario(int flightId) async {
+    await _dio.delete('/flights/$flightId/wb-scenario');
+  }
+
   // --- Weight & Balance ---
 
   Future<List<dynamic>> getWBProfiles(int aircraftId) async {
@@ -1396,6 +1400,33 @@ class ApiClient {
     } catch (_) {
       return null;
     }
+  }
+
+  // --- Notifications ---
+
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    await _dio.post('/notifications/device-token', data: {
+      'token': token,
+      'platform': platform,
+    });
+  }
+
+  Future<void> deleteDeviceToken(String token) async {
+    await _dio.delete('/notifications/device-token/$token');
+  }
+
+  Future<Map<String, dynamic>> getNotificationPreferences() async {
+    final response = await _dio.get('/notifications/preferences');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateNotificationPreferences(
+      Map<String, dynamic> prefs) async {
+    final response = await _dio.put('/notifications/preferences', data: prefs);
+    return response.data;
   }
 
   // --- Filing ---

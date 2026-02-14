@@ -176,11 +176,76 @@ export const DATA_PLATFORM = {
   },
 };
 
+// --- HRRR (NOAA High-Resolution Rapid Refresh) ---
+export const HRRR = {
+  // S3 source (public, no auth required)
+  S3_BASE_URL: 'https://noaa-hrrr-bdp-pds.s3.amazonaws.com',
+
+  // Variables to extract from wrfsfcf (2D surface file)
+  // Format matches .idx file: 'VAR:level'
+  SURFACE_VARS: [
+    'TCDC:entire atmosphere',
+    'TCDC:boundary layer cloud layer',
+    'LCDC:low cloud layer',
+    'MCDC:middle cloud layer',
+    'HCDC:high cloud layer',
+    'HGT:cloud ceiling',
+    'HGT:cloud base',
+    'HGT:cloud top',
+    'VIS:surface',
+    'UGRD:10 m above ground',
+    'VGRD:10 m above ground',
+    'TMP:2 m above ground',
+    'GUST:surface',
+  ],
+
+  // Variables to extract from wrfprsf (3D pressure levels)
+  // Note: HRRR has no TCDC at individual pressure levels; use RH as cloud proxy
+  PRESSURE_VARS: ['RH', 'UGRD', 'VGRD', 'TMP'],
+  PRESSURE_LEVELS: [1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 250, 200, 150],
+
+  // Tile rendering
+  TILE_ZOOM_MIN: 2,
+  TILE_ZOOM_MAX: 8,
+  TILE_SIZE: 256,
+  TILES_BASE_DIR: 'data/hrrr/tiles',
+  MAX_CYCLE_AGE_HOURS: 6,
+
+  // Forecast hours to process each cycle
+  FORECAST_HOURS: [1, 2, 3, 4, 5, 6],
+
+  // Grid extraction (1° spacing, matches wind grid)
+  GRID_SPACING_DEG: 1.0,
+
+  // Polling
+  POLL_INTERVAL_MS: 60 * 60 * 1000, // 60 min
+  RETRY_INTERVAL_MS: 10 * 60 * 1000, // 10 min on failure
+  S3_TIMEOUT_MS: 30_000,
+  PROCESSOR_TIMEOUT_MS: 10 * 60 * 1000, // 10 min for Python processing
+  // Hours to look back for available cycles (HRRR data available ~1-2h after init)
+  CYCLE_LOOKBACK_HOURS: 3,
+
+  // API caching
+  CACHE_TTL_TILES_MS: 30 * 60 * 1000, // 30 min
+  CACHE_TTL_ROUTE_MS: 15 * 60 * 1000, // 15 min
+
+  // Stale threshold
+  STALE_MS: 3 * 60 * 60 * 1000, // 3 hours
+};
+
 // --- Xweather ---
 export const XWEATHER = {
   API_BASE_URL: 'https://data.api.xweather.com',
   TIMEOUT_MS: 15_000,
   CONUS_BOUNDS: '24,-125,50,-66',
+};
+
+// --- Notifications ---
+export const NOTIFICATION = {
+  ACTIVE_FLIGHT_WINDOW_HOURS: 48,
+  GEOMETRY_BUFFER_DEGREES: 0.5, // ~30nm
+  DISPATCH_INTERVAL_SECONDS: 120,
+  LOG_RETENTION_DAYS: 30,
 };
 
 // --- FBO / Fuel Price Scraping ---

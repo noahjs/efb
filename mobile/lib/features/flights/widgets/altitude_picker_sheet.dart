@@ -1,9 +1,11 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/api_client.dart';
 
 /// Standard altitude picker that shows ETE and fuel for each altitude option.
-/// Matches the hemispheric altitude rules for VFR/IFR and East/West headings.
+/// Matches the hemispheric altitude rules for VFR/IFR and East/West heading.
 Future<int?> showAltitudePickerSheet(
   BuildContext context, {
   required ApiClient apiClient,
@@ -88,6 +90,12 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
   Map<int, _AltitudeData> _data = {};
   bool _loading = false;
 
+  // Computed optimal fields
+  int? _optimalAltitude;
+  int _timeSavedMinutes = 0;
+  String? _comparedToLabel;
+  double _maxAbsWind = 1; // avoid division by zero
+
   @override
   void initState() {
     super.initState();
@@ -169,12 +177,61 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
           avgGroundspeed: r['avg_groundspeed'] as int?,
         );
       }
-      if (mounted) setState(() => _data = dataMap);
+      if (mounted) {
+        setState(() => _data = dataMap);
+        _computeOptimal();
+      }
     } catch (_) {
       // Silently fail — rows will show "--"
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _computeOptimal() {
+    if (_data.isEmpty) return;
+
+    // Find altitude with lowest ETE
+    int? bestAlt;
+    int? bestEte;
+    int? worstEte;
+    double maxWind = 0;
+
+    for (final entry in _data.entries) {
+      final ete = entry.value.eteMinutes;
+      final wind = entry.value.avgWindComponent;
+      if (wind != null) {
+        maxWind = math.max(maxWind, wind.abs().toDouble());
+      }
+      if (ete != null) {
+        if (bestEte == null || ete < bestEte) {
+          bestEte = ete;
+          bestAlt = entry.key;
+        }
+        if (worstEte == null || ete > worstEte) {
+          worstEte = ete;
+        }
+      }
+    }
+
+    if (bestAlt == null || bestEte == null) return;
+
+    // Compare against current altitude if set, otherwise worst
+    final currentData = widget.currentAltitude != null
+        ? _data[widget.currentAltitude]
+        : null;
+    final compareEte = currentData?.eteMinutes ?? worstEte ?? bestEte;
+    final saved = compareEte - bestEte;
+    final compareLabel = currentData != null && widget.currentAltitude != null
+        ? _formatAltitude(widget.currentAltitude!)
+        : null;
+
+    setState(() {
+      _optimalAltitude = bestAlt;
+      _timeSavedMinutes = saved;
+      _comparedToLabel = compareLabel;
+      _maxAbsWind = maxWind > 0 ? maxWind : 1;
+    });
   }
 
   String _formatAltitude(int ft) {
@@ -200,21 +257,6 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
   String _formatFuel(double? gallons) {
     if (gallons == null) return '--';
     return '${gallons.round()}g';
-  }
-
-  String _formatWind(int? component) {
-    if (component == null) return '--';
-    if (component == 0) return '0kt';
-    // Positive = tailwind, negative = headwind
-    final prefix = component > 0 ? '+' : '';
-    return '$prefix${component}kt';
-  }
-
-  Color _windColor(int? component) {
-    if (component == null) return AppColors.textMuted;
-    if (component > 0) return AppColors.success; // tailwind = green
-    if (component < 0) return AppColors.error; // headwind = red
-    return AppColors.textSecondary;
   }
 
   @override
@@ -280,6 +322,105 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
         ),
         const Divider(height: 1, color: AppColors.divider),
 
+        // Recommendation banner
+        if (!_loading && _optimalAltitude != null && _timeSavedMinutes > 0)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            color: AppColors.accent.withValues(alpha: 0.08),
+            child: Row(
+              children: [
+                Icon(Icons.auto_awesome, size: 16, color: AppColors.accent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Optimal: ${_formatAltitude(_optimalAltitude!)}'
+                    ' \u2014 saves $_timeSavedMinutes min'
+                    '${_comparedToLabel != null ? ' vs $_comparedToLabel' : ''}',
+                    style: TextStyle(
+                      color: AppColors.accent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        // Column headers
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 72,
+                child: Text(
+                  'ALT',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const Expanded(
+                child: Text(
+                  'WIND',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              const SizedBox(
+                width: 50,
+                child: Text(
+                  'GS',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              const SizedBox(
+                width: 58,
+                child: Text(
+                  'ETE',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              const SizedBox(
+                width: 44,
+                child: Text(
+                  'FUEL',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              const SizedBox(width: 24), // radio column spacer
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: AppColors.divider),
+
         // Altitude list
         Expanded(
           child: _loading && _data.isEmpty
@@ -292,64 +433,94 @@ class _AltitudePickerBodyState extends State<_AltitudePickerBody> {
                     final alt = altitudes[i];
                     final data = _data[alt];
                     final isSelected = alt == widget.currentAltitude;
+                    final isOptimal = alt == _optimalAltitude;
 
                     return InkWell(
                       onTap: () => Navigator.pop(context, alt),
-                      child: Padding(
+                      child: Container(
+                        color: isOptimal
+                            ? AppColors.accent.withValues(alpha: 0.06)
+                            : null,
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
+                            horizontal: 16, vertical: 11),
                         child: Row(
                           children: [
                             // Altitude label
                             SizedBox(
-                              width: 80,
-                              child: Text(
-                                _formatAltitude(alt),
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              width: 72,
+                              child: Row(
+                                children: [
+                                  if (isOptimal)
+                                    Container(
+                                      width: 6,
+                                      height: 6,
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: const BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: AppColors.accent,
+                                      ),
+                                    ),
+                                  Text(
+                                    _formatAltitude(alt),
+                                    style: TextStyle(
+                                      color: isOptimal
+                                          ? AppColors.accent
+                                          : AppColors.textPrimary,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            // Wind component (headwind/tailwind)
+                            // Wind component bar
                             Expanded(
+                              child: _WindBar(
+                                component: data?.avgWindComponent,
+                                maxAbsWind: _maxAbsWind,
+                              ),
+                            ),
+                            // Groundspeed
+                            SizedBox(
+                              width: 50,
                               child: Text(
-                                _formatWind(data?.avgWindComponent),
-                                style: TextStyle(
-                                  color: _windColor(data?.avgWindComponent),
+                                data?.avgGroundspeed != null
+                                    ? '${data!.avgGroundspeed}'
+                                    : '--',
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w600,
                                 ),
-                                textAlign: TextAlign.center,
+                                textAlign: TextAlign.right,
                               ),
                             ),
                             // ETE
                             SizedBox(
-                              width: 70,
+                              width: 58,
                               child: Text(
                                 _formatEte(data?.eteMinutes),
-                                style: const TextStyle(
-                                  color: AppColors.textPrimary,
-                                  fontSize: 15,
+                                style: TextStyle(
+                                  color: isOptimal
+                                      ? AppColors.accent
+                                      : AppColors.textPrimary,
+                                  fontSize: 14,
                                 ),
                                 textAlign: TextAlign.right,
                               ),
                             ),
-                            const SizedBox(width: 16),
                             // Fuel
                             SizedBox(
-                              width: 50,
+                              width: 44,
                               child: Text(
                                 _formatFuel(data?.fuelGallons),
                                 style: const TextStyle(
                                   color: AppColors.textPrimary,
-                                  fontSize: 15,
+                                  fontSize: 14,
                                 ),
                                 textAlign: TextAlign.right,
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 8),
                             // Radio
                             _RadioDot(selected: isSelected),
                           ],
@@ -434,6 +605,72 @@ class _AltitudeData {
     this.avgWindComponent,
     this.avgGroundspeed,
   });
+}
+
+/// Visual wind bar: text label + proportional colored bar.
+class _WindBar extends StatelessWidget {
+  final int? component;
+  final double maxAbsWind;
+
+  const _WindBar({required this.component, required this.maxAbsWind});
+
+  @override
+  Widget build(BuildContext context) {
+    if (component == null) {
+      return const Text(
+        '--',
+        style: TextStyle(color: AppColors.textMuted, fontSize: 14),
+      );
+    }
+
+    final label = component == 0
+        ? '0kt'
+        : '${component! > 0 ? '+' : ''}${component}kt';
+    final color = component! > 0
+        ? AppColors.success
+        : component! < 0
+            ? AppColors.error
+            : AppColors.textSecondary;
+    final fraction = component!.abs() / maxAbsWind;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 44,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            height: 6,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(3),
+              color: color.withValues(alpha: 0.25),
+            ),
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: fraction.clamp(0.0, 1.0),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  color: color,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _RadioDot extends StatelessWidget {

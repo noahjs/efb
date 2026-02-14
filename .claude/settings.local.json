@@ -123,7 +123,30 @@
       "WebFetch(domain:www.xweather.com)",
       "WebFetch(domain:maps.api.xweather.com)",
       "WebFetch(domain:maps.aerisapi.com)",
-      "Bash(npm run start:dev:*)"
+      "Bash(npm run start:dev:*)",
+      "WebFetch(domain:nomads.ncep.noaa.gov)",
+      "WebFetch(domain:www.nco.ncep.noaa.gov)",
+      "WebFetch(domain:home.chpc.utah.edu)",
+      "WebFetch(domain:registry.opendata.aws)",
+      "Bash(aws s3 ls:*)",
+      "Bash(flutter run:*)",
+      "Bash(/Users/noah/dev/efb/hrrr-processor/venv/bin/pip install:*)",
+      "Bash(brew list:*)",
+      "Bash(xcrun simctl list devices booted:*)",
+      "Bash(/Users/noah/dev/efb/hrrr-processor/venv/bin/python3:*)",
+      "WebFetch(domain:pub.dev)",
+      "Bash(xcrun simctl shutdown:*)",
+      "Bash(xcrun simctl:*)",
+      "Bash(xcrun simctl boot:*)",
+      "Bash(open:*)",
+      "Bash(npm run seed:*)",
+      "Bash(nearblack:*)",
+      "Bash(bash scripts/process-vfr-charts.sh:*)",
+      "WebFetch(domain:lmfswebservices.atlassian.net)",
+      "Bash(flutter pub add:*)",
+      "Bash(flutter pub:*)",
+      "WebFetch(domain:catalog.data.faa.gov)",
+      "WebFetch(domain:www.boldmethod.com)"
     ]
   }
 }
