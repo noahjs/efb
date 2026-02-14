@@ -50,6 +50,15 @@ async function bootstrap() {
         callback(null, true);
         return;
       }
+      // Same-origin requests (admin page served by this API)
+      const selfOrigins = [
+        'https://api.tropiq.app',
+        `http://localhost:${process.env.PORT || 3001}`,
+      ];
+      if (selfOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
       if (corsOrigins) {
         // Explicit allowlist from env var (comma-separated)
         const allowed = corsOrigins.split(',').map((s) => s.trim());
