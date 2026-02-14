@@ -48,7 +48,23 @@ gcloud config set project "${PROJECT_ID}" >/dev/null
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "Building image: ${IMAGE_URI}"
-gcloud builds submit "${API_DIR}" --tag "${IMAGE_URI}"
+BUILD_ID="$(gcloud builds submit "${API_DIR}" --tag "${IMAGE_URI}" --async --format='value(metadata.build.id)')"
+echo "Build started: ${BUILD_ID}"
+
+while true; do
+  status="$(gcloud builds describe "${BUILD_ID}" --format='value(status)')"
+  echo "Build status: ${status}"
+  case "${status}" in
+    SUCCESS)
+      break
+      ;;
+    FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+      echo "Cloud Build failed with status: ${status}"
+      exit 1
+      ;;
+  esac
+  sleep 5
+done
 
 build_secret_flags() {
   local secret_flags=""
