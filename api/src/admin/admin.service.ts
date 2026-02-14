@@ -622,7 +622,7 @@ export class AdminService {
     this.jobs.set(jobId, job);
 
     const script = path.join(this.scriptsDir, 'process-vfr-charts.sh');
-    this.runScript('bash', [script, chartName], job);
+    this.runScript('bash', [script, 'sectional', chartName], job);
 
     return job;
   }
