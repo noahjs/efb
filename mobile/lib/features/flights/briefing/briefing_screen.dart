@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/briefing.dart';
@@ -81,7 +82,13 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
 
     return briefingAsync.when(
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Briefing')),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.pop(),
+          ),
+          title: const Text('Briefing'),
+        ),
         body: const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -103,7 +110,13 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
         ),
       ),
       error: (error, _) => Scaffold(
-        appBar: AppBar(title: const Text('Briefing')),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.pop(),
+          ),
+          title: const Text('Briefing'),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -183,6 +196,10 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
   Widget _buildWideLayout(Briefing briefing) {
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
         title: Text(
           '${briefing.flight.departureIdentifier} - ${briefing.flight.destinationIdentifier}  Briefing',
         ),
@@ -257,6 +274,10 @@ class _BriefingScreenState extends ConsumerState<BriefingScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
         title: Text(
           '${briefing.flight.departureIdentifier} - ${briefing.flight.destinationIdentifier}',
         ),

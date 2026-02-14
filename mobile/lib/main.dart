@@ -1,12 +1,22 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp();
+    await NotificationService.initialize();
+  } catch (e) {
+    debugPrint('Firebase init skipped (not configured): $e');
+  }
 
   // Force dark status bar for cockpit use
   SystemChrome.setSystemUIOverlayStyle(

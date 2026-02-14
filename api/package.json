@@ -26,7 +26,8 @@
     "seed:airspaces": "ts-node -r tsconfig-paths/register src/seed/seed-airspaces.ts",
     "seed:registry": "ts-node -r tsconfig-paths/register src/seed/seed-registry.ts",
     "seed:cifp": "ts-node -r tsconfig-paths/register src/seed/seed-cifp.ts",
-    "seed:fbos": "ts-node -r tsconfig-paths/register src/seed/seed-fbos.ts"
+    "seed:fbos": "ts-node -r tsconfig-paths/register src/seed/seed-fbos.ts",
+    "seed:master-profiles": "ts-node -r tsconfig-paths/register src/seed/seed-master-profiles.ts"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
@@ -47,6 +48,7 @@
     "class-validator": "^0.14.3",
     "csv-parse": "^6.1.0",
     "fast-xml-parser": "^5.3.4",
+    "firebase-admin": "^13.6.1",
     "google-auth-library": "^10.5.0",
     "helmet": "^8.1.0",
     "jose": "^6.1.3",

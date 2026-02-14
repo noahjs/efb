@@ -141,6 +141,10 @@ export class CalculateService {
       profile = await this.profileRepo.findOne({
         where: { id: input.performance_profile_id },
       });
+    } else if (input.aircraft_id) {
+      profile = await this.profileRepo.findOne({
+        where: { aircraft_id: input.aircraft_id, is_default: true },
+      });
     }
     const depElev = await this.getAirportElevation(input.departure_identifier);
     const destElev = await this.getAirportElevation(

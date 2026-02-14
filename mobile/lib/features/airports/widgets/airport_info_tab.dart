@@ -640,6 +640,15 @@ class _FrequencyItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Split frequency at semicolon: number on the right, remarks below name
+    String? freqNumber = frequency;
+    String? freqRemarks;
+    if (frequency != null && frequency!.contains(';')) {
+      final parts = frequency!.split(';');
+      freqNumber = parts[0].trim();
+      freqRemarks = parts.sublist(1).join(';').trim();
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: const BoxDecoration(
@@ -648,6 +657,7 @@ class _FrequencyItem extends StatelessWidget {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -660,6 +670,17 @@ class _FrequencyItem extends StatelessWidget {
                     color: AppColors.textPrimary,
                   ),
                 ),
+                if (freqRemarks != null && freqRemarks.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      freqRemarks,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
                 if (phone != null && phone!.isNotEmpty)
                   Text(
                     phone!,
@@ -671,9 +692,9 @@ class _FrequencyItem extends StatelessWidget {
               ],
             ),
           ),
-          if (frequency != null && frequency!.isNotEmpty)
+          if (freqNumber != null && freqNumber.isNotEmpty)
             Text(
-              frequency!,
+              freqNumber,
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,

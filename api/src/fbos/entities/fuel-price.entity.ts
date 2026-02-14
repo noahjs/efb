@@ -7,7 +7,7 @@ import {
 } from 'typeorm';
 import { Fbo } from './fbo.entity';
 
-@Entity('fuel_prices')
+@Entity('a_fuel_prices')
 export class FuelPrice {
   @PrimaryGeneratedColumn()
   id: number;

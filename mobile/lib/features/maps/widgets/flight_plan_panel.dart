@@ -600,6 +600,7 @@ class _FlightPlanPanelState extends ConsumerState<FlightPlanPanel> {
       trueAirspeed: flight?.trueAirspeed,
       fuelBurnRate: flight?.fuelBurnRate,
       performanceProfileId: flight?.performanceProfileId,
+      aircraftId: flight?.aircraftId,
       flightRules: flight?.flightRules,
     );
     if (result != null) {

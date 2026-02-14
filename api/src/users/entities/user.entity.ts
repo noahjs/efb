@@ -59,6 +59,13 @@ export class User {
   @Column({ type: 'simple-array', nullable: true })
   fuel_programs: string[];
 
+  @Column({ type: 'jsonb', nullable: true })
+  notification_preferences: {
+    tfr_alerts: boolean;
+    weather_alerts: boolean;
+    flight_category_alerts: boolean;
+  } | null;
+
   @CreateDateColumn()
   created_at: Date;
 

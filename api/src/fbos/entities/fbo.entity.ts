@@ -10,7 +10,7 @@ import {
 import { Airport } from '../../airports/entities/airport.entity';
 import { FuelPrice } from './fuel-price.entity';
 
-@Entity('fbos')
+@Entity('a_fbos')
 @Unique(['airport_identifier', 'airnav_id'])
 export class Fbo {
   @PrimaryGeneratedColumn()

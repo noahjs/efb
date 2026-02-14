@@ -29,6 +29,11 @@ enum MapLayerId {
   stormCells,
   forecastRadar,
 
+  // HRRR forecast overlays (mutually exclusive)
+  hrrrFlightCat,
+  hrrrClouds,
+  hrrrVisibility,
+
   // Exclusive weather-derived group (only one active at a time)
   surfaceWind,
   windsAloft,
@@ -97,6 +102,9 @@ class MapLayerDef {
       case MapLayerId.weatherAlerts: return 'weather_alerts';
       case MapLayerId.stormCells: return 'storm_cells';
       case MapLayerId.forecastRadar: return 'forecast_radar';
+      case MapLayerId.hrrrFlightCat: return 'hrrr_flight_cat';
+      case MapLayerId.hrrrClouds: return 'hrrr_clouds';
+      case MapLayerId.hrrrVisibility: return 'hrrr_visibility';
       case MapLayerId.surfaceWind: return 'surface_wind';
       case MapLayerId.windsAloft: return 'winds_aloft';
       case MapLayerId.temperature: return 'temperature';

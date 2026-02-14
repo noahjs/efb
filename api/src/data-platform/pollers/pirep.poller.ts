@@ -50,7 +50,7 @@ export class PirepPoller extends BasePoller {
 
       // Full replace
       await this.pirepRepo.manager.transaction(async (em) => {
-        await em.createQueryBuilder().delete().from(Pirep).execute();
+        await em.query('DELETE FROM a_pireps');
         if (pireps.length > 0) {
           await em.save(Pirep, pireps);
         }

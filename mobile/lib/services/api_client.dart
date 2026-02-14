@@ -504,6 +504,7 @@ class ApiClient {
     int? trueAirspeed,
     double? fuelBurnRate,
     int? performanceProfileId,
+    int? aircraftId,
     required List<int> altitudes,
   }) async {
     final response = await _dio.post('/calculate/altitudes', data: {
@@ -516,6 +517,7 @@ class ApiClient {
       if (fuelBurnRate != null) 'fuel_burn_rate': fuelBurnRate,
       if (performanceProfileId != null)
         'performance_profile_id': performanceProfileId,
+      if (aircraftId != null) 'aircraft_id': aircraftId,
       'altitudes': altitudes,
     });
     return response.data;
@@ -805,6 +807,10 @@ class ApiClient {
   Future<Map<String, dynamic>> getFlightWBScenario(int flightId) async {
     final response = await _dio.get('/flights/$flightId/wb-scenario');
     return response.data;
+  }
+
+  Future<void> deleteFlightWBScenario(int flightId) async {
+    await _dio.delete('/flights/$flightId/wb-scenario');
   }
 
   // --- Weight & Balance ---
@@ -1394,6 +1400,33 @@ class ApiClient {
     } catch (_) {
       return null;
     }
+  }
+
+  // --- Notifications ---
+
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    await _dio.post('/notifications/device-token', data: {
+      'token': token,
+      'platform': platform,
+    });
+  }
+
+  Future<void> deleteDeviceToken(String token) async {
+    await _dio.delete('/notifications/device-token/$token');
+  }
+
+  Future<Map<String, dynamic>> getNotificationPreferences() async {
+    final response = await _dio.get('/notifications/preferences');
+    return response.data;
+  }
+
+  Future<Map<String, dynamic>> updateNotificationPreferences(
+      Map<String, dynamic> prefs) async {
+    final response = await _dio.put('/notifications/preferences', data: prefs);
+    return response.data;
   }
 
   // --- Filing ---

@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KAPA/APA — ILS or LOC Rwy 35R (Jeppesen)</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.3.0/mapbox-gl.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #d0d0d0;
+      display: flex;
+      justify-content: center;
+      padding: 24px;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .plate {
+      width: 660px;
+      background: #fff;
+      border: 2px solid #000;
+      overflow: hidden;
+      color: #000;
+    }
+    .divider { border-top: 1.5px solid #000; }
+    .divider-thin { border-top: 0.75px solid #000; }
+    .bold { font-weight: 700; }
+    svg text { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    .mapboxgl-ctrl-attrib, .mapboxgl-ctrl-logo { display: none !important; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE'; // paste your token from mobile/.env
+const { createElement: h, Fragment } = React;
+
+/* ═══════════════════════════════════════════════════════════════
+   PLATE DATA — single JSON blob (as if from an API response)
+   ═══════════════════════════════════════════════════════════════ */
+const PLATE_DATA = {
+  airport: {
+    icao: 'KAPA',
+    faa: 'APA',
+    name: 'CENTENNIAL',
+    city: 'DENVER',
+    state: 'COLO',
+    elevation: 5885,
+  },
+
+  procedure: {
+    type: 'ILS or LOC',
+    runway: '35R',
+    sidestepRunway: '35L',
+  },
+
+  chart: {
+    publisher: 'JEPPESEN',
+    date: '17 FEB 23',
+    index: '41-1',
+    effective: 'Eff 23 Feb',
+    changes: 'YAGUO fix renamed to RONNI.',
+    copyright: '© JEPPESEN, 1997, 2023. ALL RIGHTS RESERVED.',
+  },
+
+  communications: [
+    { name: 'ATIS', frequency: '120.3' },
+    { name: 'DENVER Approach (R)', frequency: '132.75' },
+    { name: 'CENTENNIAL Tower', frequency: '118.9' },
+    { name: 'Ground', frequency: '121.8', flex: 0.6 },
+  ],
+
+  approach: {
+    localizer: { id: 'IAPA', frequency: 111.3 },
+    course: 350,
+    glideSlope: { angle: 3.10, tch: 51 },
+    faf: { name: 'JIDOG', altitude: 8000, agl: 2115 },
+    ilsDA: { altitude: 6085, agl: 200 },
+    tdze: [
+      { runway: '35R', elevation: 5885 },
+      { runway: '35L', elevation: 5869 },
+    ],
+  },
+
+  missedApproach: {
+    text: 'Climb to 7400\' then climbing RIGHT turn to 9200\' on heading 160° and FQF VOR R-197 to HOHUM INT/D22.5 FQF and hold.',
+    initialClimb: 7400,
+    finalAltitude: 9200,
+    turnDirection: 'RIGHT',
+    turnAbbrev: 'RT',
+    heading: 160,
+    navaid: { id: 'FQF', frequency: 116.3, radial: 'R-197' },
+    holdingFix: { name: 'HOHUM', definition: 'D22.5 FQF' },
+  },
+
+  msa: {
+    navaid: 'FQF VOR',
+    sectors: [
+      { position: 'left', altitude: 9600 },
+      { position: 'right', altitude: 8400 },
+    ],
+  },
+
+  settings: {
+    altimeterSetting: 'INCHES',
+    transitionLevel: 'FL 180',
+    transitionAltitude: '18000\'',
+  },
+
+  notes: [
+    'DME required for LOC only.',
+    'Radar required for procedure entry.',
+    'Sidestep and circling Rwy 35L not authorized at night.',
+    'Rwy 35L helicopter visibility reduction below 1 SM not authorized.',
+    'REIL, PAPI-R on Rwy 35L.',
+  ],
+
+  lighting: ['MALSR', 'PAPI'],
+
+  // Profile view fixes (ordered runway → far out)
+  profileFixes: [
+    { name: 'RW35R', dme: 1.8, loc: 'I-APA', type: 'map' },
+    { name: null, dme: 3.5, loc: 'I-APA', altitude: 6700, constraint: 'minimum', type: 'marker', marker: 'M' },
+    { name: 'LECET', dme: 4.1, loc: 'I-APA', type: 'fix' },
+    { name: 'RONNI', dme: 5.2, loc: 'I-APA', altitude: 7060, constraint: 'minimum', type: 'stepdown' },
+    { name: 'JIDOG', dme: 8.1, loc: 'I-APA', altitude: 8000, constraint: 'minimum', type: 'faf' },
+    { name: 'FIRPI', dme: 14.5, loc: 'I-APA', altitude: 9000, constraint: 'mandatory', type: 'if', radar: true },
+  ],
+
+  profileSegments: [
+    { dist: 1.7 },  // RW35R → D3.5
+    { dist: 0.7 },  // D3.5  → LECET
+    { dist: 1.1 },  // LECET → RONNI
+    { dist: 2.9 },  // RONNI → JIDOG
+    { dist: 6.4 },  // JIDOG → FIRPI
+  ],
+
+  // Plan view fix coordinates (lat/lon) along the ILS 35R course (350°)
+  // DME antenna (I-APA) at approx. north end of Rwy 35R: 39.587, -104.853
+  planViewFixes: [
+    { name: 'RW35R', lat: 39.5575, lon: -104.8462, type: 'threshold' },
+    { name: 'LECET', lat: 39.5197, lon: -104.8376, type: 'fix', altitude: null, dme: 'D4.1 IAPA' },
+    { name: 'RONNI', lat: 39.5017, lon: -104.8335, type: 'stepdown', altitude: 7060, dme: 'D5.2 IAPA' },
+    { name: 'JIDOG', lat: 39.4541, lon: -104.8226, type: 'faf', altitude: 8000, dme: 'D8.1 IAPA' },
+    { name: 'FIRPI', lat: 39.3491, lon: -104.7986, type: 'if', altitude: 9000, dme: 'D14.5 IAPA' },
+    { name: 'XBEEE', lat: 39.2834, lon: -104.7836, type: 'iaf', altitude: 9600, dme: 'D18.5 IAPA' },
+    { name: 'HOHUM', lat: 39.5300, lon: -104.7450, type: 'missed', altitude: 9200, dme: 'D22.5 FQF' },
+    { name: 'FALCON', lat: 39.6100, lon: -104.7100, type: 'feeder', altitude: null, dme: '116.3 FQF' },
+    { name: 'FQF', lat: 39.3800, lon: -104.7200, type: 'vor', frequency: '116.3' },
+  ],
+
+  runway: {
+    threshold35R: [-104.8462, 39.5575],
+    threshold35L: [-104.8502, 39.5575],
+    end35R:       [-104.8492, 39.5815],
+    end35L:       [-104.8532, 39.5815],
+  },
+
+  groundSpeed: {
+    speeds: [70, 90, 100, 120, 140, 160],
+    rates: [384, 494, 548, 658, 768, 878],
+  },
+
+  minimums: {
+    straightIn: {
+      ils: {
+        da: 6085, agl: 200,
+        visibility: { all: '1/2' },
+        railAlsOut: { all: '3/4' },
+      },
+      loc: {
+        mda: 6460, agl: 575,
+        visibility: { ab: '1/2', cd: '1¼' },
+        railAlsOut: { ab: '1', cd: '1⅝' },
+      },
+    },
+    sidestep: {
+      mda: 6460, agl: 591,
+      visibility: { ab: '1', c: '1½', d: '2' },
+    },
+    circleToLand: [
+      { category: 'A', maxKts: 90,  mda: 6460, agl: 575, visibility: '1' },
+      { category: 'B', maxKts: 120, mda: 6540, agl: 655, visibility: '1' },
+      { category: 'C', maxKts: 140, mda: 6740, agl: 855, visibility: '2½' },
+      { category: 'D', maxKts: 165, mda: 6760, agl: 875, visibility: '2¾' },
+    ],
+  },
+};
+
+/* ─── Header ─── */
+function Header() {
+  const d = PLATE_DATA;
+  return (
+    <div style={{ padding: '5px 10px 3px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div>
+        <div style={{ fontSize: 17, fontWeight: 700, letterSpacing: 0.5 }}>{d.airport.icao}/{d.airport.faa}</div>
+        <div style={{ fontSize: 10, marginTop: 1 }}>{d.airport.name}</div>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: 2 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 3, marginBottom: 2 }}>
+          <span style={{ fontSize: 9 }}>✦</span> {d.chart.publisher} <span style={{ fontSize: 9 }}>✦</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center', fontSize: 9 }}>
+          <span>{d.chart.date}</span>
+          <span style={{ border: '1.2px solid #000', borderRadius: '50%', padding: '0 4px', fontWeight: 700, fontSize: 10 }}>{d.chart.index}</span>
+          <span style={{ border: '1.2px solid #000', padding: '1px 5px', background: '#e8e8e8', fontSize: 9 }}>{d.chart.effective}</span>
+        </div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 16, fontWeight: 700 }}>{d.airport.city}, {d.airport.state}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, marginTop: 1 }}>{d.procedure.type} Rwy {d.procedure.runway}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Communications Row ─── */
+function CommSection() {
+  const cell = { textAlign: 'center', flex: 1 };
+  const label = { fontSize: 8.5, color: '#000' };
+  const freq = { fontSize: 13, fontWeight: 700 };
+  return (
+    <div style={{ padding: '3px 10px 4px', display: 'flex' }}>
+      {PLATE_DATA.communications.map((c, i) => (
+        <div key={i} style={{ ...cell, ...(c.flex ? { flex: c.flex } : {}) }}>
+          <div style={label}>{c.name}</div>
+          <div style={freq}>{c.frequency}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── LOC / Course / JIDOG / ILS / Elev ─── */
+function ApproachInfo() {
+  const d = PLATE_DATA;
+  const col = { textAlign: 'center' };
+  const sm = { fontSize: 8 };
+  const big = { fontSize: 13, fontWeight: 700 };
+  return (
+    <div style={{ padding: '3px 10px 4px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+      <div style={col}>
+        <div style={sm}>LOC</div><div style={sm}>{d.approach.localizer.id}</div>
+        <div style={big}>{d.approach.localizer.frequency}</div>
+      </div>
+      <div style={col}>
+        <div style={sm}>Final</div><div style={sm}>Apch Crs</div>
+        <div style={big}>{d.approach.course}°</div>
+      </div>
+      <div style={col}>
+        <div style={{ fontSize: 9, fontWeight: 700 }}>{d.approach.faf.name}</div>
+        <div style={big}>{d.approach.faf.altitude}'<span style={{ fontSize: 8, fontWeight: 400 }}>({d.approach.faf.agl}')</span></div>
+      </div>
+      <div style={col}>
+        <div style={sm}>ILS</div>
+        <div style={big}>{d.approach.ilsDA.altitude}'<span style={{ fontSize: 8, fontWeight: 400 }}>({d.approach.ilsDA.agl}')</span></div>
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 9 }}>Apt Elev {d.airport.elevation}'</div>
+        <div style={{ fontSize: 9 }}>TDZE {d.approach.tdze[0].runway} {d.approach.tdze[0].elevation}'</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Missed Approach ─── */
+function MissedApproach() {
+  const d = PLATE_DATA;
+  const ma = d.missedApproach;
+  return (
+    <div style={{ padding: '3px 10px 4px', display: 'flex', gap: 10 }}>
+      <div style={{ flex: 1, fontSize: 9, lineHeight: 1.4 }}>
+        <span style={{ fontWeight: 700 }}>MISSED APCH:</span>{' '}
+        {ma.text}
+      </div>
+      {/* Small MSA diagram */}
+      <svg width="72" height="48" viewBox="0 0 72 48" style={{ flexShrink: 0 }}>
+        <circle cx="36" cy="24" r="22" fill="none" stroke="#000" strokeWidth="1"/>
+        <line x1="36" y1="2" x2="36" y2="46" stroke="#000" strokeWidth="0.5"/>
+        {d.msa.sectors.map((s, i) => (
+          <text key={i} x={i === 0 ? 20 : 52} y="28" fontSize="9" fontWeight="700" textAnchor="middle">{s.altitude}</text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
+/* ─── Notes ─── */
+function NotesSection() {
+  const d = PLATE_DATA;
+  return (
+    <div style={{ padding: '2px 10px 3px' }}>
+      <div style={{ fontSize: 8, display: 'flex', gap: 18, marginBottom: 2 }}>
+        <span>Alt Set: {d.settings.altimeterSetting}</span>
+        <span>Trans level: {d.settings.transitionLevel}</span>
+        <span>Trans alt: {d.settings.transitionAltitude}</span>
+      </div>
+      <div className="divider-thin" style={{ margin: '2px 0' }}/>
+      <div style={{ fontSize: 7.5, lineHeight: 1.4 }}>
+        {d.notes.map((n, i) => `${i + 1}. ${n} `)}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Helper: generate circle coordinates ─── */
+function circleCoords(centerLon, centerLat, radiusNM, steps = 64) {
+  const coords = [];
+  const latR = radiusNM / 60;
+  const lonR = radiusNM / (60 * Math.cos(centerLat * Math.PI / 180));
+  for (let i = 0; i <= steps; i++) {
+    const a = (2 * Math.PI * i) / steps;
+    coords.push([centerLon + lonR * Math.cos(a), centerLat + latR * Math.sin(a)]);
+  }
+  return coords;
+}
+
+/* ─── Helper: generate racetrack holding pattern ─── */
+function holdingCoords(lat, lon) {
+  const pts = [];
+  const legLen = 0.018;
+  const turnR = 0.005;
+  const cosLat = Math.cos(lat * Math.PI / 180);
+  const trLon = turnR / cosLat;
+  const x0 = lon + 0.004 / cosLat;
+  const x1 = x0 + 2 * trLon;
+  const y0 = lat;
+  const y1 = lat + legLen;
+  const cx = (x0 + x1) / 2;
+  // West leg going north (outbound)
+  pts.push([x0, y0]); pts.push([x0, y1]);
+  // North semicircle (right turn east)
+  for (let i = 1; i <= 12; i++) {
+    const a = Math.PI / 2 + (Math.PI * i) / 12;
+    pts.push([cx - trLon * Math.cos(a), y1 + turnR * Math.sin(a)]);
+  }
+  // East leg going south (inbound)
+  pts.push([x1, y1]); pts.push([x1, y0]);
+  // South semicircle (right turn west)
+  for (let i = 1; i <= 12; i++) {
+    const a = -Math.PI / 2 + (Math.PI * i) / 12;
+    pts.push([cx - trLon * Math.cos(a), y0 + turnR * Math.sin(a)]);
+  }
+  pts.push([x0, y0]);
+  return pts;
+}
+
+/* ─── Helper: smooth curve through points ─── */
+function smoothCurve(points, segments = 8) {
+  if (points.length < 3) return points;
+  const result = [points[0]];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+    for (let t = 1; t <= segments; t++) {
+      const s = t / segments;
+      const s2 = s * s, s3 = s2 * s;
+      const h1 = -s3 + 2*s2 - s, h2 = 3*s3 - 5*s2 + 2;
+      const h3 = -3*s3 + 4*s2 + s, h4 = s3 - s2;
+      result.push([
+        0.5 * (h1*p0[0] + h2*p1[0] + h3*p2[0] + h4*p3[0]),
+        0.5 * (h1*p0[1] + h2*p1[1] + h3*p2[1] + h4*p3[1]),
+      ]);
+    }
+  }
+  return result;
+}
+
+/* ─── Plan View Map (Mapbox GL JS) ─── */
+function PlanViewMap() {
+  const containerRef = React.useRef(null);
+  const mapRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (mapRef.current) return;
+    mapboxgl.accessToken = MAPBOX_TOKEN;
+
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: 'mapbox://styles/mapbox/outdoors-v12',
+      interactive: false,
+      attributionControl: false,
+      bounds: [[-104.92, 39.26], [-104.66, 39.64]],
+      fitBoundsOptions: { padding: { top: 30, bottom: 10, left: 20, right: 20 } },
+    });
+    mapRef.current = map;
+
+    map.on('load', () => {
+      const d = PLATE_DATA;
+      const pv = d.planViewFixes;
+      const rwy = d.runway;
+      const fix = (n) => pv.find(f => f.name === n);
+
+      /* ── Approach course line ── */
+      const courseNames = ['XBEEE','FIRPI','JIDOG','RONNI','LECET','RW35R'];
+      const courseCoords = courseNames.map(n => { const f = fix(n); return [f.lon, f.lat]; });
+      const rw = fix('RW35R');
+      const xb = fix('XBEEE');
+      // Extension beyond runway (northward along 350°)
+      const bearing = Math.atan2(rw.lon - xb.lon, rw.lat - xb.lat);
+      const extEnd = [rw.lon + Math.sin(bearing) * 0.04, rw.lat + Math.cos(bearing) * 0.04];
+      // Extension beyond XBEEE (southward)
+      const extSouth = [xb.lon - Math.sin(bearing) * 0.02, xb.lat - Math.cos(bearing) * 0.02];
+
+      map.addSource('approach', { type: 'geojson', data: { type: 'FeatureCollection', features: [
+        { type: 'Feature', properties: { style: 'solid' }, geometry: { type: 'LineString', coordinates: courseCoords }},
+        { type: 'Feature', properties: { style: 'dashed' }, geometry: { type: 'LineString', coordinates: [[rw.lon, rw.lat], extEnd] }},
+        { type: 'Feature', properties: { style: 'dashed' }, geometry: { type: 'LineString', coordinates: [[xb.lon, xb.lat], extSouth] }},
+      ]}});
+      map.addLayer({ id: 'approach-solid', type: 'line', source: 'approach',
+        filter: ['==', ['get', 'style'], 'solid'],
+        paint: { 'line-color': '#1a1a1a', 'line-width': 2.5 }});
+      map.addLayer({ id: 'approach-dashed', type: 'line', source: 'approach',
+        filter: ['==', ['get', 'style'], 'dashed'],
+        paint: { 'line-color': '#1a1a1a', 'line-width': 1.5, 'line-dasharray': [4, 3] }});
+
+      /* ── Feeder from FALCON to JIDOG ── */
+      const falcon = fix('FALCON');
+      const jidog = fix('JIDOG');
+      map.addSource('feeder', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[falcon.lon, falcon.lat], [jidog.lon, jidog.lat]] }}});
+      map.addLayer({ id: 'feeder', type: 'line', source: 'feeder',
+        paint: { 'line-color': '#1a1a1a', 'line-width': 1 }});
+
+      /* ── Runways ── */
+      map.addSource('runways', { type: 'geojson', data: { type: 'FeatureCollection', features: [
+        { type: 'Feature', properties: { label: '35R' }, geometry: { type: 'LineString', coordinates: [rwy.threshold35R, rwy.end35R] }},
+        { type: 'Feature', properties: { label: '35L' }, geometry: { type: 'LineString', coordinates: [rwy.threshold35L, rwy.end35L] }},
+      ]}});
+      map.addLayer({ id: 'runways', type: 'line', source: 'runways',
+        paint: { 'line-color': '#333', 'line-width': 5 }});
+      map.addLayer({ id: 'runway-labels', type: 'symbol', source: 'runways',
+        layout: { 'text-field': ['get', 'label'], 'text-size': 10,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'symbol-placement': 'line', 'text-offset': [0, -0.8],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }});
+
+      /* ── Fix markers ── */
+      const fixFeatures = pv.filter(f => f.type !== 'vor').map(f => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
+        properties: { name: f.name, altitude: f.altitude ? f.altitude + "'" : '',
+          dme: f.dme || '', fixType: f.type }
+      }));
+      map.addSource('fixes', { type: 'geojson', data: { type: 'FeatureCollection', features: fixFeatures }});
+
+      // Triangle markers via custom SDF image
+      const triSize = 24;
+      const triCanvas = document.createElement('canvas');
+      triCanvas.width = triSize; triCanvas.height = triSize;
+      const ctx = triCanvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.moveTo(triSize/2, 2); ctx.lineTo(triSize - 2, triSize - 2); ctx.lineTo(2, triSize - 2);
+      ctx.closePath(); ctx.fill();
+      map.addImage('fix-triangle', { width: triSize, height: triSize, data: ctx.getImageData(0, 0, triSize, triSize).data });
+
+      // FAF maltese cross image
+      const crossSize = 28;
+      const crossCanvas = document.createElement('canvas');
+      crossCanvas.width = crossSize; crossCanvas.height = crossSize;
+      const cctx = crossCanvas.getContext('2d');
+      cctx.strokeStyle = '#000'; cctx.lineWidth = 4; cctx.lineCap = 'round';
+      const c = crossSize / 2;
+      cctx.beginPath(); cctx.moveTo(c - 7, c); cctx.lineTo(c + 7, c); cctx.stroke();
+      cctx.beginPath(); cctx.moveTo(c, c - 7); cctx.lineTo(c, c + 7); cctx.stroke();
+      // Diamond outline
+      cctx.lineWidth = 2;
+      cctx.beginPath(); cctx.moveTo(c, 2); cctx.lineTo(crossSize-2, c); cctx.lineTo(c, crossSize-2); cctx.lineTo(2, c); cctx.closePath(); cctx.stroke();
+      map.addImage('faf-cross', { width: crossSize, height: crossSize, data: cctx.getImageData(0, 0, crossSize, crossSize).data });
+
+      map.addLayer({ id: 'fix-triangles', type: 'symbol', source: 'fixes',
+        filter: ['!=', ['get', 'fixType'], 'faf'],
+        layout: { 'icon-image': 'fix-triangle', 'icon-size': 0.55,
+          'icon-allow-overlap': true, 'icon-ignore-placement': true }});
+      map.addLayer({ id: 'fix-faf', type: 'symbol', source: 'fixes',
+        filter: ['==', ['get', 'fixType'], 'faf'],
+        layout: { 'icon-image': 'faf-cross', 'icon-size': 0.7,
+          'icon-allow-overlap': true, 'icon-ignore-placement': true }});
+
+      // Fix name + altitude labels
+      map.addLayer({ id: 'fix-labels', type: 'symbol', source: 'fixes',
+        layout: {
+          'text-field': ['case',
+            ['!=', ['get', 'altitude'], ''],
+            ['concat', ['get', 'name'], '\n', ['get', 'altitude']],
+            ['get', 'name']],
+          'text-size': 11, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-offset': [1.3, 0], 'text-anchor': 'left',
+          'text-allow-overlap': true, 'text-ignore-placement': true,
+          'text-line-height': 1.2 },
+        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2 }});
+
+      /* ── VOR symbol (FQF) ── */
+      const fqf = fix('FQF');
+      // VOR hex rose image
+      const vorSize = 30;
+      const vorCanvas = document.createElement('canvas');
+      vorCanvas.width = vorSize; vorCanvas.height = vorSize;
+      const vctx = vorCanvas.getContext('2d');
+      const vc = vorSize / 2;
+      vctx.strokeStyle = '#000'; vctx.lineWidth = 1.5;
+      // Hexagon
+      vctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + (Math.PI * 2 * i) / 6;
+        const method = i === 0 ? 'moveTo' : 'lineTo';
+        vctx[method](vc + 10 * Math.cos(a), vc + 10 * Math.sin(a));
+      }
+      vctx.closePath(); vctx.stroke();
+      // Center dot
+      vctx.fillStyle = '#000';
+      vctx.beginPath(); vctx.arc(vc, vc, 2, 0, Math.PI * 2); vctx.fill();
+      map.addImage('vor-hex', { width: vorSize, height: vorSize, data: vctx.getImageData(0, 0, vorSize, vorSize).data });
+
+      map.addSource('vor', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'Point', coordinates: [fqf.lon, fqf.lat] },
+        properties: { name: 'FQF VOR', freq: fqf.frequency }}});
+      map.addLayer({ id: 'vor-icon', type: 'symbol', source: 'vor',
+        layout: { 'icon-image': 'vor-hex', 'icon-size': 0.8,
+          'icon-allow-overlap': true, 'icon-ignore-placement': true }});
+      map.addLayer({ id: 'vor-label', type: 'symbol', source: 'vor',
+        layout: { 'text-field': ['concat', ['get', 'name'], '\n', ['get', 'freq']],
+          'text-size': 10, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-offset': [0, 1.8], 'text-anchor': 'top',
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 2 }});
+
+      /* ── R-197 radial line from FQF through HOHUM ── */
+      const hohum = fix('HOHUM');
+      const radialExt = [fqf.lon - (hohum.lon - fqf.lon) * 0.3, fqf.lat - (hohum.lat - fqf.lat) * 0.3];
+      map.addSource('radial', { type: 'geojson', data: { type: 'FeatureCollection', features: [
+        { type: 'Feature', geometry: { type: 'LineString', coordinates: [radialExt, [fqf.lon, fqf.lat], [hohum.lon, hohum.lat]] }},
+      ]}});
+      map.addLayer({ id: 'radial', type: 'line', source: 'radial',
+        paint: { 'line-color': '#555', 'line-width': 0.8, 'line-dasharray': [6, 3] }});
+
+      // R-197 label
+      const radMid = [(fqf.lon + hohum.lon) / 2 + 0.01, (fqf.lat + hohum.lat) / 2];
+      map.addSource('radial-label', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'Point', coordinates: radMid }, properties: { text: 'R-197' }}});
+      map.addLayer({ id: 'radial-label', type: 'symbol', source: 'radial-label',
+        layout: { 'text-field': ['get', 'text'], 'text-size': 9,
+          'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }});
+
+      /* ── MSA circle (25 NM around FQF) ── */
+      const msaCoords = circleCoords(fqf.lon, fqf.lat, 25);
+      map.addSource('msa', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'LineString', coordinates: msaCoords }}});
+      map.addLayer({ id: 'msa-circle', type: 'line', source: 'msa',
+        paint: { 'line-color': '#666', 'line-width': 1.2, 'line-dasharray': [5, 3] }});
+
+      // MSA dividing line (roughly E-W through FQF)
+      const msaR = 25 / 60;
+      map.addSource('msa-div', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[fqf.lon, fqf.lat - msaR], [fqf.lon, fqf.lat + msaR]] }}});
+      map.addLayer({ id: 'msa-div', type: 'line', source: 'msa-div',
+        paint: { 'line-color': '#666', 'line-width': 0.8 }});
+
+      // MSA sector altitude labels
+      const msaOff = 0.12;
+      map.addSource('msa-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: [
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [fqf.lon - msaOff, fqf.lat] }, properties: { alt: '9600' }},
+        { type: 'Feature', geometry: { type: 'Point', coordinates: [fqf.lon + msaOff, fqf.lat] }, properties: { alt: '8400' }},
+      ]}});
+      map.addLayer({ id: 'msa-labels', type: 'symbol', source: 'msa-labels',
+        layout: { 'text-field': ['get', 'alt'], 'text-size': 12,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 2 }});
+
+      // MSA title label
+      map.addSource('msa-title', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'Point', coordinates: [fqf.lon, fqf.lat + msaR * 0.85] },
+        properties: { text: 'MSA FQF VOR' }}});
+      map.addLayer({ id: 'msa-title', type: 'symbol', source: 'msa-title',
+        layout: { 'text-field': ['get', 'text'], 'text-size': 9,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#555', 'text-halo-color': '#fff', 'text-halo-width': 2 }});
+
+      /* ── Missed approach path ── */
+      const missedPts = smoothCurve([
+        [rw.lon, rw.lat],
+        [rw.lon - 0.004, rw.lat + 0.025],
+        [rw.lon + 0.035, rw.lat + 0.04],
+        [rw.lon + 0.065, rw.lat + 0.015],
+        [hohum.lon, hohum.lat],
+      ]);
+      map.addSource('missed', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'LineString', coordinates: missedPts }}});
+      map.addLayer({ id: 'missed', type: 'line', source: 'missed',
+        paint: { 'line-color': '#1a1a1a', 'line-width': 1.5, 'line-dasharray': [6, 3] }});
+
+      // Missed approach heading label
+      const missedMid = missedPts[Math.floor(missedPts.length * 0.6)];
+      map.addSource('missed-label', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'Point', coordinates: [missedMid[0] + 0.01, missedMid[1] + 0.005] },
+        properties: { text: '160°' }}});
+      map.addLayer({ id: 'missed-label', type: 'symbol', source: 'missed-label',
+        layout: { 'text-field': ['get', 'text'], 'text-size': 10,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }});
+
+      /* ── Holding pattern at HOHUM ── */
+      const holdPts = holdingCoords(hohum.lat, hohum.lon);
+      map.addSource('hold', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'LineString', coordinates: holdPts }}});
+      map.addLayer({ id: 'hold', type: 'line', source: 'hold',
+        paint: { 'line-color': '#1a1a1a', 'line-width': 1.2 }});
+
+      /* ── Course bearing label ── */
+      const ronni = fix('RONNI');
+      map.addSource('course-lbl', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'Point', coordinates: [ronni.lon - 0.025, ronni.lat + 0.01] },
+        properties: { text: '350°\n111.3 IAPA' }}});
+      map.addLayer({ id: 'course-lbl', type: 'symbol', source: 'course-lbl',
+        layout: { 'text-field': ['get', 'text'], 'text-size': 13,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true, 'text-ignore-placement': true,
+          'text-line-height': 1.1 },
+        paint: { 'text-color': '#000', 'text-halo-color': 'rgba(255,255,255,0.85)', 'text-halo-width': 2 }});
+
+      // "MISSED APCH FIX" label near HOHUM
+      map.addSource('missed-fix-lbl', { type: 'geojson', data: { type: 'Feature',
+        geometry: { type: 'Point', coordinates: [hohum.lon + 0.02, hohum.lat + 0.015] },
+        properties: { text: 'MISSED APCH FIX' }}});
+      map.addLayer({ id: 'missed-fix-lbl', type: 'symbol', source: 'missed-fix-lbl',
+        layout: { 'text-field': ['get', 'text'], 'text-size': 8,
+          'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true, 'text-ignore-placement': true },
+        paint: { 'text-color': '#000', 'text-halo-color': '#fff', 'text-halo-width': 1.5 }});
+    });
+
+    return () => { if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; } };
+  }, []);
+
+  return (
+    <div ref={containerRef} style={{ width: '100%', height: 420, borderTop: '1.5px solid #000', borderBottom: '1.5px solid #000' }} />
+  );
+}
+
+/* ─── Altitude Constraint Symbol ─── */
+/* Jeppesen convention:
+   minimum (at or above): bar BELOW the number
+   maximum (at or below): bar ABOVE the number
+   mandatory (at):        bars ABOVE and BELOW */
+function AltitudeConstraint({ x, y, altitude, constraint, barWidth = 30, belowLineY }) {
+  const hw = barWidth / 2;
+  return (
+    <g>
+      {/* Bar(s) at the altitude position in the profile */}
+      {(constraint === 'minimum' || constraint === 'mandatory') && (
+        <line x1={x - hw} y1={y} x2={x + hw} y2={y} stroke="#000" strokeWidth="1.5" />
+      )}
+      {(constraint === 'maximum' || constraint === 'mandatory') && (
+        <line x1={x - hw} y1={y - 14} x2={x + hw} y2={y - 14} stroke="#000" strokeWidth="1.5" />
+      )}
+      {/* Altitude number below the bottom line, with constraint bar */}
+      <text x={x} y={belowLineY} fontSize="9" fontWeight="700" textAnchor="middle">{altitude}'</text>
+      {(constraint === 'minimum' || constraint === 'mandatory') && (
+        <line x1={x - hw} y1={belowLineY + 3} x2={x + hw} y2={belowLineY + 3} stroke="#000" strokeWidth="1.5" />
+      )}
+      {(constraint === 'maximum' || constraint === 'mandatory') && (
+        <line x1={x - hw} y1={belowLineY - 12} x2={x + hw} y2={belowLineY - 12} stroke="#000" strokeWidth="1.5" />
+      )}
+    </g>
+  );
+}
+
+/* ─── Profile View (data-driven) ─── */
+function ProfileView() {
+  const d = PLATE_DATA;
+  const fixes = d.profileFixes;
+  const segments = d.profileSegments;
+  const gs = d.approach.glideSlope;
+  const tdze = d.approach.tdze;
+
+  /* Layout constants */
+  const W = 620;
+  const H = 168;
+  const margin = { left: 55, right: 25 };
+  const groundY = 112;
+  const topY = 14;
+
+  /* Build x-positions from segment distances */
+  const totalDist = segments.reduce((s, seg) => s + seg.dist, 0);
+  const xScale = (W - margin.left - margin.right) / totalDist;
+  const xPositions = [margin.left];
+  segments.forEach((seg) => {
+    xPositions.push(xPositions[xPositions.length - 1] + seg.dist * xScale);
+  });
+
+  /* Altitude → Y mapping */
+  const altMin = 5700;
+  const altMax = 9600;
+  const altToY = (alt) => groundY - ((alt - altMin) / (altMax - altMin)) * (groundY - topY);
+
+  /* Key positions */
+  const rwyElev = tdze[0].elevation;
+  const gsStartAlt = rwyElev + gs.tch;
+  const fafIdx = fixes.findIndex(f => f.type === 'faf');
+  const fafX = xPositions[fafIdx];
+  const fafAlt = fixes[fafIdx].altitude;
+
+  /* LOC step-down path */
+  const locFixes = fixes
+    .map((f, i) => ({ ...f, x: xPositions[i] }))
+    .filter(f => f.altitude && f.constraint === 'minimum')
+    .sort((a, b) => b.dme - a.dme);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', borderTop: '1.5px solid #000' }}>
+      <defs>
+        <marker id="arr" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#000"/>
+        </marker>
+      </defs>
+      <rect width={W} height={H} fill="#fff"/>
+
+      {/* ── Terrain cross-section ── */}
+      <path d={`
+        M ${xPositions[0]},${groundY}
+        C ${xPositions[0] + 30},${groundY - 1} ${xPositions[1] - 10},${groundY - 2} ${xPositions[1]},${groundY - 2}
+        C ${xPositions[2]},${groundY - 3} ${xPositions[3] - 20},${groundY - 5} ${xPositions[3]},${groundY - 6}
+        C ${xPositions[3] + 30},${groundY - 8} ${xPositions[4] - 40},${groundY - 12} ${xPositions[4]},${groundY - 14}
+        C ${xPositions[4] + 20},${groundY - 16} ${xPositions[5] - 30},${groundY - 20} ${xPositions[5]},${groundY - 22}
+        L ${xPositions[5] + 15},${groundY - 24}
+        L ${xPositions[5] + 15},${groundY} Z
+      `} fill="#b8a88a" opacity="0.3" stroke="#8b7355" strokeWidth="0.5"/>
+
+      {/* ── LOC-only step-down staircase ── */}
+      {(() => {
+        /* Build the staircase path: horizontal shelves at each MDA, diagonal drops between */
+        const steps = [];
+        for (let i = 0; i < locFixes.length; i++) {
+          const fix = locFixes[i];
+          const nextFix = locFixes[i + 1];
+          const shelfY = altToY(fix.altitude);
+          // Horizontal shelf at this fix's altitude
+          if (nextFix) {
+            steps.push(`${i === 0 ? 'M' : 'L'} ${fix.x},${shelfY} L ${nextFix.x},${shelfY}`);
+          } else {
+            // Last step-down: shelf extends to near the runway
+            steps.push(`${i === 0 ? 'M' : 'L'} ${fix.x},${shelfY} L ${xPositions[0] + 10},${shelfY}`);
+          }
+        }
+        return steps.length > 0 ? (
+          <path d={steps.join(' ')} fill="none" stroke="#000" strokeWidth="0.8" strokeDasharray="4,2" />
+        ) : null;
+      })()}
+
+      {/* ── Glide slope line (thick, from TCH at runway to GS intercept at FAF) ── */}
+      <line x1={xPositions[0]} y1={altToY(gsStartAlt)} x2={fafX} y2={altToY(fafAlt)}
+            stroke="#000" strokeWidth="2.5" />
+
+      {/* GS angle + TCH label along the slope */}
+      <text x={(xPositions[0] + fafX) / 2 - 10} y={altToY((gsStartAlt + fafAlt) / 2) - 6}
+            fontSize="8" fontWeight="700" textAnchor="middle">GS {gs.angle}°</text>
+      <text x={xPositions[0] - 8} y={altToY(gsStartAlt) + 3}
+            fontSize="7" textAnchor="end">TCH {gs.tch}'</text>
+
+      {/* ── Course direction arrow ── */}
+      <line x1={xPositions[5] - 30} y1={groundY - 4}
+            x2={xPositions[0] + 15} y2={groundY - 4}
+            stroke="#aaa" strokeWidth="1.2" markerEnd="url(#arr)"/>
+      <text x={(xPositions[0] + xPositions[5]) / 2} y={groundY - 7}
+            fontSize="9" fontWeight="700" textAnchor="middle" fill="#888">{d.approach.course}°</text>
+
+      {/* ── Fix labels, vertical lines, altitude constraints ── */}
+      {fixes.map((fix, i) => {
+        const x = xPositions[i];
+        const isSolid = fix.type === 'map' || fix.type === 'faf' || fix.type === 'if';
+        const labelY0 = 11;
+
+        return (
+          <g key={i}>
+            {/* ── Vertical fix line ── */}
+            <line x1={x} y1={32} x2={x} y2={groundY}
+                  stroke="#000" strokeWidth={isSolid ? 0.7 : 0.5}
+                  strokeDasharray={isSolid ? 'none' : '3,2'} />
+
+            {/* ── Fix labels (top) ── */}
+            {fix.type === 'map' && (
+              <>
+                <text x={x} y={labelY0} fontSize="7" textAnchor="middle">{fix.loc} {fix.dme}</text>
+                <text x={x} y={labelY0 + 9} fontSize="7" textAnchor="middle">(RW35R)</text>
+              </>
+            )}
+
+            {fix.type === 'marker' && (
+              <>
+                <text x={x} y={labelY0} fontSize="7" textAnchor="middle">{fix.loc} {fix.dme}</text>
+                {/* Middle marker lens symbol */}
+                <ellipse cx={x} cy={groundY - 4} rx="4" ry="6" fill="none" stroke="#000" strokeWidth="0.8"/>
+                <text x={x} y={groundY - 1} fontSize="6" fontWeight="700" textAnchor="middle">M</text>
+              </>
+            )}
+
+            {fix.type === 'fix' && (
+              <>
+                <text x={x} y={labelY0} fontSize="7.5" fontWeight="700" textAnchor="middle">{fix.name}</text>
+                <text x={x} y={labelY0 + 9} fontSize="6.5" textAnchor="middle">{fix.loc} {fix.dme}</text>
+              </>
+            )}
+
+            {fix.type === 'stepdown' && (
+              <>
+                <text x={x} y={labelY0} fontSize="7.5" fontWeight="700" textAnchor="middle">{fix.name}</text>
+                <text x={x} y={labelY0 + 9} fontSize="6.5" textAnchor="middle">{fix.loc} {fix.dme}</text>
+              </>
+            )}
+
+            {fix.type === 'faf' && (
+              <>
+                <text x={x} y={labelY0} fontSize="7.5" fontWeight="700" textAnchor="middle">{fix.name}</text>
+                <text x={x} y={labelY0 + 9} fontSize="6.5" textAnchor="middle">{fix.loc} {fix.dme}</text>
+              </>
+            )}
+
+            {fix.type === 'if' && (
+              <>
+                <text x={x} y={labelY0} fontSize="7.5" fontWeight="700" textAnchor="middle">{fix.name}</text>
+                <text x={x} y={labelY0 + 9} fontSize="6.5" textAnchor="middle">{fix.loc} {fix.dme}</text>
+                {fix.radar && <text x={x} y={labelY0 + 17} fontSize="6" textAnchor="middle">RADAR</text>}
+              </>
+            )}
+
+            {/* ── Altitude constraint: bars in profile, number below bottom line ── */}
+            {fix.altitude && fix.constraint && (
+              <AltitudeConstraint
+                x={x}
+                y={altToY(fix.altitude)}
+                altitude={fix.altitude}
+                constraint={fix.constraint}
+                belowLineY={groundY + 27}
+              />
+            )}
+
+            {/* ── FAF maltese cross ── */}
+            {fix.type === 'faf' && (
+              <g transform={`translate(${x},${altToY(fix.altitude) + 14})`}>
+                <line x1="-5" y1="0" x2="5" y2="0" stroke="#000" strokeWidth="2.5"/>
+                <line x1="0" y1="-5" x2="0" y2="5" stroke="#000" strokeWidth="2.5"/>
+              </g>
+            )}
+          </g>
+        );
+      })}
+
+      {/* ── TDZE labels (below bottom line, aligned with altitude row) ── */}
+      {tdze.map((t, i) => (
+        <text key={i} x="4" y={groundY + 27 + i * 10} fontSize="7">TDZE {t.runway} {t.elevation}'</text>
+      ))}
+
+      {/* ── Bottom line & distance ticks ── */}
+      <line x1={xPositions[0]} y1={groundY + 2} x2={xPositions[xPositions.length - 1]} y2={groundY + 2}
+            stroke="#000" strokeWidth="0.5"/>
+      {segments.map((seg, i) => {
+        const xa = xPositions[i];
+        const xb = xPositions[i + 1];
+        return (
+          <g key={i}>
+            <line x1={xa} y1={groundY + 2} x2={xa} y2={groundY + 7} stroke="#000" strokeWidth="0.5"/>
+            <text x={(xa + xb) / 2} y={groundY + 15} fontSize="7" textAnchor="middle">{seg.dist}</text>
+          </g>
+        );
+      })}
+      <line x1={xPositions[xPositions.length - 1]} y1={groundY + 2}
+            x2={xPositions[xPositions.length - 1]} y2={groundY + 7}
+            stroke="#000" strokeWidth="0.5"/>
+
+      {/* ── Altitude values row (below distances) ── */}
+      {/* These are rendered by AltitudeConstraint via belowLineY */}
+    </svg>
+  );
+}
+
+/* ─── Speed & Missed Approach Section ─── */
+function SpeedAndMissedApproach() {
+  const d = PLATE_DATA;
+  const ma = d.missedApproach;
+  const gs = d.approach.glideSlope;
+  const mapFix = d.profileFixes.find(f => f.type === 'map');
+  const bdr1 = '1px solid #000';
+  const cellNum = { fontSize: 10, fontWeight: 700, textAlign: 'center', padding: '2px 0', borderRight: bdr1 };
+
+  return (
+    <div style={{ borderTop: '1.5px solid #000' }}>
+      <div style={{ display: 'flex' }}>
+        {/* ── Left: Ground Speed Table ── */}
+        <div style={{ borderRight: bdr1 }}>
+          <table style={{ borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr style={{ borderBottom: bdr1 }}>
+                <td style={{ fontSize: 9, padding: '2px 6px', whiteSpace: 'nowrap', borderRight: bdr1 }}>Gnd speed-Kts</td>
+                {d.groundSpeed.speeds.map(s => (
+                  <td key={s} style={{ ...cellNum, width: 34 }}>{s}</td>
+                ))}
+              </tr>
+              <tr style={{ borderBottom: bdr1 }}>
+                <td style={{ fontSize: 9, padding: '2px 6px', borderRight: bdr1, whiteSpace: 'nowrap' }}>
+                  GS <span style={{ marginLeft: 12, fontWeight: 700 }}>{gs.angle}°</span>
+                </td>
+                {d.groundSpeed.rates.map(g => (
+                  <td key={g} style={{ ...cellNum, fontWeight: 400 }}>{g}</td>
+                ))}
+              </tr>
+              <tr>
+                <td colSpan={7} style={{ fontSize: 9, padding: '3px 6px', borderRight: bdr1 }}>
+                  MAP at D{mapFix.dme} {mapFix.loc}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Right: MALSR/PAPI + Missed Approach ── */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'stretch' }}>
+          {/* Lighting */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '2px 8px', borderRight: bdr1, fontSize: 9 }}>
+            {d.lighting.map((l, i) => (
+              <div key={i} style={i > 0 ? { marginTop: 4 } : {}}>{l}</div>
+            ))}
+          </div>
+
+          {/* Missed approach info */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'stretch' }}>
+            <div style={{ textAlign: 'center', borderRight: bdr1, padding: '4px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{ma.initialClimb}'</div>
+              <div style={{ fontSize: 18, lineHeight: 0.8 }}>&#x2191;</div>
+            </div>
+
+            <div style={{ textAlign: 'center', borderRight: bdr1, padding: '4px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{ma.finalAltitude}'</div>
+              <div style={{ fontSize: 8, marginTop: 2 }}>
+                <span style={{ fontSize: 12 }}>&#x21B7;</span> {ma.turnAbbrev}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 8, padding: '0 4px', display: 'flex', alignItems: 'center', borderRight: bdr1 }}>on</div>
+
+            <div style={{ textAlign: 'center', borderRight: bdr1, padding: '4px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>{ma.heading}°</div>
+              <div style={{ fontSize: 8 }}>hdg</div>
+            </div>
+
+            <div style={{ fontSize: 8, padding: '0 4px', display: 'flex', alignItems: 'center', borderRight: '1px dashed #000' }}>and</div>
+
+            <div style={{ textAlign: 'center', padding: '3px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ fontSize: 9 }}>{ma.navaid.id}</div>
+              <div style={{ fontSize: 17, fontWeight: 700 }}>{ma.navaid.frequency}</div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{ma.navaid.radial}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Minimums Section ─── */
+function MinimumsSection() {
+  const d = PLATE_DATA;
+  const mins = d.minimums;
+  const bdr = '1.5px solid #000';
+  const bdr1 = '1px solid #000';
+  const bdrThin = '0.5px solid #000';
+
+  return (
+    <div style={{ borderTop: bdr }}>
+      {/* ── Upper minimums table ── */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 44 }} />    {/* TERPS / Cat */}
+          <col style={{ width: '14%' }} /> {/* ILS DA */}
+          <col style={{ width: '10%' }} /> {/* ILS RAIL/ALS */}
+          <col style={{ width: '14%' }} /> {/* LOC MDA */}
+          <col style={{ width: '10%' }} /> {/* LOC RAIL/ALS */}
+          <col style={{ width: '13%' }} /> {/* Sidestep */}
+          <col style={{ width: 32 }} />    {/* Circle kts */}
+          <col />                          {/* Circle MDA */}
+        </colgroup>
+        <tbody>
+          {/* ── Row 1: Section headers ── */}
+          <tr>
+            <td rowSpan={3} style={{
+              background: '#000', color: '#fff', fontWeight: 700, fontSize: 9,
+              textAlign: 'center', verticalAlign: 'top', padding: '4px 2px',
+              borderRight: bdr1, letterSpacing: 1
+            }}>TERPS</td>
+            <td colSpan={4} style={{
+              fontWeight: 700, fontSize: 10, textAlign: 'center',
+              padding: '3px 0', borderBottom: bdr1, borderRight: bdr
+            }}>
+              STRAIGHT-IN LANDING RWY <span style={{ fontSize: 13, fontWeight: 700 }}>{d.procedure.runway}</span>
+            </td>
+            <td rowSpan={2} style={{
+              fontWeight: 700, fontSize: 9, textAlign: 'center',
+              padding: '3px 4px', borderRight: bdr, borderBottom: bdr1,
+              lineHeight: 1.35, verticalAlign: 'middle'
+            }}>
+              SIDESTEP<br/>LANDING<br/>RWY <span style={{ fontSize: 12 }}>{d.procedure.sidestepRunway}</span>
+            </td>
+            <td colSpan={2} style={{
+              fontWeight: 700, fontSize: 10, textAlign: 'center',
+              padding: '3px 0', borderBottom: bdr1
+            }}>CIRCLE-TO-LAND</td>
+          </tr>
+
+          {/* ── Row 2: DA/MDA values ── */}
+          <tr>
+            <td colSpan={2} style={{
+              textAlign: 'center', padding: '4px 2px 2px',
+              borderRight: bdr1, borderBottom: bdrThin, verticalAlign: 'top'
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700 }}>ILS</div>
+              <div style={{ fontSize: 7 }}>
+                <span style={{ fontSize: 7 }}>DA(H)</span>{' '}
+                <span style={{ fontSize: 16, fontWeight: 700 }}>{mins.straightIn.ils.da}'</span>
+                <span style={{ fontSize: 9 }}>({mins.straightIn.ils.agl}')</span>
+              </div>
+            </td>
+            <td colSpan={2} style={{
+              textAlign: 'center', padding: '4px 2px 2px',
+              borderRight: bdr, borderBottom: bdrThin, verticalAlign: 'top'
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700 }}>LOC (GS out)</div>
+              <div style={{ fontSize: 7 }}>
+                <span style={{ fontSize: 7 }}>MDA(H)</span>{' '}
+                <span style={{ fontSize: 16, fontWeight: 700 }}>{mins.straightIn.loc.mda}'</span>
+                <span style={{ fontSize: 9 }}>({mins.straightIn.loc.agl}')</span>
+              </div>
+            </td>
+            {/* Circle-to-Land: diamond + header (spans rows 2-3) */}
+            <td colSpan={2} rowSpan={2} style={{ verticalAlign: 'top', padding: 0, borderBottom: bdr1 }}>
+              <div style={{ padding: '3px 6px 0' }}>
+                <svg width="22" height="24" viewBox="0 0 22 24" style={{ display: 'block' }}>
+                  <polygon points="11,1 21,12 11,23 1,12" fill="#000" stroke="#000" strokeWidth="0.5"/>
+                  <text x="11" y="16" fill="#fff" fontSize="11" fontWeight="700" textAnchor="middle">C</text>
+                </svg>
+              </div>
+              <div style={{ display: 'flex', padding: '0 6px 2px' }}>
+                <span style={{ fontSize: 8, width: 30, lineHeight: 1.15 }}>Max<br/>Kts</span>
+                <span style={{ fontSize: 8, borderBottom: bdr1, flex: 1, paddingBottom: 1 }}>MDA(H)</span>
+              </div>
+            </td>
+          </tr>
+
+          {/* ── Row 3: RAIL/ALS out sub-labels ── */}
+          <tr>
+            <td style={{ borderRight: bdrThin, borderBottom: bdr1 }}></td>
+            <td style={{ fontSize: 7.5, textAlign: 'center', padding: '2px', borderRight: bdr1, borderBottom: bdr1 }}>
+              RAIL/ALS out
+            </td>
+            <td style={{ borderRight: bdrThin, borderBottom: bdr1 }}></td>
+            <td style={{ fontSize: 7.5, textAlign: 'center', padding: '2px', borderRight: bdr, borderBottom: bdr1 }}>
+              RAIL/ALS out
+            </td>
+            {/* Sidestep MDA */}
+            <td style={{ textAlign: 'center', borderRight: bdr, borderBottom: bdr1, padding: '2px 4px' }}>
+              <div style={{ fontSize: 7 }}>MDA(H)</div>
+              <div style={{ fontSize: 16, fontWeight: 700, lineHeight: 1.1 }}>
+                {mins.sidestep.mda}'<span style={{ fontSize: 9, fontWeight: 400 }}>({mins.sidestep.agl}')</span>
+              </div>
+            </td>
+          </tr>
+
+          {/* ═══ Visibility Grid — rows aligned with Circle-to-Land ═══ */}
+          {/* Row A = 90 kts */}
+          <tr>
+            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 2px', borderRight: bdr1, borderBottom: bdr1 }}>A</td>
+            {/* ILS vis spans A-D */}
+            <td rowSpan={4} style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdrThin, borderBottom: bdr1, fontSize: 20, fontWeight: 700 }}>
+              {mins.straightIn.ils.visibility.all}
+            </td>
+            {/* ILS RAIL/ALS out spans A-D */}
+            <td rowSpan={4} style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr1, borderBottom: bdr1, fontSize: 20, fontWeight: 700 }}>
+              {mins.straightIn.ils.railAlsOut.all}
+            </td>
+            {/* LOC vis spans A+B */}
+            <td rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdrThin, borderBottom: bdr1, fontSize: 20, fontWeight: 700 }}>
+              {mins.straightIn.loc.visibility.ab}
+            </td>
+            {/* LOC RAIL/ALS out spans A+B */}
+            <td rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr, borderBottom: bdr1, fontSize: 20, fontWeight: 700 }}>
+              {mins.straightIn.loc.railAlsOut.ab}
+            </td>
+            {/* Sidestep vis spans A+B */}
+            <td rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr, borderBottom: bdr1, fontSize: 20, fontWeight: 700 }}>
+              {mins.sidestep.visibility.ab}
+            </td>
+            <td style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr1, borderBottom: bdr1, fontSize: 9, padding: '2px' }}>{mins.circleToLand[0].maxKts}</td>
+            <td style={{ padding: '1px 6px', borderBottom: bdr1, whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>{mins.circleToLand[0].mda}'</span>
+              <span style={{ fontSize: 9 }}>({mins.circleToLand[0].agl}')</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}> - {mins.circleToLand[0].visibility}</span>
+            </td>
+          </tr>
+
+          {/* Row B */}
+          <tr>
+            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 2px', borderRight: bdr1, borderBottom: bdr1 }}>{mins.circleToLand[1].category}</td>
+            <td style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr1, borderBottom: bdr1, fontSize: 9, padding: '2px' }}>{mins.circleToLand[1].maxKts}</td>
+            <td style={{ padding: '1px 6px', borderBottom: bdr1, whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>{mins.circleToLand[1].mda}'</span>
+              <span style={{ fontSize: 9 }}>({mins.circleToLand[1].agl}')</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}> - {mins.circleToLand[1].visibility}</span>
+            </td>
+          </tr>
+
+          {/* Row C */}
+          <tr>
+            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 2px', borderRight: bdr1, borderBottom: bdr1 }}>{mins.circleToLand[2].category}</td>
+            {/* LOC vis spans C+D */}
+            <td rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 700, fontSize: 16, borderRight: bdrThin, borderBottom: bdr1 }}>{mins.straightIn.loc.visibility.cd}</td>
+            {/* LOC RAIL/ALS out spans C+D */}
+            <td rowSpan={2} style={{ textAlign: 'center', verticalAlign: 'middle', fontWeight: 700, fontSize: 16, borderRight: bdr, borderBottom: bdr1 }}>{mins.straightIn.loc.railAlsOut.cd}</td>
+            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, borderRight: bdr, borderBottom: bdr1 }}>{mins.sidestep.visibility.c}</td>
+            <td style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr1, borderBottom: bdr1, fontSize: 9, padding: '2px' }}>{mins.circleToLand[2].maxKts}</td>
+            <td style={{ padding: '1px 6px', borderBottom: bdr1, whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>{mins.circleToLand[2].mda}'</span>
+              <span style={{ fontSize: 9 }}>({mins.circleToLand[2].agl}')</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}> - {mins.circleToLand[2].visibility}</span>
+            </td>
+          </tr>
+
+          {/* Row D */}
+          <tr>
+            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, padding: '3px 2px', borderRight: bdr1 }}>{mins.circleToLand[3].category}</td>
+            <td style={{ textAlign: 'center', fontWeight: 700, fontSize: 16, borderRight: bdr }}>{mins.sidestep.visibility.d}</td>
+            <td style={{ textAlign: 'center', verticalAlign: 'middle', borderRight: bdr1, fontSize: 9, padding: '2px' }}>{mins.circleToLand[3].maxKts}</td>
+            <td style={{ padding: '1px 6px', whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>{mins.circleToLand[3].mda}'</span>
+              <span style={{ fontSize: 9 }}>({mins.circleToLand[3].agl}')</span>
+              <span style={{ fontSize: 11, fontWeight: 700 }}> - {mins.circleToLand[3].visibility}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ─── Footer ─── */
+function PlateFooter() {
+  const d = PLATE_DATA;
+  return (
+    <div style={{ borderTop: '1px solid #000', padding: '3px 10px', display: 'flex', justifyContent: 'space-between', fontSize: 7 }}>
+      <span>CHANGES: {d.chart.changes}</span>
+      <span>{d.chart.copyright}</span>
+    </div>
+  );
+}
+
+/* ─── Main App ─── */
+function App() {
+  return (
+    <div className="plate">
+      <Header />
+      <div className="divider"/>
+      <CommSection />
+      <div className="divider"/>
+      <ApproachInfo />
+      <div className="divider"/>
+      <MissedApproach />
+      <div className="divider"/>
+      <NotesSection />
+      <PlanViewMap />
+      <ProfileView />
+      <SpeedAndMissedApproach />
+      <MinimumsSection />
+      <PlateFooter />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

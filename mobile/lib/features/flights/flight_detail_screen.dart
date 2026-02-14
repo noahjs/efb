@@ -100,6 +100,11 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
         (updated.startFuelGallons != _flight.startFuelGallons ||
          updated.fuelAtShutdownGallons != _flight.fuelAtShutdownGallons);
 
+    // Track whether aircraft changed — W&B must be reset
+    final aircraftChanged = !_isNew &&
+        _flight.id != null &&
+        updated.aircraftId != _flight.aircraftId;
+
     setState(() {
       _flight = updated;
       _saving = true;
@@ -111,12 +116,22 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
         final created = await service.createFlight(updated.toJson());
         setState(() => _flight = created);
       } else {
+        // If aircraft changed, delete the old W&B scenario first
+        if (aircraftChanged) {
+          try {
+            final api = ref.read(apiClientProvider);
+            await api.deleteFlightWBScenario(_flight.id!);
+          } catch (_) {
+            // No existing scenario — that's fine
+          }
+        }
+
         final saved =
             await service.updateFlight(_flight.id!, updated.toJson());
         setState(() => _flight = saved);
 
-        // If fuel changed, invalidate W&B and flight provider so both stay in sync
-        if (fuelChanged) {
+        // Invalidate W&B provider so it re-creates from new aircraft
+        if (aircraftChanged || fuelChanged) {
           ref.invalidate(flightWBProvider(_flight.id!));
           ref.invalidate(flightDetailProvider(_flight.id!));
         }

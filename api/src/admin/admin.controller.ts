@@ -2,8 +2,10 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Param,
+  Body,
   Res,
   HttpCode,
   BadRequestException,
@@ -56,6 +58,31 @@ export class AdminController {
   @Get('data-sources')
   async getDataSources() {
     return this.adminService.getDataSources();
+  }
+
+  /**
+   * Aggregated health counts across all data sources
+   */
+  @Get('data-sources/summary')
+  async getDataSourcesSummary() {
+    return this.adminService.getDataSourcesSummary();
+  }
+
+  /**
+   * Run history for a single data source
+   */
+  @Get('data-sources/:key/history')
+  async getDataSourceHistory(@Param('key') key: string) {
+    return this.adminService.getDataSourceHistory(key);
+  }
+
+  /**
+   * Toggle a data source enabled/disabled
+   */
+  @Post('data-sources/:key/toggle')
+  @HttpCode(200)
+  async toggleDataSource(@Param('key') key: string) {
+    return this.adminService.toggleDataSource(key);
   }
 
   /**
@@ -184,5 +211,33 @@ export class AdminController {
       throw new BadRequestException(`Invalid chart name: ${chart}`);
     }
     return this.adminService.deleteChart(chart);
+  }
+
+  // --- Master W&B Profiles ---
+
+  @Get('master-profiles')
+  async getMasterProfiles() {
+    return this.adminService.getMasterProfiles();
+  }
+
+  @Get('master-profiles/:id')
+  async getMasterProfile(@Param('id') id: string) {
+    return this.adminService.getMasterProfile(+id);
+  }
+
+  @Post('master-profiles')
+  async createMasterProfile(@Body() data: any) {
+    return this.adminService.createMasterProfile(data);
+  }
+
+  @Put('master-profiles/:id')
+  async updateMasterProfile(@Param('id') id: string, @Body() data: any) {
+    return this.adminService.updateMasterProfile(+id, data);
+  }
+
+  @Delete('master-profiles/:id')
+  async deleteMasterProfile(@Param('id') id: string) {
+    await this.adminService.deleteMasterProfile(+id);
+    return { deleted: true };
   }
 }

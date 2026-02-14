@@ -33,7 +33,7 @@ const NASR_DIR = path.join(DATA_DIR, 'nasr');
 async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
-    entities: [Airport, Runway, RunwayEnd, Frequency],
+    entities: [path.join(__dirname, '..', '**', '*.entity.{ts,js}')],
   });
 
   await ds.initialize();
@@ -354,7 +354,12 @@ async function seedContacts(ds: DataSource): Promise<number> {
   for (let i = 0; i < entries.length; i += batchSize) {
     const batch = entries.slice(i, i + batchSize);
     for (const [aptId, data] of batch) {
-      await repo.update(aptId, data);
+      // Filter out undefined values — TypeORM can't update with all-undefined
+      const filtered = Object.fromEntries(
+        Object.entries(data).filter(([, v]) => v !== undefined),
+      );
+      if (Object.keys(filtered).length === 0) continue;
+      await repo.update(aptId, filtered);
       count++;
     }
   }

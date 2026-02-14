@@ -65,6 +65,15 @@ final assembledOverlaysProvider =
     }
   }
 
+  // HRRR forecast tile overlays
+  for (final id in kHrrrTileProducts.keys) {
+    final hrrr = ref.watch(hrrrOverlayProvider(id));
+    if (hrrr != null) {
+      final def = kLayerById[id]!;
+      overlays[def.sourceKey] = hrrr;
+    }
+  }
+
   final windsAloft = ref.watch(windsAloftOverlayProvider);
   if (windsAloft != null) overlays['winds-aloft'] = windsAloft;
 

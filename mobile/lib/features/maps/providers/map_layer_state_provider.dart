@@ -14,6 +14,7 @@ class MapLayerState {
   final TrafficSettings trafficSettings;
   final int windsAloftAltitude;
   final int radarFrameIndex;
+  final int cloudsAltitude; // pressure level in hPa, default 850
 
   const MapLayerState({
     this.baseLayer = MapLayerId.dark,
@@ -22,6 +23,7 @@ class MapLayerState {
     this.trafficSettings = const TrafficSettings(),
     this.windsAloftAltitude = 9000,
     this.radarFrameIndex = 10,
+    this.cloudsAltitude = 850,
   });
 
   MapLayerState copyWith({
@@ -31,6 +33,7 @@ class MapLayerState {
     TrafficSettings? trafficSettings,
     int? windsAloftAltitude,
     int? radarFrameIndex,
+    int? cloudsAltitude,
   }) {
     return MapLayerState(
       baseLayer: baseLayer ?? this.baseLayer,
@@ -39,6 +42,7 @@ class MapLayerState {
       trafficSettings: trafficSettings ?? this.trafficSettings,
       windsAloftAltitude: windsAloftAltitude ?? this.windsAloftAltitude,
       radarFrameIndex: radarFrameIndex ?? this.radarFrameIndex,
+      cloudsAltitude: cloudsAltitude ?? this.cloudsAltitude,
     );
   }
 
@@ -133,6 +137,14 @@ class MapLayerStateNotifier extends AsyncNotifier<MapLayerState> {
     final current = state.value;
     if (current == null) return;
     state = AsyncData(current.copyWith(windsAloftAltitude: altitude));
+  }
+
+  // ── Clouds altitude (pressure level) ────────────────────────────────
+
+  void setCloudsAltitude(int level) {
+    final current = state.value;
+    if (current == null) return;
+    state = AsyncData(current.copyWith(cloudsAltitude: level));
   }
 
   // ── Radar frame ───────────────────────────────────────────────────────

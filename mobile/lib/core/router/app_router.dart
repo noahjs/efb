@@ -193,6 +193,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               child: MoreScreen(),
             ),
           ),
+          GoRoute(
+            path: '/more/profile',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: PilotProfileScreen(),
+            ),
+          ),
         ],
       ),
 
@@ -513,11 +519,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ReceiverSettingsScreen(),
       ),
 
-      // More
-      GoRoute(
-        path: '/more/profile',
-        builder: (context, state) => const PilotProfileScreen(),
-      ),
     ],
   );
 });

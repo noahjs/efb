@@ -34,4 +34,13 @@ export class DataSource {
 
   @Column({ type: 'boolean', default: true })
   enabled: boolean;
+
+  @Column({ type: 'int', default: 0 })
+  consecutive_failures: number;
+
+  @Column({ type: 'int', default: 0 })
+  total_runs: number;
+
+  @Column({ type: 'int', default: 0 })
+  total_successes: number;
 }

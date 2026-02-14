@@ -9,6 +9,7 @@ typedef MapBounds = ({
   double maxLat,
   double minLng,
   double maxLng,
+  double zoom,
 });
 
 /// Type of map feature tapped.

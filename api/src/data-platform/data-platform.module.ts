@@ -17,6 +17,11 @@ import { NwsForecast } from './entities/nws-forecast.entity';
 import { StormCell } from './entities/storm-cell.entity';
 import { LightningThreat } from './entities/lightning-threat.entity';
 import { WeatherAlert } from './entities/weather-alert.entity';
+import { PollerRun } from './entities/poller-run.entity';
+import { HrrrCycle } from './entities/hrrr-cycle.entity';
+import { HrrrSurface } from './entities/hrrr-surface.entity';
+import { HrrrPressure } from './entities/hrrr-pressure.entity';
+import { HrrrTileMeta } from './entities/hrrr-tile-meta.entity';
 import { Airport } from '../airports/entities/airport.entity';
 import { Fbo } from '../fbos/entities/fbo.entity';
 import { FuelPrice } from '../fbos/entities/fuel-price.entity';
@@ -40,6 +45,9 @@ import { FuelPricePoller } from './pollers/fuel-price.poller';
 import { StormCellPoller } from './pollers/storm-cell.poller';
 import { LightningThreatPoller } from './pollers/lightning-threat.poller';
 import { WeatherAlertPoller } from './pollers/weather-alert.poller';
+import { HrrrPoller } from './pollers/hrrr.poller';
+import { NotificationPoller } from './pollers/notification.poller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 const entities = [
   DataSource,
@@ -55,6 +63,11 @@ const entities = [
   StormCell,
   LightningThreat,
   WeatherAlert,
+  PollerRun,
+  HrrrCycle,
+  HrrrSurface,
+  HrrrPressure,
+  HrrrTileMeta,
   Airport,
   Fbo,
   FuelPrice,
@@ -65,6 +78,7 @@ const entities = [
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature(entities),
     HttpModule.register({ timeout: 30000, maxRedirects: 3 }),
+    NotificationsModule,
   ],
   providers: [
     DataSchedulerService,
@@ -83,6 +97,8 @@ const entities = [
     StormCellPoller,
     LightningThreatPoller,
     WeatherAlertPoller,
+    HrrrPoller,
+    NotificationPoller,
   ],
   exports: [DataSchedulerService, DataWorkerService, TypeOrmModule],
 })
@@ -102,6 +118,8 @@ export class DataPlatformModule implements OnModuleInit {
     private readonly stormCellPoller: StormCellPoller,
     private readonly lightningThreatPoller: LightningThreatPoller,
     private readonly weatherAlertPoller: WeatherAlertPoller,
+    private readonly hrrrPoller: HrrrPoller,
+    private readonly notificationPoller: NotificationPoller,
   ) {}
 
   async onModuleInit() {
@@ -119,6 +137,8 @@ export class DataPlatformModule implements OnModuleInit {
     this.worker.registerPoller('storm_cell_poll', this.stormCellPoller);
     this.worker.registerPoller('lightning_threat_poll', this.lightningThreatPoller);
     this.worker.registerPoller('weather_alert_poll', this.weatherAlertPoller);
+    this.worker.registerPoller('hrrr_poll', this.hrrrPoller);
+    this.worker.registerPoller('notification_dispatch', this.notificationPoller);
 
     // Now start processing jobs (pollers are guaranteed registered)
     await this.worker.start();

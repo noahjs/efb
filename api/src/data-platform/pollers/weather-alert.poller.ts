@@ -62,7 +62,7 @@ export class WeatherAlertPoller extends BasePoller {
 
     // Full replace in a transaction
     await this.alertRepo.manager.transaction(async (em) => {
-      await em.createQueryBuilder().delete().from(WeatherAlert).execute();
+      await em.query('DELETE FROM a_weather_alerts');
       if (alerts.length > 0) {
         // Save in batches to avoid parameter limit
         const batchSize = 500;

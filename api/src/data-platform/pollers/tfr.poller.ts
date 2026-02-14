@@ -124,11 +124,11 @@ export class TfrPoller extends BasePoller {
     // Upsert TFRs, remove any that are no longer active
     if (tfrs.length > 0) {
       await this.tfrRepo.manager.transaction(async (em) => {
-        await em.createQueryBuilder().delete().from(Tfr).execute();
+        await em.query('DELETE FROM a_tfrs');
         await em.save(Tfr, tfrs);
       });
     } else {
-      await this.tfrRepo.createQueryBuilder().delete().from(Tfr).execute();
+      await this.tfrRepo.query('DELETE FROM a_tfrs');
     }
 
     // Count web text fetch failures

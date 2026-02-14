@@ -31,11 +31,12 @@ class _RunwayPair {
   final _RunwayEnd? end2;
 
   _RunwayPair({required this.end1, this.end2});
+
+  bool contains(String id) => end1.identifier == id || end2?.identifier == id;
 }
 
 class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
   GoogleMapController? _mapController;
-  late final List<_RunwayEnd> _runwayEnds;
   late final List<_RunwayPair> _runwayPairs;
   String? _selectedEndId;
 
@@ -53,36 +54,25 @@ class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
   @override
   void initState() {
     super.initState();
-    _runwayEnds = _extractRunwayEnds();
     _runwayPairs = _groupIntoPairs();
-    if (_runwayEnds.isNotEmpty) {
-      _selectedEndId = _runwayEnds.first.identifier;
-    }
+    final longest = _longestPair();
+    _selectedEndId = longest?.end1.identifier ?? _runwayPairs.firstOrNull?.end1.identifier;
   }
 
-  List<_RunwayEnd> _extractRunwayEnds() {
+  _RunwayPair? _longestPair() {
     final runways = widget.airport['runways'] as List<dynamic>? ?? [];
-    final ends = <_RunwayEnd>[];
+    int bestIdx = -1;
+    int bestLength = 0;
 
-    for (final runway in runways) {
-      final runwayEnds = runway['ends'] as List<dynamic>? ?? [];
-      for (final end in runwayEnds) {
-        final id = end['identifier'] as String?;
-        final heading = (end['true_heading'] as num?)?.toDouble();
-        final lat = (end['latitude'] as num?)?.toDouble();
-        final lng = (end['longitude'] as num?)?.toDouble();
-        if (id != null && heading != null && lat != null && lng != null) {
-          ends.add(_RunwayEnd(
-            identifier: id,
-            heading: heading,
-            latitude: lat,
-            longitude: lng,
-          ));
-        }
+    for (int i = 0; i < runways.length && i < _runwayPairs.length; i++) {
+      final length = (runways[i]['length'] as num?)?.toInt() ?? 0;
+      if (length > bestLength) {
+        bestLength = length;
+        bestIdx = i;
       }
     }
 
-    return ends;
+    return bestIdx >= 0 ? _runwayPairs[bestIdx] : null;
   }
 
   List<_RunwayPair> _groupIntoPairs() {
@@ -91,15 +81,15 @@ class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
 
     for (final runway in runways) {
       final ends = runway['ends'] as List<dynamic>? ?? [];
-      final runwayEndObjs = <_RunwayEnd>[];
+      final parsed = <_RunwayEnd>[];
 
       for (final end in ends) {
         final id = end['identifier'] as String?;
-        final heading = (end['true_heading'] as num?)?.toDouble();
+        final heading = (end['heading'] as num?)?.toDouble();
         final lat = (end['latitude'] as num?)?.toDouble();
         final lng = (end['longitude'] as num?)?.toDouble();
         if (id != null && heading != null && lat != null && lng != null) {
-          runwayEndObjs.add(_RunwayEnd(
+          parsed.add(_RunwayEnd(
             identifier: id,
             heading: heading,
             latitude: lat,
@@ -108,10 +98,10 @@ class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
         }
       }
 
-      if (runwayEndObjs.length == 2) {
-        pairs.add(_RunwayPair(end1: runwayEndObjs[0], end2: runwayEndObjs[1]));
-      } else if (runwayEndObjs.length == 1) {
-        pairs.add(_RunwayPair(end1: runwayEndObjs[0]));
+      if (parsed.length == 2) {
+        pairs.add(_RunwayPair(end1: parsed[0], end2: parsed[1]));
+      } else if (parsed.length == 1) {
+        pairs.add(_RunwayPair(end1: parsed[0]));
       }
     }
 
@@ -136,46 +126,47 @@ class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
   }
 
   CameraPosition get _initialCamera {
-    if (_runwayEnds.isNotEmpty) {
-      final runways = widget.airport['runways'] as List<dynamic>? ?? [];
-      _RunwayEnd? bestEnd;
-      int bestLength = 0;
-
-      for (final runway in runways) {
-        final length = (runway['length'] as num?)?.toInt() ?? 0;
-        final ends = runway['ends'] as List<dynamic>? ?? [];
-        if (length > bestLength && ends.isNotEmpty) {
-          final end = ends.first;
-          final id = end['identifier'] as String?;
-          final heading = (end['true_heading'] as num?)?.toDouble();
-          final lat = (end['latitude'] as num?)?.toDouble();
-          final lng = (end['longitude'] as num?)?.toDouble();
-          if (id != null && heading != null && lat != null && lng != null) {
-            bestLength = length;
-            bestEnd = _RunwayEnd(
-              identifier: id,
-              heading: heading,
-              latitude: lat,
-              longitude: lng,
-            );
-          }
-        }
-      }
-
-      if (bestEnd != null) return _cameraForRunwayEnd(bestEnd);
-      return _cameraForRunwayEnd(_runwayEnds.first);
-    }
-
     return CameraPosition(
       target: LatLng(_airportLat, _airportLng),
-      zoom: 15.5,
+      zoom: 14,
     );
   }
 
-  void _animateToEnd(_RunwayEnd end) {
-    setState(() => _selectedEndId = end.identifier);
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+    final end = _findEnd(_selectedEndId);
+    if (end != null) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          _mapController?.animateCamera(
+            CameraUpdate.newCameraPosition(_cameraForRunwayEnd(end)),
+          );
+        }
+      });
+    }
+  }
+
+  _RunwayEnd? _findEnd(String? id) {
+    if (id == null) return null;
+    for (final pair in _runwayPairs) {
+      if (pair.end1.identifier == id) return pair.end1;
+      if (pair.end2?.identifier == id) return pair.end2;
+    }
+    return null;
+  }
+
+  void _onRunwayPairTap(_RunwayPair pair) {
+    _RunwayEnd target;
+    if (pair.contains(_selectedEndId ?? '')) {
+      target = pair.end1.identifier == _selectedEndId
+          ? (pair.end2 ?? pair.end1)
+          : pair.end1;
+    } else {
+      target = pair.end1;
+    }
+    setState(() => _selectedEndId = target.identifier);
     _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(_cameraForRunwayEnd(end)),
+      CameraUpdate.newCameraPosition(_cameraForRunwayEnd(target)),
     );
   }
 
@@ -190,7 +181,7 @@ class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             mapToolbarEnabled: false,
-            onMapCreated: (controller) => _mapController = controller,
+            onMapCreated: _onMapCreated,
           ),
 
           // Top bar
@@ -231,37 +222,74 @@ class _Platform3dViewScreenState extends State<Platform3dViewScreen> {
             ),
           ),
 
-          // Info chips + runway buttons
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 52,
-            left: 12,
-            right: 12,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_elevation != null)
-                  _InfoChip(
-                    label: '${_elevation!.round()}\' MSL',
-                    icon: Icons.terrain,
-                  ),
-                const Spacer(),
-                if (_runwayPairs.isNotEmpty)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: _runwayPairs.map((pair) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: _RunwayPairButton(
-                          pair: pair,
-                          selectedEndId: _selectedEndId,
-                          onEndTap: _animateToEnd,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-              ],
+          // Info chips below top bar
+          if (_elevation != null)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 52,
+              left: 12,
+              child: _InfoChip(
+                label: '${_elevation!.round()}\' MSL',
+                icon: Icons.terrain,
+              ),
             ),
-          ),
+
+          // Runway selector bottom bar
+          if (_runwayPairs.isNotEmpty)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: AppColors.surface.withValues(alpha: 0.85),
+                child: SafeArea(
+                  top: false,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    child: Row(
+                      children: _runwayPairs.map((pair) {
+                        final isActive = pair.contains(_selectedEndId ?? '');
+                        String label;
+                        if (pair.end2 == null) {
+                          label = pair.end1.identifier;
+                        } else if (isActive && _selectedEndId == pair.end2!.identifier) {
+                          label = '${pair.end2!.identifier}/${pair.end1.identifier}';
+                        } else {
+                          label = '${pair.end1.identifier}/${pair.end2!.identifier}';
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: GestureDetector(
+                            onTap: () => _onRunwayPairTap(pair),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isActive
+                                    ? AppColors.primary.withValues(alpha: 0.3)
+                                    : AppColors.surface.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isActive ? AppColors.accent : AppColors.divider,
+                                  width: isActive ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isActive ? AppColors.accent : AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -296,60 +324,6 @@ class _InfoChip extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RunwayPairButton extends StatelessWidget {
-  final _RunwayPair pair;
-  final String? selectedEndId;
-  final void Function(_RunwayEnd) onEndTap;
-
-  const _RunwayPairButton({
-    required this.pair,
-    required this.selectedEndId,
-    required this.onEndTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _endButton(pair.end1),
-            if (pair.end2 != null) ...[
-              Container(width: 1, color: AppColors.divider),
-              _endButton(pair.end2!),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _endButton(_RunwayEnd end) {
-    final isSelected = end.identifier == selectedEndId;
-    return GestureDetector(
-      onTap: () => onEndTap(end),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.3) : Colors.transparent,
-        child: Text(
-          end.identifier,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isSelected ? AppColors.accent : AppColors.textPrimary,
-          ),
-        ),
       ),
     );
   }

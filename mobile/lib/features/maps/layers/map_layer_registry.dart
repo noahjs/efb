@@ -108,6 +108,26 @@ const kMapLayers = <MapLayerDef>[
     group: LayerGroup.rightOverlay,
   ),
 
+  // HRRR forecast overlays (mutually exclusive)
+  MapLayerDef(
+    id: MapLayerId.hrrrFlightCat,
+    displayName: 'Fcst Flight Cat',
+    group: LayerGroup.rightOverlay,
+    exclusiveGroup: 'hrrr_forecast',
+  ),
+  MapLayerDef(
+    id: MapLayerId.hrrrClouds,
+    displayName: 'Clouds',
+    group: LayerGroup.rightOverlay,
+    exclusiveGroup: 'hrrr_forecast',
+  ),
+  MapLayerDef(
+    id: MapLayerId.hrrrVisibility,
+    displayName: 'Fcst Visibility',
+    group: LayerGroup.rightOverlay,
+    exclusiveGroup: 'hrrr_forecast',
+  ),
+
   // Weather-derived (mutually exclusive)
   MapLayerDef(
     id: MapLayerId.surfaceWind,
@@ -188,4 +208,11 @@ const kXweatherLayerNames = <MapLayerId, String>{
   MapLayerId.satelliteIr: 'satellite-infrared-color',
   MapLayerId.satelliteVisible: 'satellite-visible',
   MapLayerId.forecastRadar: 'fradar',
+};
+
+/// HRRR forecast tile product names — maps layer IDs to URL path segments.
+const kHrrrTileProducts = <MapLayerId, String>{
+  MapLayerId.hrrrFlightCat: 'flight-cat',
+  MapLayerId.hrrrClouds: 'clouds',
+  MapLayerId.hrrrVisibility: 'visibility',
 };

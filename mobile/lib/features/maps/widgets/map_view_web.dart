@@ -249,12 +249,13 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     }).toJS;
 
     _onBoundsChangedJs =
-        ((JSNumber minLng, JSNumber minLat, JSNumber maxLng, JSNumber maxLat) {
+        ((JSNumber minLng, JSNumber minLat, JSNumber maxLng, JSNumber maxLat, JSNumber zoom) {
       widget.onBoundsChanged?.call((
         minLat: minLat.toDartDouble,
         maxLat: maxLat.toDartDouble,
         minLng: minLng.toDartDouble,
         maxLng: maxLng.toDartDouble,
+        zoom: zoom.toDartDouble,
       ));
     }).toJS;
 
@@ -506,6 +507,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           'id': id,
           'category': category,
           'symbolType': symbolType,
+          'staleness': a['staleness'] ?? 1.0,
         },
       };
     }).toList();
@@ -571,10 +573,16 @@ class _PlatformMapViewState extends State<PlatformMapView> {
         (function() {
           var map = window.$_mapVar;
           if (!map) return;
-          var vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
+          var vfrCharts = $_allSectionalNamesJs;
           vfrCharts.forEach(function(chart) {
             if (map.getLayer('vfr-layer-' + chart)) {
               map.setLayoutProperty('vfr-layer-' + chart, 'visibility', '$vfrVisibility');
+            }
+          });
+          var tacCharts = $_allTacNamesJs;
+          tacCharts.forEach(function(chart) {
+            if (map.getLayer('tac-layer-' + chart)) {
+              map.setLayoutProperty('tac-layer-' + chart, 'visibility', '$vfrVisibility');
             }
           });
         })();
@@ -616,7 +624,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           // Fire initial bounds
           var b = map.getBounds();
           if (window._efbOnBoundsChanged) {
-            window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+            window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth(), map.getZoom());
           }
         });
       })();
@@ -643,9 +651,35 @@ class _PlatformMapViewState extends State<PlatformMapView> {
     });
   }
 
+  // JS array literals for chart names
+  static const _allSectionalNamesJs = "["
+      "'Albuquerque','Anchorage','Atlanta','Bethel','Billings',"
+      "'Brownsville','Cape_Lisburne','Charlotte','Cheyenne','Chicago',"
+      "'Cincinnati','Cold_Bay','Dallas-Ft_Worth','Dawson','Denver',"
+      "'Detroit','Dutch_Harbor','El_Paso','Fairbanks','Great_Falls',"
+      "'Green_Bay','Halifax','Hawaiian_Islands','Houston','Jacksonville',"
+      "'Juneau','Kansas_City','Ketchikan','Lake_Huron','Las_Vegas',"
+      "'Los_Angeles','McGrath','Memphis','Miami','Minneapolis',"
+      "'Montreal','New_Orleans','New_York','Nome','Omaha','Phoenix',"
+      "'Point_Barrow','Salt_Lake_City','San_Antonio','San_Francisco',"
+      "'Seattle','Seward','St_Louis','Twin_Cities','Washington',"
+      "'Western_Aleutian_Islands','Wichita'"
+      "]";
+
+  static const _allTacNamesJs = "["
+      "'Anchorage-Fairbanks','Atlanta','Baltimore-Washington','Boston',"
+      "'Charlotte','Chicago','Cincinnati','Cleveland','Dallas-Ft_Worth',"
+      "'Denver','Detroit','Houston','Kansas_City','Las_Vegas',"
+      "'Los_Angeles','Memphis','Miami','Minneapolis-St_Paul','New_Orleans',"
+      "'New_York','Philadelphia','Phoenix','Pittsburgh','Puerto_Rico-VI',"
+      "'Salt_Lake_City','San_Diego','San_Francisco','Seattle','St_Louis',"
+      "'Tampa-Orlando'"
+      "]";
+
   static String _vfrTilesJs(String visibility) {
     return '''
-          var vfrCharts = ['Denver', 'Cheyenne', 'Albuquerque', 'Salt_Lake_City'];
+          // Sectional charts (1:500,000 scale, zoom 5-11)
+          var vfrCharts = $_allSectionalNamesJs;
           vfrCharts.forEach(function(chart) {
             map.addSource('vfr-' + chart, {
               type: 'raster',
@@ -660,6 +694,31 @@ class _PlatformMapViewState extends State<PlatformMapView> {
               id: 'vfr-layer-' + chart,
               type: 'raster',
               source: 'vfr-' + chart,
+              layout: {
+                'visibility': '$visibility'
+              },
+              paint: {
+                'raster-opacity': 0.85
+              }
+            });
+          });
+
+          // Terminal Area Charts on top (1:250,000 scale, zoom 7-13)
+          var tacCharts = $_allTacNamesJs;
+          tacCharts.forEach(function(chart) {
+            map.addSource('tac-' + chart, {
+              type: 'raster',
+              tiles: ['${AppConfig.apiBaseUrl}/api/tiles/vfr-tac/' + chart + '/{z}/{x}/{y}.png'],
+              tileSize: 256,
+              minzoom: 7,
+              maxzoom: 13,
+              attribution: 'FAA TAC: ' + chart
+            });
+
+            map.addLayer({
+              id: 'tac-layer-' + chart,
+              type: 'raster',
+              source: 'tac-' + chart,
               layout: {
                 'visibility': '$visibility'
               },
@@ -930,7 +989,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             layout: {
               'visibility': '$symbolVisibility',
               'icon-image': ['get', 'symbolType'],
-              'icon-size': 0.4,
+              'icon-size': 1.04,
               'icon-allow-overlap': true,
               'icon-ignore-placement': true
             }
@@ -943,7 +1002,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
             source: 'airports',
             layout: { 'visibility': '$haloVisibility' },
             paint: {
-              'circle-radius': 8,
+              'circle-radius': 12,
               'circle-color': ['match', ['get', 'category'],
                 'VFR', '#00C853', 'MVFR', '#2196F3',
                 'IFR', '#FF1744', 'LIFR', '#E040FB',
@@ -2089,7 +2148,7 @@ class _PlatformMapViewState extends State<PlatformMapView> {
           map.on('moveend', function() {
             var b = map.getBounds();
             if (window._efbOnBoundsChanged) {
-              window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth());
+              window._efbOnBoundsChanged(b.getWest(), b.getSouth(), b.getEast(), b.getNorth(), map.getZoom());
             }
           });
 

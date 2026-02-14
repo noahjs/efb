@@ -127,7 +127,7 @@ export class StormCellPoller extends BasePoller {
 
     // Full replace in a transaction
     await this.stormCellRepo.manager.transaction(async (em) => {
-      await em.createQueryBuilder().delete().from(StormCell).execute();
+      await em.query('DELETE FROM a_storm_cells');
       if (cells.length > 0) {
         await em.save(StormCell, cells);
       }
