@@ -269,6 +269,7 @@ class Aircraft {
   final double? maxLandingWeight;
   final double? fuelWeightPerGallon;
   final bool isDefault;
+  final String? photoUrl;
   final String? createdAt;
   final String? updatedAt;
   final List<PerformanceProfile> performanceProfiles;
@@ -302,6 +303,7 @@ class Aircraft {
     this.maxLandingWeight,
     this.fuelWeightPerGallon,
     this.isDefault = false,
+    this.photoUrl,
     this.createdAt,
     this.updatedAt,
     this.performanceProfiles = const [],
@@ -350,6 +352,7 @@ class Aircraft {
       fuelWeightPerGallon:
           (json['fuel_weight_per_gallon'] as num?)?.toDouble(),
       isDefault: (json['is_default'] as bool?) ?? false,
+      photoUrl: json['photo_url'] as String?,
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
       performanceProfiles: profilesList
@@ -394,6 +397,7 @@ class Aircraft {
       'max_landing_weight': maxLandingWeight,
       'fuel_weight_per_gallon': fuelWeightPerGallon,
       'is_default': isDefault,
+      if (photoUrl != null) 'photo_url': photoUrl,
     };
   }
 
@@ -424,6 +428,7 @@ class Aircraft {
     double? maxLandingWeight,
     double? fuelWeightPerGallon,
     bool? isDefault,
+    String? photoUrl,
     List<PerformanceProfile>? performanceProfiles,
     List<FuelTank>? fuelTanks,
     AircraftEquipment? equipment,
@@ -455,6 +460,7 @@ class Aircraft {
       maxLandingWeight: maxLandingWeight ?? this.maxLandingWeight,
       fuelWeightPerGallon: fuelWeightPerGallon ?? this.fuelWeightPerGallon,
       isDefault: isDefault ?? this.isDefault,
+      photoUrl: photoUrl ?? this.photoUrl,
       performanceProfiles: performanceProfiles ?? this.performanceProfiles,
       fuelTanks: fuelTanks ?? this.fuelTanks,
       equipment: equipment ?? this.equipment,

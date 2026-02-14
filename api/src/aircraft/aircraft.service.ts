@@ -20,6 +20,7 @@ import {
   TBM960_TAKEOFF_DATA,
   TBM960_LANDING_DATA,
 } from './seed/tbm960-performance';
+import { fetchAircraftPhoto } from './utils/fetch-aircraft-photo';
 
 @Injectable()
 export class AircraftService {
@@ -106,6 +107,19 @@ export class AircraftService {
     const aircraft = this.aircraftRepo.create(data);
     const saved = await this.aircraftRepo.save(aircraft);
 
+    // Fetch photo from FlightAware
+    try {
+      const photoUrl = await fetchAircraftPhoto(saved.tail_number);
+      if (photoUrl) {
+        saved.photo_url = photoUrl;
+        await this.aircraftRepo.update(saved.id, { photo_url: photoUrl });
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Failed to fetch photo for ${saved.tail_number}: ${err.message}`,
+      );
+    }
+
     // Clone master profile data (fuel tanks, perf profiles, W&B profiles)
     if (masterProfile) {
       await this.cloneMasterProfile(saved, masterProfile);
@@ -136,6 +150,14 @@ export class AircraftService {
     // Set new default
     await this.aircraftRepo.update(id, { is_default: true });
     return this.findOne(id, userId);
+  }
+
+  async fetchPhoto(id: number, userId: string): Promise<Aircraft> {
+    const aircraft = await this.findOne(id, userId);
+    const photoUrl = await fetchAircraftPhoto(aircraft.tail_number);
+    aircraft.photo_url = photoUrl;
+    await this.aircraftRepo.update(id, { photo_url: photoUrl });
+    return aircraft;
   }
 
   // --- Master Profile Clone ---

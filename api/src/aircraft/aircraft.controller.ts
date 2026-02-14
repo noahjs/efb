@@ -83,6 +83,14 @@ export class AircraftController {
     return this.aircraftService.setDefault(id, user.id);
   }
 
+  @Post(':id/fetch-photo')
+  fetchPhoto(
+    @CurrentUser() user: { id: string },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.aircraftService.fetchPhoto(id, user.id);
+  }
+
   // --- Performance Profiles ---
 
   @Get(':id/profiles')

@@ -100,6 +100,9 @@ export class Aircraft {
   @Column({ type: 'float', nullable: true })
   fuel_weight_per_gallon: number;
 
+  @Column({ type: 'varchar', nullable: true })
+  photo_url: string | null;
+
   @Column({ type: 'boolean', default: false })
   is_default: boolean;
 
