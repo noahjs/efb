@@ -152,7 +152,8 @@
       "Bash(gcloud run services list:*)",
       "Bash(CLAUDECODE= claude mcp serve --help)",
       "Bash(psql:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "WebFetch(domain:www.flightaware.com)"
     ]
   }
 }

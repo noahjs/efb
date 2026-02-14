@@ -23,6 +23,9 @@ RUN apt-get update \
     python3-pip \
     libeccodes0 \
     unzip \
+    curl \
+    gdal-bin \
+    python3-gdal \
   && rm -rf /var/lib/apt/lists/*
 
 # Install API dependencies (prod only)
@@ -33,6 +36,9 @@ RUN npm ci --omit=dev
 # Copy built API artifacts
 COPY --from=build /app/api/dist ./dist
 COPY --from=build /app/api/public ./public
+
+# Copy scripts (chart tile processing, etc.)
+COPY api/scripts ./scripts
 
 # HRRR processor (Python)
 WORKDIR /app/hrrr-processor
