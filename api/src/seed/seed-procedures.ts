@@ -20,6 +20,14 @@ import * as path from 'path';
 import * as https from 'https';
 import { downloadFile } from './seed-utils';
 import { dbConfig } from '../db.config';
+import { DataCycle, CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
+import {
+  parseCycleIdArg,
+  resolveOrCreateCycle,
+  deleteCycleData,
+  updateRecordCounts,
+  markCycleStaged,
+} from './seed-cycle-utils';
 
 const DATA_DIR =
   process.env.EFB_DATA_DIR ||
@@ -31,7 +39,7 @@ const XML_PATH = path.join(DTPP_DIR, 'current.xml');
 async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
-    entities: [Procedure, DtppCycle],
+    entities: [Procedure, DtppCycle, DataCycle],
   });
 
   await ds.initialize();
@@ -218,10 +226,25 @@ async function main() {
   const ds = await initDataSource();
   console.log('Database initialized.\n');
 
-  // Clear existing procedures
-  console.log('Clearing existing procedure data...');
-  await ds.query('TRUNCATE TABLE a_procedures, a_dtpp_cycles CASCADE');
+  // Resolve or create a data cycle
+  const cycleIdArg = parseCycleIdArg();
+  const { cycle: dataCycle } = await resolveOrCreateCycle(ds, cycleIdArg, CycleDataGroup.DTPP, {
+    cycle_code: cycle,
+    effective_date: fromDate || new Date().toISOString().slice(0, 10),
+    expiration_date: toDate || new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10),
+  });
+  const dataCycleId = dataCycle.id;
+  console.log('');
+
+  // Clear existing data for this cycle
+  console.log('Clearing existing procedure data for this cycle...');
+  await deleteCycleData(ds, dataCycleId, ['a_procedures', 'a_dtpp_cycles']);
   console.log('  Done.\n');
+
+  // Attach cycle_id to all procedure records
+  for (const proc of procedures) {
+    proc.cycle_id = dataCycleId;
+  }
 
   // Batch insert procedures
   console.log('Inserting procedures...');
@@ -246,12 +269,16 @@ async function main() {
     to_date: toDate,
     procedure_count: inserted,
     seeded_at: new Date().toISOString(),
+    cycle_id: dataCycleId,
   } as DtppCycle);
 
   console.log('\n=== Seed Complete ===');
   console.log(`  Cycle:      ${cycle}`);
   console.log(`  Effective:  ${fromDate} to ${toDate}`);
   console.log(`  Procedures: ${inserted}`);
+
+  await updateRecordCounts(ds, dataCycleId, { procedures: inserted, dtpp_cycles: 1 });
+  if (!cycleIdArg) await markCycleStaged(ds, dataCycleId);
 
   await ds.destroy();
 }

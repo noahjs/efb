@@ -24,7 +24,7 @@ export class FlightsService {
     if (query) {
       const q = `%${query}%`;
       qb.andWhere(
-        '(flight.departure_identifier LIKE :q OR flight.destination_identifier LIKE :q OR flight.aircraft_identifier LIKE :q OR flight.route_string LIKE :q)',
+        '(flight.departure_identifier ILIKE :q OR flight.destination_identifier ILIKE :q OR flight.aircraft_identifier ILIKE :q OR flight.route_string ILIKE :q)',
         { q },
       );
     }

@@ -4,6 +4,8 @@ import { Repository, ILike } from 'typeorm';
 import { Navaid } from './entities/navaid.entity';
 import { Fix } from './entities/fix.entity';
 import { Airport } from '../airports/entities/airport.entity';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 @Injectable()
 export class NavaidsService {
@@ -14,14 +16,16 @@ export class NavaidsService {
     private fixRepo: Repository<Fix>,
     @InjectRepository(Airport)
     private airportRepo: Repository<Airport>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   async searchNavaids(query?: string, type?: string, limit = 50) {
     const qb = this.navaidRepo.createQueryBuilder('navaid');
+    await this.cycleHelper.applyCycleFilter(qb, 'navaid', CycleDataGroup.NASR);
 
     if (query) {
       const q = `%${query}%`;
-      qb.where('(navaid.identifier LIKE :q OR navaid.name LIKE :q)', { q });
+      qb.andWhere('(navaid.identifier ILIKE :q OR navaid.name ILIKE :q)', { q });
     }
 
     if (type) {
@@ -34,7 +38,8 @@ export class NavaidsService {
   }
 
   async findNavaidById(identifier: string) {
-    return this.navaidRepo.findOne({ where: { identifier } });
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
+    return this.navaidRepo.findOne({ where: { identifier, ...cycleWhere } });
   }
 
   async getNavaidsInBounds(
@@ -44,23 +49,26 @@ export class NavaidsService {
     maxLng: number,
     limit = 200,
   ) {
-    return this.navaidRepo
+    const qb = this.navaidRepo
       .createQueryBuilder('navaid')
       .where('navaid.latitude BETWEEN :minLat AND :maxLat', { minLat, maxLat })
       .andWhere('navaid.longitude BETWEEN :minLng AND :maxLng', {
         minLng,
         maxLng,
-      })
-      .take(limit)
-      .getMany();
+      });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'navaid', CycleDataGroup.NASR);
+
+    return qb.take(limit).getMany();
   }
 
   async searchFixes(query?: string, limit = 50) {
     const qb = this.fixRepo.createQueryBuilder('fix');
+    await this.cycleHelper.applyCycleFilter(qb, 'fix', CycleDataGroup.NASR);
 
     if (query) {
       const q = `%${query}%`;
-      qb.where('fix.identifier LIKE :q', { q });
+      qb.andWhere('fix.identifier ILIKE :q', { q });
     }
 
     qb.orderBy('fix.identifier', 'ASC').take(limit);
@@ -75,12 +83,14 @@ export class NavaidsService {
     maxLng: number,
     limit = 200,
   ) {
-    return this.fixRepo
+    const qb = this.fixRepo
       .createQueryBuilder('fix')
       .where('fix.latitude BETWEEN :minLat AND :maxLat', { minLat, maxLat })
-      .andWhere('fix.longitude BETWEEN :minLng AND :maxLng', { minLng, maxLng })
-      .take(limit)
-      .getMany();
+      .andWhere('fix.longitude BETWEEN :minLng AND :maxLng', { minLng, maxLng });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'fix', CycleDataGroup.NASR);
+
+    return qb.take(limit).getMany();
   }
 
   /**
@@ -94,10 +104,14 @@ export class NavaidsService {
     type: string;
   } | null> {
     const id = identifier.trim();
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
 
     // Try airport (FAA id or ICAO id) — case-insensitive
     const airport = await this.airportRepo.findOne({
-      where: [{ identifier: ILike(id) }, { icao_identifier: ILike(id) }],
+      where: [
+        { identifier: ILike(id), ...cycleWhere },
+        { icao_identifier: ILike(id), ...cycleWhere },
+      ],
     });
     if (airport?.latitude != null && airport?.longitude != null) {
       return {
@@ -113,7 +127,7 @@ export class NavaidsService {
     if (upper.length === 4 && upper.startsWith('K')) {
       const faaId = upper.substring(1);
       const faaAirport = await this.airportRepo.findOne({
-        where: { identifier: ILike(faaId) },
+        where: { identifier: ILike(faaId), ...cycleWhere },
       });
       if (faaAirport?.latitude != null && faaAirport?.longitude != null) {
         return {
@@ -127,7 +141,7 @@ export class NavaidsService {
 
     // Try navaid — case-insensitive
     const navaid = await this.navaidRepo.findOne({
-      where: { identifier: ILike(id) },
+      where: { identifier: ILike(id), ...cycleWhere },
     });
     if (navaid) {
       return {
@@ -140,7 +154,7 @@ export class NavaidsService {
 
     // Try fix — case-insensitive
     const fix = await this.fixRepo.findOne({
-      where: { identifier: ILike(id) },
+      where: { identifier: ILike(id), ...cycleWhere },
     });
     if (fix) {
       return {

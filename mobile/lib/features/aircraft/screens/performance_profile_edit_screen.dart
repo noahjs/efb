@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/navigation_helpers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/aircraft.dart';
 import '../../../services/aircraft_providers.dart';
@@ -59,7 +60,7 @@ class _PerformanceProfileEditScreenState
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => context
-                  .go('/aircraft/${widget.aircraftId}/profiles'),
+                  .goBack('/aircraft/${widget.aircraftId}/profiles'),
             ),
           ),
           body: const Center(child: CircularProgressIndicator()),
@@ -69,7 +70,7 @@ class _PerformanceProfileEditScreenState
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () => context
-                  .go('/aircraft/${widget.aircraftId}/profiles'),
+                  .goBack('/aircraft/${widget.aircraftId}/profiles'),
             ),
           ),
           body: Center(child: Text('Error: $e')),
@@ -103,7 +104,7 @@ class _PerformanceProfileEditScreenState
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () =>
-                context.go('/aircraft/${widget.aircraftId}/profiles'),
+                context.goBack('/aircraft/${widget.aircraftId}/profiles'),
           ),
         ),
         body: const Center(child: CircularProgressIndicator()),

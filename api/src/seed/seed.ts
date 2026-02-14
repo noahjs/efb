@@ -17,6 +17,14 @@ import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { RunwayEnd } from '../airports/entities/runway-end.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
+import { DataCycle, CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
+import {
+  parseCycleIdArg,
+  resolveOrCreateCycle,
+  deleteCycleData,
+  updateRecordCounts,
+  markCycleStaged,
+} from './seed-cycle-utils';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -37,17 +45,19 @@ async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
     entities: [path.join(__dirname, '..', '**', '*.entity.{ts,js}')],
+    // Needed so DataCycle enum types are registered
+    synchronize: false,
   });
 
   await ds.initialize();
   return ds;
 }
 
-async function seedAirports(ds: DataSource): Promise<number> {
+async function seedAirports(ds: DataSource, cycleId?: string): Promise<number> {
   const aptFile = findFile(NASR_DIR, 'APT_BASE.csv', 'APT.csv');
   if (!aptFile) {
     console.log('  Airport file not found, seeding sample data instead...');
-    return seedSampleAirports(ds);
+    return seedSampleAirports(ds, cycleId);
   }
 
   console.log(`  Reading ${aptFile}...`);
@@ -68,6 +78,7 @@ async function seedAirports(ds: DataSource): Promise<number> {
       if (!identifier) continue;
 
       airports.push({
+        cycle_id: cycleId,
         identifier: identifier.trim(),
         icao_identifier: (r['ICAO_ID'] || '').trim() || undefined,
         name: (r['ARPT_NAME'] || '').trim(),
@@ -108,6 +119,7 @@ async function seedAirports(ds: DataSource): Promise<number> {
 
 async function seedRunways(
   ds: DataSource,
+  cycleId?: string,
 ): Promise<{ runways: number; ends: number }> {
   const rwyFile = findFile(NASR_DIR, 'APT_RWY.csv');
   const rwyEndFile = findFile(NASR_DIR, 'APT_RWY_END.csv');
@@ -138,6 +150,7 @@ async function seedRunways(
       if (!aptId || !rwyId) continue;
 
       runways.push({
+        cycle_id: cycleId,
         airport_identifier: aptId,
         identifiers: rwyId,
         length: parseInt(r['RWY_LEN'] || '', 10) || undefined,
@@ -182,6 +195,7 @@ async function seedRunways(
       const rightTraffic = (r['RIGHT_HAND_TRAFFIC_PAT_FLAG'] || '').trim();
 
       ends.push({
+        cycle_id: cycleId,
         runway_id: runwayId,
         identifier: endId,
         heading: parseFloat(r['TRUE_ALIGNMENT'] || '') || undefined,
@@ -216,7 +230,7 @@ async function seedRunways(
  * Each TWR3 record has: identifier (pos 5-8), then up to 9 freq/use pairs.
  * Freq: 44 chars, Use: 50 chars, repeating from position 9.
  */
-async function seedFrequencies(ds: DataSource): Promise<number> {
+async function seedFrequencies(ds: DataSource, cycleId?: string): Promise<number> {
   const twrFile = path.join(NASR_DIR, 'TWR.txt');
   if (!fs.existsSync(twrFile)) {
     console.log('  TWR.txt not found, skipping frequencies...');
@@ -277,6 +291,7 @@ async function seedFrequencies(ds: DataSource): Promise<number> {
       if (!freqStr) continue;
 
       freqs.push({
+        cycle_id: cycleId,
         airport_identifier: identifier,
         type: useToType(useStr),
         name: useStr || undefined,
@@ -362,7 +377,7 @@ async function seedContacts(ds: DataSource): Promise<number> {
         Object.entries(data).filter(([, v]) => v !== undefined),
       );
       if (Object.keys(filtered).length === 0) continue;
-      await repo.update(aptId, filtered);
+      await repo.update({ identifier: aptId }, filtered);
       count++;
     }
   }
@@ -396,14 +411,14 @@ async function seedTowerHours(ds: DataSource): Promise<number> {
     const towerHrs = (r['TWR_HRS'] || '').trim();
     if (!facilityId || !towerHrs || !airportIds.has(facilityId)) continue;
 
-    await repo.update(facilityId, { tower_hours: towerHrs });
+    await repo.update({ identifier: facilityId }, { tower_hours: towerHrs });
     count++;
   }
 
   return count;
 }
 
-async function seedSampleAirports(ds: DataSource): Promise<number> {
+async function seedSampleAirports(ds: DataSource, cycleId?: string): Promise<number> {
   const repo = ds.getRepository(Airport);
   const sampleAirports: Partial<Airport>[] = [
     {
@@ -546,6 +561,10 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
     },
   ];
 
+  // Set cycle_id on all sample airports
+  if (cycleId) {
+    for (const a of sampleAirports) a.cycle_id = cycleId;
+  }
   await repo.save(sampleAirports as Airport[]);
 
   // Add sample runways for KBJC
@@ -553,6 +572,7 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
   const endRepo = ds.getRepository(RunwayEnd);
 
   const rwy1 = await rwyRepo.save({
+    cycle_id: cycleId,
     airport_identifier: 'BJC',
     identifiers: '03/21',
     length: 3600,
@@ -591,6 +611,7 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
   ]);
 
   const rwy2 = await rwyRepo.save({
+    cycle_id: cycleId,
     airport_identifier: 'BJC',
     identifiers: '12L/30R',
     length: 9000,
@@ -625,6 +646,7 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
   ]);
 
   const rwy3 = await rwyRepo.save({
+    cycle_id: cycleId,
     airport_identifier: 'BJC',
     identifiers: '12R/30L',
     length: 7002,
@@ -660,7 +682,7 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
 
   // Add sample frequencies for KBJC
   const freqRepo = ds.getRepository(Frequency);
-  await freqRepo.save([
+  const sampleFreqs: Partial<Frequency>[] = [
     {
       airport_identifier: 'BJC',
       type: 'ATIS',
@@ -710,7 +732,11 @@ async function seedSampleAirports(ds: DataSource): Promise<number> {
       name: 'UNICOM',
       frequency: '122.95',
     },
-  ] as Frequency[]);
+  ];
+  if (cycleId) {
+    for (const f of sampleFreqs) f.cycle_id = cycleId;
+  }
+  await freqRepo.save(sampleFreqs as Frequency[]);
 
   return sampleAirports.length;
 }
@@ -798,29 +824,56 @@ async function main() {
   const ds = await initDataSource();
   console.log('Database initialized.\n');
 
-  // Clear existing data (CASCADE needed for Postgres foreign key constraints)
-  console.log('Clearing existing data...');
-  await ds.query(
-    'TRUNCATE TABLE a_runway_ends, a_runways, a_frequencies, a_airports CASCADE',
+  // Resolve or create a data cycle
+  const cycleIdArg = parseCycleIdArg();
+  const { cycle } = await resolveOrCreateCycle(
+    ds,
+    cycleIdArg,
+    CycleDataGroup.NASR,
+    {
+      cycle_code: new Date().toISOString().slice(0, 10),
+      effective_date: new Date().toISOString().slice(0, 10),
+      expiration_date: new Date(Date.now() + 28 * 86400000)
+        .toISOString()
+        .slice(0, 10),
+    },
   );
+  const cycleId = cycle.id;
+  console.log('');
+
+  // Clear existing data for this cycle (child tables first)
+  console.log('Clearing existing data for this cycle...');
+  await deleteCycleData(ds, cycleId, [
+    'a_runway_ends',
+    'a_runways',
+    'a_frequencies',
+    'a_airports',
+  ]);
   console.log('  Done.\n');
 
   // Seed airports
   console.log('Seeding airports...');
-  const airportCount = await seedAirports(ds);
+  const airportCount = await seedAirports(ds, cycleId);
   console.log(`  Imported ${airportCount} airports.\n`);
 
   // Seed runways + runway ends
   console.log('Seeding runways...');
-  const { runways: rwyCount, ends: endCount } = await seedRunways(ds);
+  const { runways: rwyCount, ends: endCount } = await seedRunways(ds, cycleId);
   console.log('');
 
   // Seed frequencies from TWR.txt
   console.log('Seeding frequencies...');
-  const freqCount = await seedFrequencies(ds);
+  const freqCount = await seedFrequencies(ds, cycleId);
   console.log(`  Imported ${freqCount} frequencies.\n`);
 
   if (fast) {
+    await updateRecordCounts(ds, cycleId, {
+      airports: airportCount,
+      runways: rwyCount,
+      runway_ends: endCount,
+      frequencies: freqCount,
+    });
+    if (!cycleIdArg) await markCycleStaged(ds, cycleId);
     console.log('=== Seed Complete (fast) ===');
     console.log(`  Airports:     ${airportCount}`);
     console.log(`  Runways:      ${rwyCount}`);
@@ -844,10 +897,11 @@ async function main() {
   console.log('Flagging airports with AWOS/ASOS...');
   const awosResult = await ds.query(`
     UPDATE a_airports SET has_awos = true
-    WHERE identifier IN (
-      SELECT DISTINCT airport_identifier FROM a_frequencies WHERE type IN ('AWOS', 'ASOS')
+    WHERE cycle_id = $1 AND identifier IN (
+      SELECT DISTINCT airport_identifier FROM a_frequencies
+      WHERE cycle_id = $1 AND type IN ('AWOS', 'ASOS')
     )
-  `);
+  `, [cycleId]);
   const awosCount = awosResult[1] ?? 0;
   console.log(`  Marked ${awosCount} airports with AWOS/ASOS.\n`);
 
@@ -856,8 +910,20 @@ async function main() {
   const datisCount = await seedDatisCapability(ds);
   console.log(`  Marked ${datisCount} airports with D-ATIS.\n`);
 
+  // Update record counts and mark cycle as staged
+  await updateRecordCounts(ds, cycleId, {
+    airports: airportCount,
+    runways: rwyCount,
+    runway_ends: endCount,
+    frequencies: freqCount,
+    contacts: contactCount,
+    tower_hours: towerCount,
+  });
+  if (!cycleIdArg) await markCycleStaged(ds, cycleId);
+
   // Summary
   console.log('=== Seed Complete ===');
+  console.log(`  Cycle:        ${cycleId}`);
   console.log(`  Airports:     ${airportCount}`);
   console.log(`  Contacts:     ${contactCount}`);
   console.log(`  Tower Hours:  ${towerCount}`);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/navigation_helpers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/aircraft.dart';
 import '../../../services/aircraft_providers.dart';
@@ -26,7 +27,7 @@ class _FuelTanksScreenState extends ConsumerState<FuelTanksScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/aircraft/${widget.aircraftId}'),
+          onPressed: () => context.goBack('/aircraft/${widget.aircraftId}'),
         ),
         title: const Text('Fuel Tanks'),
         centerTitle: true,

@@ -5,6 +5,8 @@ import { CifpApproach } from './entities/cifp-approach.entity';
 import { CifpIls } from './entities/cifp-ils.entity';
 import { CifpMsa } from './entities/cifp-msa.entity';
 import { CifpRunway } from './entities/cifp-runway.entity';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 @Injectable()
 export class CifpService {
@@ -17,6 +19,7 @@ export class CifpService {
     private msaRepo: Repository<CifpMsa>,
     @InjectRepository(CifpRunway)
     private runwayRepo: Repository<CifpRunway>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   /**
@@ -42,7 +45,7 @@ export class CifpService {
   async getApproaches(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
 
-    return this.approachRepo
+    const qb = this.approachRepo
       .createQueryBuilder('a')
       .select([
         'a.id',
@@ -59,7 +62,11 @@ export class CifpService {
       .where('a.airport_identifier = :faa OR a.icao_identifier = :icao', {
         faa,
         icao,
-      })
+      });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'a', CycleDataGroup.CIFP);
+
+    return qb
       .orderBy('a.procedure_name', 'ASC')
       .addOrderBy('a.transition_identifier', 'ASC')
       .getMany();
@@ -69,8 +76,9 @@ export class CifpService {
    * Get a single approach with all legs.
    */
   async getApproach(approachId: number) {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
     return this.approachRepo.findOne({
-      where: { id: approachId },
+      where: { id: approachId, ...cycleWhere },
       relations: ['legs'],
       order: { legs: { sequence_number: 'ASC' } },
     });
@@ -81,8 +89,12 @@ export class CifpService {
    */
   async getIls(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
     return this.ilsRepo.find({
-      where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+      where: [
+        { airport_identifier: faa, ...cycleWhere },
+        { icao_identifier: icao, ...cycleWhere },
+      ],
     });
   }
 
@@ -91,8 +103,12 @@ export class CifpService {
    */
   async getMsa(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
     return this.msaRepo.find({
-      where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+      where: [
+        { airport_identifier: faa, ...cycleWhere },
+        { icao_identifier: icao, ...cycleWhere },
+      ],
     });
   }
 
@@ -101,8 +117,12 @@ export class CifpService {
    */
   async getRunways(airportId: string) {
     const { faa, icao } = this.normalizeId(airportId);
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
     return this.runwayRepo.find({
-      where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+      where: [
+        { airport_identifier: faa, ...cycleWhere },
+        { icao_identifier: icao, ...cycleWhere },
+      ],
     });
   }
 
@@ -141,10 +161,12 @@ export class CifpService {
 
     // For ILS approaches, merge LOC step-down fixes
     if (approach.route_type === 'I' && approach.runway_identifier) {
+      const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
       const locWhere: any = {
         airport_identifier: approach.airport_identifier,
         route_type: 'L',
         runway_identifier: approach.runway_identifier,
+        ...cycleWhere,
       };
       if (approach.transition_identifier) {
         locWhere.transition_identifier = approach.transition_identifier;
@@ -213,8 +235,9 @@ export class CifpService {
    * Debug: get full raw data for an approach by ID — all columns, no filtering.
    */
   async getDebugData(approachId: number) {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
     const approach = await this.approachRepo.findOne({
-      where: { id: approachId },
+      where: { id: approachId, ...cycleWhere },
       relations: ['legs'],
       order: { legs: { sequence_number: 'ASC' } },
     });
@@ -222,33 +245,43 @@ export class CifpService {
 
     const { faa, icao } = this.normalizeId(approach.airport_identifier);
 
+    const relatedQb = this.approachRepo
+      .createQueryBuilder('a')
+      .select([
+        'a.id',
+        'a.procedure_identifier',
+        'a.route_type',
+        'a.transition_identifier',
+        'a.procedure_name',
+        'a.runway_identifier',
+      ])
+      .loadRelationCountAndMap('a.leg_count', 'a.legs')
+      .where('a.airport_identifier = :faa OR a.icao_identifier = :icao', {
+        faa,
+        icao,
+      });
+    await this.cycleHelper.applyCycleFilter(relatedQb, 'a', CycleDataGroup.CIFP);
+
     const [ils, msa, runways, relatedApproaches] = await Promise.all([
       this.ilsRepo.find({
-        where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+        where: [
+          { airport_identifier: faa, ...cycleWhere },
+          { icao_identifier: icao, ...cycleWhere },
+        ],
       }),
       this.msaRepo.find({
-        where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+        where: [
+          { airport_identifier: faa, ...cycleWhere },
+          { icao_identifier: icao, ...cycleWhere },
+        ],
       }),
       this.runwayRepo.find({
-        where: [{ airport_identifier: faa }, { icao_identifier: icao }],
+        where: [
+          { airport_identifier: faa, ...cycleWhere },
+          { icao_identifier: icao, ...cycleWhere },
+        ],
       }),
-      this.approachRepo
-        .createQueryBuilder('a')
-        .select([
-          'a.id',
-          'a.procedure_identifier',
-          'a.route_type',
-          'a.transition_identifier',
-          'a.procedure_name',
-          'a.runway_identifier',
-        ])
-        .loadRelationCountAndMap('a.leg_count', 'a.legs')
-        .where('a.airport_identifier = :faa OR a.icao_identifier = :icao', {
-          faa,
-          icao,
-        })
-        .orderBy('a.procedure_name', 'ASC')
-        .getMany(),
+      relatedQb.orderBy('a.procedure_name', 'ASC').getMany(),
     ]);
 
     return {
@@ -271,9 +304,11 @@ export class CifpService {
     const airportId = approach.airport_identifier;
     const runwayId = approach.runway_identifier;
 
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.CIFP);
+
     // Find matching ILS by runway
     const allIls = await this.ilsRepo.find({
-      where: { airport_identifier: airportId },
+      where: { airport_identifier: airportId, ...cycleWhere },
     });
     const matchingIls = runwayId
       ? allIls.find((ils) => ils.runway_identifier === runwayId)
@@ -281,7 +316,7 @@ export class CifpService {
 
     // Find matching MSA
     const allMsa = await this.msaRepo.find({
-      where: { airport_identifier: airportId },
+      where: { airport_identifier: airportId, ...cycleWhere },
     });
     // Try to match MSA by runway, then fall back to first available
     const matchingMsa =
@@ -298,6 +333,7 @@ export class CifpService {
           where: {
             airport_identifier: airportId,
             runway_identifier: runwayId,
+            ...cycleWhere,
           },
         })
       : null;

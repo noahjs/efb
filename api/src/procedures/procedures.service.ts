@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { Procedure } from './entities/procedure.entity';
 import { DtppCycle } from './entities/dtpp-cycle.entity';
 import { parseGeoref, GeorefData } from './georef-parser';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as https from 'https';
@@ -35,21 +37,23 @@ export class ProceduresService {
   constructor(
     @InjectRepository(Procedure) private procedureRepo: Repository<Procedure>,
     @InjectRepository(DtppCycle) private cycleRepo: Repository<DtppCycle>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   async getByAirport(airportId: string): Promise<Record<string, Procedure[]>> {
     // FAA d-TPP uses FAA identifiers (e.g. "APA"), not ICAO (e.g. "KAPA").
     // Try the provided ID first, then strip leading K for US ICAO codes.
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.DTPP);
     let id = airportId.toUpperCase();
     let procedures = await this.procedureRepo.find({
-      where: { airport_identifier: id },
+      where: { airport_identifier: id, ...cycleWhere },
       order: { chart_code: 'ASC', chart_seq: 'ASC' },
     });
 
     if (procedures.length === 0 && id.length === 4 && id.startsWith('K')) {
       id = id.substring(1);
       procedures = await this.procedureRepo.find({
-        where: { airport_identifier: id },
+        where: { airport_identifier: id, ...cycleWhere },
         order: { chart_code: 'ASC', chart_seq: 'ASC' },
       });
     }
@@ -89,7 +93,9 @@ export class ProceduresService {
   }
 
   async getCurrentCycle(): Promise<DtppCycle | null> {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.DTPP);
     const cycles = await this.cycleRepo.find({
+      where: { ...cycleWhere },
       order: { seeded_at: 'DESC' },
       take: 1,
     });
@@ -103,15 +109,16 @@ export class ProceduresService {
     airportId: string,
     procedureId: number,
   ): Promise<Procedure> {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.DTPP);
     let id = airportId.toUpperCase();
     let procedure = await this.procedureRepo.findOne({
-      where: { id: procedureId, airport_identifier: id },
+      where: { id: procedureId, airport_identifier: id, ...cycleWhere },
     });
 
     if (!procedure && id.length === 4 && id.startsWith('K')) {
       id = id.substring(1);
       procedure = await this.procedureRepo.findOne({
-        where: { id: procedureId, airport_identifier: id },
+        where: { id: procedureId, airport_identifier: id, ...cycleWhere },
       });
     }
 

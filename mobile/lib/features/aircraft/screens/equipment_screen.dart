@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/navigation_helpers.dart';
 import '../../../models/aircraft.dart';
 import '../../../services/aircraft_providers.dart';
 import '../../flights/widgets/flight_section_header.dart';
@@ -51,7 +52,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () =>
-                  context.go('/aircraft/${widget.aircraftId}'),
+                  context.goBack('/aircraft/${widget.aircraftId}'),
             ),
           ),
           body: const Center(child: CircularProgressIndicator()),
@@ -61,7 +62,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () =>
-                  context.go('/aircraft/${widget.aircraftId}'),
+                  context.goBack('/aircraft/${widget.aircraftId}'),
             ),
           ),
           body: Center(child: Text('Error: $e')),
@@ -90,7 +91,7 @@ class _EquipmentScreenState extends ConsumerState<EquipmentScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () =>
-              context.go('/aircraft/${widget.aircraftId}'),
+              context.goBack('/aircraft/${widget.aircraftId}'),
         ),
         title: const Text('Equipment'),
         centerTitle: true,

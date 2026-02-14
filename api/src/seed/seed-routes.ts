@@ -13,6 +13,14 @@ import { PreferredRouteSegment } from '../routes/entities/preferred-route-segmen
 import * as path from 'path';
 import { parsePipeDelimited, findFile, ensureNasrData } from './seed-utils';
 import { dbConfig } from '../db.config';
+import { DataCycle, CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
+import {
+  parseCycleIdArg,
+  resolveOrCreateCycle,
+  deleteCycleData,
+  updateRecordCounts,
+  markCycleStaged,
+} from './seed-cycle-utils';
 
 const DATA_DIR =
   process.env.EFB_DATA_DIR ||
@@ -23,14 +31,14 @@ const NASR_DIR = path.join(DATA_DIR, 'nasr');
 async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
-    entities: [PreferredRoute, PreferredRouteSegment],
+    entities: [PreferredRoute, PreferredRouteSegment, DataCycle],
   });
 
   await ds.initialize();
   return ds;
 }
 
-async function seedRoutes(ds: DataSource): Promise<{
+async function seedRoutes(ds: DataSource, cycleId?: string): Promise<{
   routeCount: number;
   routeLookup: Map<string, number>;
 }> {
@@ -74,6 +82,7 @@ async function seedRoutes(ds: DataSource): Promise<{
         area_description: (r['SPECIAL_AREA_DESCRIP'] || '').trim() || undefined,
         origin_city: (r['ORIGIN_CITY'] || '').trim() || undefined,
         destination_city: (r['DSTN_CITY'] || '').trim() || undefined,
+        cycle_id: cycleId,
       });
     }
 
@@ -93,6 +102,7 @@ async function seedRoutes(ds: DataSource): Promise<{
 async function seedSegments(
   ds: DataSource,
   routeLookup: Map<string, number>,
+  cycleId?: string,
 ): Promise<number> {
   const segFile = findFile(NASR_DIR, 'PFR_SEG.csv');
   if (!segFile) {
@@ -133,6 +143,7 @@ async function seedSegments(
         value: (r['SEG_VALUE'] || '').trim(),
         type: (r['SEG_TYPE'] || '').trim(),
         navaid_type: (r['NAV_TYPE'] || '').trim() || undefined,
+        cycle_id: cycleId,
       });
     }
 
@@ -158,27 +169,38 @@ async function main() {
   const ds = await initDataSource();
   console.log('Database initialized.\n');
 
-  // Clear existing data
-  console.log('Clearing existing preferred route data...');
-  await ds.query(
-    'TRUNCATE TABLE a_preferred_route_segments, a_preferred_routes CASCADE',
-  );
+  // Resolve or create a data cycle
+  const cycleIdArg = parseCycleIdArg();
+  const { cycle } = await resolveOrCreateCycle(ds, cycleIdArg, CycleDataGroup.NASR, {
+    cycle_code: new Date().toISOString().slice(0, 10),
+    effective_date: new Date().toISOString().slice(0, 10),
+    expiration_date: new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10),
+  });
+  const cycleId = cycle.id;
+  console.log('');
+
+  // Clear existing data for this cycle
+  console.log('Clearing existing preferred route data for this cycle...');
+  await deleteCycleData(ds, cycleId, ['a_preferred_route_segments', 'a_preferred_routes']);
   console.log('  Done.\n');
 
   // Seed routes
   console.log('Seeding preferred routes...');
-  const { routeCount, routeLookup } = await seedRoutes(ds);
+  const { routeCount, routeLookup } = await seedRoutes(ds, cycleId);
   console.log(`  Imported ${routeCount} routes.\n`);
 
   // Seed segments
   console.log('Seeding route segments...');
-  const segmentCount = await seedSegments(ds, routeLookup);
+  const segmentCount = await seedSegments(ds, routeLookup, cycleId);
   console.log(`  Imported ${segmentCount} segments.\n`);
 
   // Summary
   console.log('=== Seed Complete ===');
   console.log(`  Routes:   ${routeCount}`);
   console.log(`  Segments: ${segmentCount}`);
+
+  await updateRecordCounts(ds, cycleId, { preferred_routes: routeCount, preferred_route_segments: segmentCount });
+  if (!cycleIdArg) await markCycleStaged(ds, cycleId);
 
   await ds.destroy();
 }

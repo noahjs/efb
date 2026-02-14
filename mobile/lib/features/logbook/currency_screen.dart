@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/router/navigation_helpers.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/currency_item.dart';
@@ -35,7 +36,7 @@ class _CurrencyScreenState extends ConsumerState<CurrencyScreen>
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/logbook'),
+          onPressed: () => context.goBack('/logbook'),
         ),
         title: const Text('Currency & Reports'),
         centerTitle: true,

@@ -92,7 +92,7 @@ async function main() {
       if (!html) {
         // 404 or no page — mark as scraped with no FBOs
         console.log(`${progress} ${icao} — no AirNav page, skipping.`);
-        await airportRepo.update(airport.identifier, {
+        await airportRepo.update({ identifier: airport.identifier }, {
           fbo_scraped_at: new Date(),
         });
         skipped++;
@@ -104,7 +104,7 @@ async function main() {
 
       if (scrapedFbos.length === 0) {
         console.log(`${progress} ${icao} — no FBOs found.`);
-        await airportRepo.update(airport.identifier, {
+        await airportRepo.update({ identifier: airport.identifier }, {
           fbo_scraped_at: new Date(),
         });
         skipped++;
@@ -169,7 +169,7 @@ async function main() {
       }
 
       // Mark airport as scraped
-      await airportRepo.update(airport.identifier, {
+      await airportRepo.update({ identifier: airport.identifier }, {
         fbo_scraped_at: now,
       });
 

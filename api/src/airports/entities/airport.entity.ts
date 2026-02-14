@@ -1,14 +1,38 @@
-import { Entity, Column, PrimaryColumn, OneToMany, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
+  Index,
+  Unique,
+} from 'typeorm';
 import { Runway } from './runway.entity';
 import { Frequency } from './frequency.entity';
-import { Fbo } from '../../fbos/entities/fbo.entity';
+// Fbo is no longer FK-linked to Airport (decoupled for cycle versioning)
 import { DataGroup } from '../../config/constants';
+import { DataCycle } from '../../data-cycle/entities/data-cycle.entity';
 
 @Entity('a_airports')
+@Unique(['identifier', 'cycle_id'])
 export class Airport {
   static readonly DATA_GROUP = DataGroup.AVIATION;
-  @PrimaryColumn({ length: 10 })
+
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ type: 'varchar', length: 10 })
+  @Index()
   identifier: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  cycle_id: string;
+
+  @ManyToOne(() => DataCycle, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'cycle_id' })
+  cycle: DataCycle;
 
   @Column({ type: 'varchar', nullable: true })
   @Index()
@@ -138,7 +162,4 @@ export class Airport {
 
   @Column({ type: 'timestamp', nullable: true })
   fbo_scraped_at: Date;
-
-  @OneToMany(() => Fbo, (fbo) => fbo.airport, { cascade: true })
-  fbos: Fbo[];
 }

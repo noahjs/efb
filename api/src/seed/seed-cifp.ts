@@ -17,6 +17,14 @@ import * as https from 'https';
 import { execSync } from 'child_process';
 import { downloadFile } from './seed-utils';
 import { dbConfig } from '../db.config';
+import { DataCycle, CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
+import {
+  parseCycleIdArg,
+  resolveOrCreateCycle,
+  deleteCycleData,
+  updateRecordCounts,
+  markCycleStaged,
+} from './seed-cycle-utils';
 import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { RunwayEnd } from '../airports/entities/runway-end.entity';
@@ -70,6 +78,7 @@ async function initDataSource(): Promise<DataSource> {
       CifpIls,
       CifpMsa,
       CifpRunway,
+      DataCycle,
     ],
   });
   await ds.initialize();
@@ -81,32 +90,31 @@ async function initDataSource(): Promise<DataSource> {
 // ---------------------------------------------------------------------------
 
 /**
- * Compute candidate CIFP effective dates.
- * FAA CIFP is published every 28 days. We try several dates.
+ * Compute candidate CIFP effective dates using the AIRAC 28-day cycle.
+ *
+ * AIRAC cycles are exactly 28 days from a known epoch. 2020-01-02 is a
+ * well-documented AIRAC effective date; every multiple of 28 days from
+ * that date is another valid cycle start.
+ *
+ * We return the next upcoming cycle, the current cycle, and two prior
+ * cycles — most recent first so we hit the live file quickly.
  */
 function getCifpCandidateDates(): string[] {
-  const now = new Date();
+  const AIRAC_EPOCH = Date.UTC(2020, 0, 2); // 2020-01-02 UTC
+  const CYCLE_MS = 28 * 24 * 60 * 60 * 1000;
+
+  const now = Date.now();
+  const currentCycleIndex = Math.floor((now - AIRAC_EPOCH) / CYCLE_MS);
+
   const dates: string[] = [];
-
-  // Generate candidate dates going back up to 3 cycles
-  for (let offset = 0; offset >= -3; offset--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() + offset * 28);
-
-    // Try dates around the 22nd of each month (common AIRAC effective day)
-    for (const dayOffset of [0, -1, -2, 1, 2, -7, -14]) {
-      const candidate = new Date(d);
-      candidate.setDate(candidate.getDate() + dayOffset);
-
-      const yy = String(candidate.getFullYear() % 100).padStart(2, '0');
-      const mm = String(candidate.getMonth() + 1).padStart(2, '0');
-      const dd = String(candidate.getDate()).padStart(2, '0');
-      const key = `${yy}${mm}${dd}`;
-
-      if (!dates.includes(key)) {
-        dates.push(key);
-      }
-    }
+  // next, current, previous, two-back
+  for (const offset of [1, 0, -1, -2]) {
+    const cycleMs = AIRAC_EPOCH + (currentCycleIndex + offset) * CYCLE_MS;
+    const d = new Date(cycleMs);
+    const yy = String(d.getUTCFullYear() % 100).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    dates.push(`${yy}${mm}${dd}`);
   }
 
   return dates;
@@ -458,11 +466,32 @@ async function main() {
   const grouped = groupApproachRecords(parsed.approachRecords);
   console.log(`  ${grouped.length} approach procedures\n`);
 
-  // Clear existing CIFP data
-  console.log('Clearing existing CIFP data...');
-  await ds.query(
-    'TRUNCATE TABLE a_cifp_legs, a_cifp_approaches, a_cifp_ils, a_cifp_msa, a_cifp_runways CASCADE',
+  // Resolve or create a data cycle
+  const cycleIdArg = parseCycleIdArg();
+  const { cycle: dataCycle } = await resolveOrCreateCycle(
+    ds,
+    cycleIdArg,
+    CycleDataGroup.CIFP,
+    {
+      cycle_code: new Date().toISOString().slice(0, 10),
+      effective_date: new Date().toISOString().slice(0, 10),
+      expiration_date: new Date(Date.now() + 28 * 86400000)
+        .toISOString()
+        .slice(0, 10),
+    },
   );
+  const dataCycleId = dataCycle.id;
+  console.log('');
+
+  // Clear existing CIFP data for this cycle
+  console.log('Clearing existing CIFP data for this cycle...');
+  await deleteCycleData(ds, dataCycleId, [
+    'a_cifp_legs',
+    'a_cifp_approaches',
+    'a_cifp_ils',
+    'a_cifp_msa',
+    'a_cifp_runways',
+  ]);
   console.log('  Done.\n');
 
   // Insert approaches with legs
@@ -482,6 +511,7 @@ async function main() {
       const cycle = group.legs[0]?.cycle || '';
 
       const approach = new CifpApproach();
+      approach.cycle_id = dataCycleId;
       approach.airport_identifier = faaId;
       approach.icao_identifier = group.icaoId;
       approach.procedure_identifier = group.procedureId;
@@ -502,6 +532,7 @@ async function main() {
         const wpFlags = decodeWaypointDesc(leg.waypointDescCode);
 
         const cifpLeg = new CifpLeg();
+        cifpLeg.cycle_id = dataCycleId;
         cifpLeg.sequence_number = leg.sequenceNumber;
         cifpLeg.fix_identifier = n(leg.fixIdentifier);
         cifpLeg.fix_section_code = n(leg.fixSectionCode);
@@ -551,6 +582,7 @@ async function main() {
   // Insert runways
   console.log('\nInserting runways...');
   const runways = parsed.runwayRecords.map((r) => ({
+    cycle_id: dataCycleId,
     airport_identifier: icaoToFaa(r.icaoId, icaoFaaMap),
     icao_identifier: r.icaoId,
     runway_identifier: r.runwayId,
@@ -570,6 +602,7 @@ async function main() {
   // Insert ILS
   console.log('\nInserting ILS/LOC data...');
   const ilsData = parsed.ilsRecords.map((r) => ({
+    cycle_id: dataCycleId,
     airport_identifier: icaoToFaa(r.icaoId, icaoFaaMap),
     icao_identifier: r.icaoId,
     localizer_identifier: r.localizerIdent,
@@ -594,6 +627,7 @@ async function main() {
   const msaData = parsed.msaRecords
     .filter((r) => r.sectors.length > 0)
     .map((r) => ({
+      cycle_id: dataCycleId,
       airport_identifier: icaoToFaa(r.icaoId, icaoFaaMap),
       icao_identifier: r.icaoId,
       msa_center: r.msaCenter,
@@ -605,8 +639,19 @@ async function main() {
     })) as Partial<CifpMsa>[];
   await batchInsert(ds, CifpMsa, msaData, 'MSA');
 
+  // Update record counts and mark cycle as staged
+  await updateRecordCounts(ds, dataCycleId, {
+    cifp_approaches: approachCount,
+    cifp_legs: legCount,
+    cifp_runways: runways.length,
+    cifp_ils: ilsData.length,
+    cifp_msa: msaData.length,
+  });
+  if (!cycleIdArg) await markCycleStaged(ds, dataCycleId);
+
   // Summary
   console.log('\n=== Seed Complete ===');
+  console.log(`  Cycle:      ${dataCycleId}`);
   console.log(`  Approaches: ${approachCount}`);
   console.log(`  Legs:       ${legCount}`);
   console.log(`  Runways:    ${runways.length}`);

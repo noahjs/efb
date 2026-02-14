@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/navigation_helpers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../models/aircraft.dart';
 import '../../../services/aircraft_providers.dart';
@@ -26,7 +27,7 @@ class _AircraftDetailScreenState extends ConsumerState<AircraftDetailScreen> {
 
   void _goBackToList() {
     ref.invalidate(aircraftListProvider(''));
-    context.go('/aircraft');
+    context.goBack('/aircraft');
   }
 
   Future<void> _saveField(Map<String, dynamic> updates) async {

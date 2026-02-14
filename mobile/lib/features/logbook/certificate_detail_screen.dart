@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/router/navigation_helpers.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/certificate.dart';
@@ -80,7 +81,7 @@ class _CertificateDetailScreenState
 
   void _goBackToList() {
     ref.invalidate(certificatesListProvider(''));
-    context.go('/credentials');
+    context.goBack('/credentials');
   }
 
   Future<void> _saveField(Certificate updated) async {

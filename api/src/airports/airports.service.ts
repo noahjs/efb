@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, ILike } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Airport, Runway, Frequency } from './entities';
 import { Fbo } from '../fbos/entities/fbo.entity';
 import { AIRPORTS } from '../config/constants';
@@ -8,6 +8,8 @@ import {
   computeBoundingBox,
   getPositionAlongRoute,
 } from '../briefing/utils/route-corridor.util';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 @Injectable()
 export class AirportsService {
@@ -20,6 +22,7 @@ export class AirportsService {
     private frequencyRepo: Repository<Frequency>,
     @InjectRepository(Fbo)
     private fboRepo: Repository<Fbo>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   async search(
@@ -29,11 +32,12 @@ export class AirportsService {
     offset = 0,
   ) {
     const qb = this.airportRepo.createQueryBuilder('airport');
+    await this.cycleHelper.applyCycleFilter(qb, 'airport', CycleDataGroup.NASR);
 
     if (query) {
       const q = `%${query}%`;
-      qb.where(
-        '(airport.identifier LIKE :q OR airport.icao_identifier LIKE :q OR airport.name LIKE :q OR airport.city LIKE :q)',
+      qb.andWhere(
+        '(airport.identifier ILIKE :q OR airport.icao_identifier ILIKE :q OR airport.name ILIKE :q OR airport.city ILIKE :q)',
         { q },
       );
     }
@@ -49,16 +53,24 @@ export class AirportsService {
   }
 
   async findById(identifier: string) {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     return this.airportRepo.findOne({
-      where: [{ identifier }, { icao_identifier: identifier }],
+      where: [
+        { identifier, ...cycleWhere },
+        { icao_identifier: identifier, ...cycleWhere },
+      ],
       relations: ['runways', 'runways.ends', 'frequencies'],
     });
   }
 
   /** Lightweight lookup — returns the airport row without relations. */
   async findByIdLean(identifier: string) {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     return this.airportRepo.findOne({
-      where: [{ identifier }, { icao_identifier: identifier }],
+      where: [
+        { identifier, ...cycleWhere },
+        { icao_identifier: identifier, ...cycleWhere },
+      ],
     });
   }
 
@@ -71,7 +83,7 @@ export class AirportsService {
     // Simple bounding-box approximation: 1 degree ~= 60nm
     const degRange = radiusNm / 60;
 
-    const airports = await this.airportRepo
+    const qb = this.airportRepo
       .createQueryBuilder('airport')
       .where('airport.latitude BETWEEN :minLat AND :maxLat', {
         minLat: lat - degRange,
@@ -80,7 +92,11 @@ export class AirportsService {
       .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', {
         minLng: lng - degRange,
         maxLng: lng + degRange,
-      })
+      });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'airport', CycleDataGroup.NASR);
+
+    const airports = await qb
       .orderBy('airport.identifier', 'ASC')
       .take(limit)
       .getMany();
@@ -101,16 +117,18 @@ export class AirportsService {
 
   async getRunways(identifier: string) {
     const faaId = await this.resolveFaaIdentifier(identifier);
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     return this.runwayRepo.find({
-      where: { airport_identifier: faaId },
+      where: { airport_identifier: faaId, ...cycleWhere },
       relations: ['ends'],
     });
   }
 
   async getFrequencies(identifier: string) {
     const faaId = await this.resolveFaaIdentifier(identifier);
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     return this.frequencyRepo.find({
-      where: { airport_identifier: faaId },
+      where: { airport_identifier: faaId, ...cycleWhere },
       order: { type: 'ASC' },
     });
   }
@@ -130,8 +148,12 @@ export class AirportsService {
    * FAA identifier. Otherwise returns the input unchanged.
    */
   private async resolveFaaIdentifier(identifier: string): Promise<string> {
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     const airport = await this.airportRepo.findOne({
-      where: [{ identifier }, { icao_identifier: identifier }],
+      where: [
+        { identifier, ...cycleWhere },
+        { icao_identifier: identifier, ...cycleWhere },
+      ],
       select: ['identifier'],
     });
     return airport?.identifier ?? identifier;
@@ -148,15 +170,17 @@ export class AirportsService {
     maxLng: number,
     limit = AIRPORTS.BOUNDS_QUERY_LIMIT,
   ) {
-    const airports = await this.airportRepo
+    const qb = this.airportRepo
       .createQueryBuilder('airport')
       .where('airport.latitude BETWEEN :minLat AND :maxLat', { minLat, maxLat })
       .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', {
         minLng,
         maxLng,
-      })
-      .take(limit)
-      .getMany();
+      });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'airport', CycleDataGroup.NASR);
+
+    const airports = await qb.take(limit).getMany();
 
     if (airports.length === 0) return airports;
 
@@ -204,7 +228,7 @@ export class AirportsService {
 
     const bbox = computeBoundingBox(waypoints, corridorNm);
 
-    const candidates = await this.airportRepo
+    const qb = this.airportRepo
       .createQueryBuilder('airport')
       .where('airport.latitude BETWEEN :minLat AND :maxLat', {
         minLat: bbox.minLat,
@@ -213,8 +237,11 @@ export class AirportsService {
       .andWhere('airport.longitude BETWEEN :minLng AND :maxLng', {
         minLng: bbox.minLng,
         maxLng: bbox.maxLng,
-      })
-      .getMany();
+      });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'airport', CycleDataGroup.NASR);
+
+    const candidates = await qb.getMany();
 
     const results: (Airport & {
       distanceAlongRoute: number;

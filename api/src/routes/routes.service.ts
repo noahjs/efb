@@ -2,12 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PreferredRoute } from './entities/preferred-route.entity';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 @Injectable()
 export class RoutesService {
   constructor(
     @InjectRepository(PreferredRoute)
     private routeRepo: Repository<PreferredRoute>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   async search(origin: string, destination: string, type?: string) {
@@ -18,6 +21,8 @@ export class RoutesService {
       .andWhere('route.destination_id = :destination', {
         destination: destination.toUpperCase(),
       });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'route', CycleDataGroup.NASR);
 
     if (type) {
       qb.andWhere('route.route_type = :type', { type: type.toUpperCase() });
@@ -36,6 +41,8 @@ export class RoutesService {
       .leftJoinAndSelect('route.segments', 'seg')
       .where('route.origin_id = :origin', { origin: origin.toUpperCase() });
 
+    await this.cycleHelper.applyCycleFilter(qb, 'route', CycleDataGroup.NASR);
+
     if (type) {
       qb.andWhere('route.route_type = :type', { type: type.toUpperCase() });
     }
@@ -49,9 +56,13 @@ export class RoutesService {
   }
 
   async getRouteTypes(): Promise<string[]> {
-    const result: { route_type: string }[] = await this.routeRepo
+    const qb = this.routeRepo
       .createQueryBuilder('route')
-      .select('DISTINCT route.route_type', 'route_type')
+      .select('DISTINCT route.route_type', 'route_type');
+
+    await this.cycleHelper.applyCycleFilter(qb, 'route', CycleDataGroup.NASR);
+
+    const result: { route_type: string }[] = await qb
       .orderBy('route.route_type', 'ASC')
       .getRawMany();
 

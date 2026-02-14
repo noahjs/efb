@@ -12,6 +12,8 @@ import { Tfr } from '../data-platform/entities/tfr.entity';
 import { WeatherAlert } from '../data-platform/entities/weather-alert.entity';
 import { Metar } from '../data-platform/entities/metar.entity';
 import { NOTIFICATION } from '../config/constants';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 /** Flight category severity order (higher = worse). */
 const CATEGORY_RANK: Record<string, number> = {
@@ -54,6 +56,7 @@ export class NotificationDispatchService {
     private readonly weatherAlertRepo: Repository<WeatherAlert>,
     @InjectRepository(Metar)
     private readonly metarRepo: Repository<Metar>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   async dispatchNewAlerts(since: Date): Promise<number> {
@@ -284,7 +287,7 @@ export class NotificationDispatchService {
   ): Promise<Map<string, { lat: number; lng: number; icao: string | null }>> {
     if (identifiers.length === 0) return new Map();
 
-    const airports = await this.airportRepo
+    const qb = this.airportRepo
       .createQueryBuilder('a')
       .select([
         'a.identifier',
@@ -292,8 +295,11 @@ export class NotificationDispatchService {
         'a.latitude',
         'a.longitude',
       ])
-      .where('a.identifier IN (:...ids)', { ids: identifiers })
-      .getMany();
+      .where('a.identifier IN (:...ids)', { ids: identifiers });
+
+    await this.cycleHelper.applyCycleFilter(qb, 'a', CycleDataGroup.NASR);
+
+    const airports = await qb.getMany();
 
     const map = new Map<
       string,

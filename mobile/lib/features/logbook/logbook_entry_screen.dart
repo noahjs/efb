@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/router/navigation_helpers.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/logbook_entry.dart';
@@ -89,7 +90,7 @@ class _LogbookEntryScreenState extends ConsumerState<LogbookEntryScreen> {
   void _goBackToList() {
     ref.invalidate(logbookListProvider(''));
     ref.invalidate(logbookSummaryProvider);
-    context.go('/logbook');
+    context.goBack('/logbook');
   }
 
   Future<void> _saveField(LogbookEntry updated) async {

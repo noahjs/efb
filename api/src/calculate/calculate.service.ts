@@ -5,6 +5,8 @@ import { PerformanceProfile } from '../aircraft/entities/performance-profile.ent
 import { Airport } from '../airports/entities/airport.entity';
 import { NavaidsService } from '../navaids/navaids.service';
 import { WindyService } from '../windy/windy.service';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 export interface CalculateInput {
   departure_identifier?: string;
@@ -69,6 +71,7 @@ export class CalculateService {
     private airportRepo: Repository<Airport>,
     @InjectRepository(PerformanceProfile)
     private profileRepo: Repository<PerformanceProfile>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   async calculate(input: CalculateInput): Promise<CalculateResult> {
@@ -737,10 +740,11 @@ export class CalculateService {
 
   private async getAirportElevation(identifier?: string): Promise<number> {
     if (!identifier) return 0;
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     const airport = await this.airportRepo.findOne({
       where: [
-        { identifier: ILike(identifier) },
-        { icao_identifier: ILike(identifier) },
+        { identifier: ILike(identifier), ...cycleWhere },
+        { icao_identifier: ILike(identifier), ...cycleWhere },
       ],
     });
     return airport?.elevation ?? 0;

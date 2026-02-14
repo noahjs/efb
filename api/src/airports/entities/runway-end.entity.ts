@@ -4,9 +4,11 @@ import {
   PrimaryGeneratedColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Runway } from './runway.entity';
 import { DataGroup } from '../../config/constants';
+import { DataCycle } from '../../data-cycle/entities/data-cycle.entity';
 
 @Entity('a_runway_ends')
 export class RunwayEnd {
@@ -20,6 +22,14 @@ export class RunwayEnd {
   @ManyToOne(() => Runway, (runway) => runway.ends)
   @JoinColumn({ name: 'runway_id' })
   runway: Runway;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  cycle_id: string;
+
+  @ManyToOne(() => DataCycle, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'cycle_id' })
+  cycle: DataCycle;
 
   @Column({ type: 'varchar', nullable: true })
   identifier: string;

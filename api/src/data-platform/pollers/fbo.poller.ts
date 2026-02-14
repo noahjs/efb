@@ -7,6 +7,8 @@ import { Fbo } from '../../fbos/entities/fbo.entity';
 import { FuelPrice } from '../../fbos/entities/fuel-price.entity';
 import { FBO } from '../../config/constants';
 import { scrapeAndUpsertAirport, sleep } from './fbo-scrape.utils';
+import { CycleQueryHelper } from '../../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../../data-cycle/entities/data-cycle.entity';
 
 @Injectable()
 export class FboPoller extends BasePoller {
@@ -17,14 +19,16 @@ export class FboPoller extends BasePoller {
     private readonly fboRepo: Repository<Fbo>,
     @InjectRepository(FuelPrice)
     private readonly fuelPriceRepo: Repository<FuelPrice>,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {
     super('FboPoller');
   }
 
   async execute(): Promise<PollerResult> {
     // Scrape airports that have never been scraped
+    const cycleWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
     const airports = await this.airportRepo.find({
-      where: { fbo_scraped_at: IsNull() },
+      where: { fbo_scraped_at: IsNull(), ...cycleWhere },
       order: { identifier: 'ASC' },
     });
 

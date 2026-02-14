@@ -92,6 +92,8 @@ import { DeviceToken } from './notifications/entities/device-token.entity';
 import { NotificationLog } from './notifications/entities/notification-log.entity';
 import { MetarCategoryCache } from './notifications/entities/metar-category-cache.entity';
 import { dbConfig } from './db.config';
+import { DataCycleModule } from './data-cycle/data-cycle.module';
+import { DataCycle } from './data-cycle/entities/data-cycle.entity';
 
 @Module({
   imports: [
@@ -99,6 +101,7 @@ import { dbConfig } from './db.config';
     TypeOrmModule.forRoot({
       ...dbConfig,
       entities: [
+        DataCycle,
         Airport,
         Runway,
         RunwayEnd,
@@ -191,6 +194,7 @@ import { dbConfig } from './db.config';
     DataPlatformModule,
     HrrrModule,
     NotificationsModule,
+    DataCycleModule,
   ],
 })
 export class AppModule {}

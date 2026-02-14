@@ -2,17 +2,28 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
   Index,
   OneToMany,
 } from 'typeorm';
 import { CifpLeg } from './cifp-leg.entity';
 import { DataGroup } from '../../config/constants';
+import { DataCycle } from '../../data-cycle/entities/data-cycle.entity';
 
 @Entity('a_cifp_approaches')
 export class CifpApproach {
   static readonly DATA_GROUP = DataGroup.AVIATION;
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  cycle_id: string;
+
+  @ManyToOne(() => DataCycle, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'cycle_id' })
+  data_cycle: DataCycle;
 
   @Column({ type: 'varchar' })
   @Index()

@@ -5,10 +5,12 @@ import {
   ManyToOne,
   OneToMany,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Airport } from './airport.entity';
 import { RunwayEnd } from './runway-end.entity';
 import { DataGroup } from '../../config/constants';
+import { DataCycle } from '../../data-cycle/entities/data-cycle.entity';
 
 @Entity('a_runways')
 export class Runway {
@@ -16,12 +18,26 @@ export class Runway {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'int', nullable: true })
+  airport_id: number;
+
   @Column({ type: 'varchar' })
+  @Index()
   airport_identifier: string;
 
-  @ManyToOne(() => Airport, (airport) => airport.runways)
-  @JoinColumn({ name: 'airport_identifier' })
+  @ManyToOne(() => Airport, (airport) => airport.runways, {
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'airport_id' })
   airport: Airport;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  cycle_id: string;
+
+  @ManyToOne(() => DataCycle, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'cycle_id' })
+  cycle: DataCycle;
 
   @Column({ type: 'varchar', nullable: true })
   identifiers: string;

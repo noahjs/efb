@@ -2,11 +2,14 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
+  ManyToOne,
+  JoinColumn,
   Index,
   OneToMany,
 } from 'typeorm';
 import { PreferredRouteSegment } from './preferred-route-segment.entity';
 import { DataGroup } from '../../config/constants';
+import { DataCycle } from '../../data-cycle/entities/data-cycle.entity';
 
 @Entity('a_preferred_routes')
 @Index(['origin_id', 'destination_id'])
@@ -15,6 +18,14 @@ export class PreferredRoute {
 
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index()
+  cycle_id: string;
+
+  @ManyToOne(() => DataCycle, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'cycle_id' })
+  cycle: DataCycle;
 
   @Column({ type: 'varchar' })
   @Index()

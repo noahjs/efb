@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/router/navigation_helpers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/flight.dart';
 import '../../services/api_client.dart';
@@ -40,7 +41,7 @@ class _FlightDetailScreenState extends ConsumerState<FlightDetailScreen> {
 
   void _goBackToList() {
     ref.invalidate(flightsListProvider(''));
-    context.go('/flights');
+    context.goBack('/flights');
   }
 
   @override

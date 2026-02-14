@@ -18,6 +18,14 @@ import {
   ensureNasrData,
 } from './seed-utils';
 import { dbConfig } from '../db.config';
+import { DataCycle, CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
+import {
+  parseCycleIdArg,
+  resolveOrCreateCycle,
+  deleteCycleData,
+  updateRecordCounts,
+  markCycleStaged,
+} from './seed-cycle-utils';
 
 const DATA_DIR =
   process.env.EFB_DATA_DIR ||
@@ -28,18 +36,18 @@ const NASR_DIR = path.join(DATA_DIR, 'nasr');
 async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
-    entities: [Navaid, Fix],
+    entities: [Navaid, Fix, DataCycle],
   });
 
   await ds.initialize();
   return ds;
 }
 
-async function seedNavaids(ds: DataSource): Promise<number> {
+async function seedNavaids(ds: DataSource, cycleId?: string): Promise<number> {
   const navFile = findFile(NASR_DIR, 'NAV_BASE.csv', 'NAV.csv');
   if (!navFile) {
     console.log('  NAV file not found, seeding sample data instead...');
-    return seedSampleNavaids(ds);
+    return seedSampleNavaids(ds, cycleId);
   }
 
   console.log(`  Reading ${navFile}...`);
@@ -63,6 +71,7 @@ async function seedNavaids(ds: DataSource): Promise<number> {
       if (isNaN(lat) || isNaN(lng)) continue;
 
       navaids.push({
+        cycle_id: cycleId,
         identifier: identifier.trim(),
         name: (r['NAME'] || '').trim(),
         type: (r['NAV_TYPE'] || '').trim(),
@@ -86,7 +95,7 @@ async function seedNavaids(ds: DataSource): Promise<number> {
   return count;
 }
 
-async function seedSampleNavaids(ds: DataSource): Promise<number> {
+async function seedSampleNavaids(ds: DataSource, cycleId?: string): Promise<number> {
   const repo = ds.getRepository(Navaid);
   const samples: Partial<Navaid>[] = [
     {
@@ -208,15 +217,16 @@ async function seedSampleNavaids(ds: DataSource): Promise<number> {
     },
   ];
 
+  if (cycleId) { for (const n of samples) n.cycle_id = cycleId; }
   await repo.save(samples as Navaid[]);
   return samples.length;
 }
 
-async function seedFixes(ds: DataSource): Promise<number> {
+async function seedFixes(ds: DataSource, cycleId?: string): Promise<number> {
   const fixFile = findFile(NASR_DIR, 'FIX_BASE.csv', 'FIX.csv');
   if (!fixFile) {
     console.log('  FIX file not found, seeding sample data instead...');
-    return seedSampleFixes(ds);
+    return seedSampleFixes(ds, cycleId);
   }
 
   console.log(`  Reading ${fixFile}...`);
@@ -240,6 +250,7 @@ async function seedFixes(ds: DataSource): Promise<number> {
       if (isNaN(lat) || isNaN(lng)) continue;
 
       fixes.push({
+        cycle_id: cycleId,
         identifier: identifier.trim(),
         latitude: lat,
         longitude: lng,
@@ -258,7 +269,7 @@ async function seedFixes(ds: DataSource): Promise<number> {
   return count;
 }
 
-async function seedSampleFixes(ds: DataSource): Promise<number> {
+async function seedSampleFixes(ds: DataSource, cycleId?: string): Promise<number> {
   const repo = ds.getRepository(Fix);
   const samples: Partial<Fix>[] = [
     {
@@ -343,6 +354,7 @@ async function seedSampleFixes(ds: DataSource): Promise<number> {
     },
   ];
 
+  if (cycleId) { for (const f of samples) f.cycle_id = cycleId; }
   await repo.save(samples as Fix[]);
   return samples.length;
 }
@@ -356,25 +368,38 @@ async function main() {
   const ds = await initDataSource();
   console.log('Database initialized.\n');
 
-  // Clear existing data
-  console.log('Clearing existing navigation data...');
-  await ds.query('TRUNCATE TABLE a_navaids, a_fixes CASCADE');
+  // Resolve or create a data cycle
+  const cycleIdArg = parseCycleIdArg();
+  const { cycle } = await resolveOrCreateCycle(ds, cycleIdArg, CycleDataGroup.NASR, {
+    cycle_code: new Date().toISOString().slice(0, 10),
+    effective_date: new Date().toISOString().slice(0, 10),
+    expiration_date: new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10),
+  });
+  const cycleId = cycle.id;
+  console.log('');
+
+  // Clear existing data for this cycle
+  console.log('Clearing existing navigation data for this cycle...');
+  await deleteCycleData(ds, cycleId, ['a_navaids', 'a_fixes']);
   console.log('  Done.\n');
 
   // Seed navaids
   console.log('Seeding navaids...');
-  const navaidCount = await seedNavaids(ds);
+  const navaidCount = await seedNavaids(ds, cycleId);
   console.log(`  Imported ${navaidCount} navaids.\n`);
 
   // Seed fixes
   console.log('Seeding fixes...');
-  const fixCount = await seedFixes(ds);
+  const fixCount = await seedFixes(ds, cycleId);
   console.log(`  Imported ${fixCount} fixes.\n`);
 
   // Summary
   console.log('=== Seed Complete ===');
   console.log(`  Navaids: ${navaidCount}`);
   console.log(`  Fixes:   ${fixCount}`);
+
+  await updateRecordCounts(ds, cycleId, { navaids: navaidCount, fixes: fixCount });
+  if (!cycleIdArg) await markCycleStaged(ds, cycleId);
 
   await ds.destroy();
 }

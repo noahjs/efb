@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/router/navigation_helpers.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/aircraft_providers.dart';
 import '../../../services/api_client.dart';
@@ -137,7 +138,9 @@ class _AircraftCreateScreenState extends ConsumerState<AircraftCreateScreen> {
 
   void _applyRegistryData(Map<String, dynamic> data) {
     setState(() {
-      if (data['aircraft_type'] != null) {
+      if (data['model'] != null) {
+        _aircraftType = data['model'];
+      } else if (data['aircraft_type'] != null) {
         _aircraftType = data['aircraft_type'];
       }
       if (data['serial_number'] != null) {
@@ -200,7 +203,7 @@ class _AircraftCreateScreenState extends ConsumerState<AircraftCreateScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/aircraft'),
+          onPressed: () => context.goBack('/aircraft'),
         ),
         title: const Text('New Aircraft'),
         centerTitle: true,

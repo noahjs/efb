@@ -31,6 +31,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { dbConfig } from '../db.config';
 import { buildCloudLoggingFilter } from './cloud-logging.util';
+import { CycleQueryHelper } from '../data-cycle/cycle-query.helper';
+import { CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
 
 // All FAA VFR Sectional chart names
 export const VFR_SECTIONAL_CHARTS = [
@@ -163,6 +165,7 @@ export class AdminService {
     private readonly leidosService: LeidosService,
     private readonly dataScheduler: DataSchedulerService,
     private readonly orm: TypeOrmDataSource,
+    private readonly cycleHelper: CycleQueryHelper,
   ) {}
 
   // --- Environment / Infrastructure ---
@@ -329,12 +332,15 @@ export class AdminService {
   // --- Data inventory ---
 
   async getOverview() {
-    const airports = await this.airportRepo.count();
-    const runways = await this.runwayRepo.count();
-    const frequencies = await this.freqRepo.count();
-    const navaids = await this.navaidRepo.count();
-    const fixes = await this.fixRepo.count();
-    const procedures = await this.procedureRepo.count();
+    const nasrWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.NASR);
+    const dtppWhere = await this.cycleHelper.getCycleWhere(CycleDataGroup.DTPP);
+
+    const airports = await this.airportRepo.count({ where: { ...nasrWhere } });
+    const runways = await this.runwayRepo.count({ where: { ...nasrWhere } });
+    const frequencies = await this.freqRepo.count({ where: { ...nasrWhere } });
+    const navaids = await this.navaidRepo.count({ where: { ...nasrWhere } });
+    const fixes = await this.fixRepo.count({ where: { ...nasrWhere } });
+    const procedures = await this.procedureRepo.count({ where: { ...dtppWhere } });
     const registryAircraft = await this.registryRepo.count();
     const fbos = await this.fboRepo.count();
     const fuelPrices = await this.fuelPriceRepo.count();
@@ -343,6 +349,7 @@ export class AdminService {
 
     // Get current d-TPP cycle
     const cycles = await this.cycleRepo.find({
+      where: { ...dtppWhere },
       order: { seeded_at: 'DESC' },
       take: 1,
     });
@@ -821,7 +828,7 @@ export class AdminService {
 
   async getWeatherCoverage() {
     // 1. Query airports with any weather flag
-    const airports = await this.airportRepo
+    const qb = this.airportRepo
       .createQueryBuilder('a')
       .select([
         'a.identifier',
@@ -837,9 +844,11 @@ export class AdminService {
       ])
       .where(
         'a.has_metar = true OR a.has_taf = true OR a.has_datis = true OR a.has_liveatc = true OR a.has_awos = true',
-      )
-      .orderBy('a.identifier', 'ASC')
-      .getMany();
+      );
+
+    await this.cycleHelper.applyCycleFilter(qb, 'a', CycleDataGroup.NASR);
+
+    const airports = await qb.orderBy('a.identifier', 'ASC').getMany();
 
     // 2. Get all ICAO IDs that have polled METAR/TAF data (with timestamps)
     const metarRows: { icao_id: string; obs_time: string | null }[] =

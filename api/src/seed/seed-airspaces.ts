@@ -17,6 +17,14 @@ import * as path from 'path';
 import * as shapefile from 'shapefile';
 import { parsePipeDelimited, findFile, ensureNasrData } from './seed-utils';
 import { dbConfig } from '../db.config';
+import { DataCycle, CycleDataGroup } from '../data-cycle/entities/data-cycle.entity';
+import {
+  parseCycleIdArg,
+  resolveOrCreateCycle,
+  deleteCycleData,
+  updateRecordCounts,
+  markCycleStaged,
+} from './seed-cycle-utils';
 
 const DATA_DIR =
   process.env.EFB_DATA_DIR ||
@@ -27,7 +35,7 @@ const NASR_DIR = path.join(DATA_DIR, 'nasr');
 async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
-    entities: [Airspace, AirwaySegment, ArtccBoundary, Navaid, Fix],
+    entities: [Airspace, AirwaySegment, ArtccBoundary, Navaid, Fix, DataCycle],
   });
 
   await ds.initialize();
@@ -36,7 +44,7 @@ async function initDataSource(): Promise<DataSource> {
 
 // ---- Airspaces from Shapefile ----
 
-async function seedAirspaces(ds: DataSource): Promise<number> {
+async function seedAirspaces(ds: DataSource, cycleId?: string): Promise<number> {
   const shpFile = findFile(
     NASR_DIR,
     'Class_Airspace.shp',
@@ -44,7 +52,7 @@ async function seedAirspaces(ds: DataSource): Promise<number> {
   );
   if (!shpFile) {
     console.log('  Class_Airspace.shp not found, seeding sample data...');
-    return seedSampleAirspaces(ds);
+    return seedSampleAirspaces(ds, cycleId);
   }
 
   console.log(`  Reading ${shpFile}...`);
@@ -95,6 +103,7 @@ async function seedAirspaces(ds: DataSource): Promise<number> {
       min_lng: minLng,
       max_lng: maxLng,
       military: props.MIL_CODE === 'MIL',
+      cycle_id: cycleId,
     });
 
     if (batch.length >= batchSize) {
@@ -133,7 +142,7 @@ function flattenCoords(coords: any): [number, number][] {
   return result;
 }
 
-async function seedSampleAirspaces(ds: DataSource): Promise<number> {
+async function seedSampleAirspaces(ds: DataSource, cycleId?: string): Promise<number> {
   const repo = ds.getRepository(Airspace);
 
   // Sample Denver Class B airspace (simplified polygon)
@@ -180,6 +189,7 @@ async function seedSampleAirspaces(ds: DataSource): Promise<number> {
       min_lng: -105.2,
       max_lng: -104.5,
       military: false,
+      cycle_id: cycleId,
     },
     {
       identifier: 'APA',
@@ -196,6 +206,7 @@ async function seedSampleAirspaces(ds: DataSource): Promise<number> {
       min_lng: -104.88,
       max_lng: -104.83,
       military: false,
+      cycle_id: cycleId,
     },
   ];
 
@@ -246,11 +257,11 @@ async function buildCoordLookup(
   return lookup;
 }
 
-async function seedAirways(ds: DataSource): Promise<number> {
+async function seedAirways(ds: DataSource, cycleId?: string): Promise<number> {
   const awyFile = findFile(NASR_DIR, 'AWY_SEG_ALT.csv');
   if (!awyFile) {
     console.log('  AWY_SEG_ALT.csv not found, seeding sample data...');
-    return seedSampleAirways(ds);
+    return seedSampleAirways(ds, cycleId);
   }
 
   const coordLookup = await buildCoordLookup(ds);
@@ -307,6 +318,7 @@ async function seedAirways(ds: DataSource): Promise<number> {
         moca: moca,
         distance_nm: dist,
         airway_type: airwayType,
+        cycle_id: cycleId,
       });
     }
 
@@ -323,7 +335,7 @@ async function seedAirways(ds: DataSource): Promise<number> {
   return count;
 }
 
-async function seedSampleAirways(ds: DataSource): Promise<number> {
+async function seedSampleAirways(ds: DataSource, cycleId?: string): Promise<number> {
   const repo = ds.getRepository(AirwaySegment);
 
   const samples: Partial<AirwaySegment>[] = [
@@ -339,6 +351,7 @@ async function seedSampleAirways(ds: DataSource): Promise<number> {
       min_enroute_alt: 11000,
       airway_type: 'V',
       distance_nm: 15.2,
+      cycle_id: cycleId,
     },
     {
       airway_id: 'V389',
@@ -352,6 +365,7 @@ async function seedSampleAirways(ds: DataSource): Promise<number> {
       min_enroute_alt: 11000,
       airway_type: 'V',
       distance_nm: 3.0,
+      cycle_id: cycleId,
     },
   ];
 
@@ -361,12 +375,12 @@ async function seedSampleAirways(ds: DataSource): Promise<number> {
 
 // ---- ARTCC Boundaries from CSV ----
 
-async function seedArtcc(ds: DataSource): Promise<number> {
+async function seedArtcc(ds: DataSource, cycleId?: string): Promise<number> {
   const segFile = findFile(NASR_DIR, 'ARB_SEG.csv');
   const baseFile = findFile(NASR_DIR, 'ARB_BASE.csv');
   if (!segFile) {
     console.log('  ARB_SEG.csv not found, seeding sample data...');
-    return seedSampleArtcc(ds);
+    return seedSampleArtcc(ds, cycleId);
   }
 
   console.log(`  Reading ${segFile}...`);
@@ -446,6 +460,7 @@ async function seedArtcc(ds: DataSource): Promise<number> {
       max_lat: maxLat,
       min_lng: minLng,
       max_lng: maxLng,
+      cycle_id: cycleId,
     });
   }
 
@@ -457,7 +472,7 @@ async function seedArtcc(ds: DataSource): Promise<number> {
   return count;
 }
 
-async function seedSampleArtcc(ds: DataSource): Promise<number> {
+async function seedSampleArtcc(ds: DataSource, cycleId?: string): Promise<number> {
   const repo = ds.getRepository(ArtccBoundary);
 
   const zdvPolygon = {
@@ -489,6 +504,7 @@ async function seedSampleArtcc(ds: DataSource): Promise<number> {
       max_lat: 43.0,
       min_lng: -111.85,
       max_lng: -103.0,
+      cycle_id: cycleId,
     },
   ];
 
@@ -507,26 +523,34 @@ async function main() {
   const ds = await initDataSource();
   console.log('Database initialized.\n');
 
-  // Clear existing data
-  console.log('Clearing existing airspace data...');
-  await ds.query('DELETE FROM a_airspaces');
-  await ds.query('DELETE FROM a_airway_segments');
-  await ds.query('DELETE FROM a_artcc_boundaries');
+  // Resolve or create a data cycle
+  const cycleIdArg = parseCycleIdArg();
+  const { cycle } = await resolveOrCreateCycle(ds, cycleIdArg, CycleDataGroup.NASR, {
+    cycle_code: new Date().toISOString().slice(0, 10),
+    effective_date: new Date().toISOString().slice(0, 10),
+    expiration_date: new Date(Date.now() + 28 * 86400000).toISOString().slice(0, 10),
+  });
+  const cycleId = cycle.id;
+  console.log('');
+
+  // Clear existing data for this cycle
+  console.log('Clearing existing airspace data for this cycle...');
+  await deleteCycleData(ds, cycleId, ['a_airspaces', 'a_airway_segments', 'a_artcc_boundaries']);
   console.log('  Done.\n');
 
   // Seed airspaces
   console.log('Seeding airspaces from shapefile...');
-  const airspaceCount = await seedAirspaces(ds);
+  const airspaceCount = await seedAirspaces(ds, cycleId);
   console.log(`  Imported ${airspaceCount} airspaces.\n`);
 
   // Seed airways
   console.log('Seeding airway segments...');
-  const airwayCount = await seedAirways(ds);
+  const airwayCount = await seedAirways(ds, cycleId);
   console.log(`  Imported ${airwayCount} airway segments.\n`);
 
   // Seed ARTCC boundaries
   console.log('Seeding ARTCC boundaries...');
-  const artccCount = await seedArtcc(ds);
+  const artccCount = await seedArtcc(ds, cycleId);
   console.log(`  Imported ${artccCount} ARTCC boundaries.\n`);
 
   // Summary
@@ -534,6 +558,13 @@ async function main() {
   console.log(`  Airspaces:        ${airspaceCount}`);
   console.log(`  Airway segments:  ${airwayCount}`);
   console.log(`  ARTCC boundaries: ${artccCount}`);
+
+  await updateRecordCounts(ds, cycleId, {
+    airspaces: airspaceCount,
+    airway_segments: airwayCount,
+    artcc_boundaries: artccCount,
+  });
+  if (!cycleIdArg) await markCycleStaged(ds, cycleId);
 
   await ds.destroy();
 }

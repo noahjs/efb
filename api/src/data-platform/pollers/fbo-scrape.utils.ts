@@ -25,7 +25,7 @@ export async function scrapeAndUpsertAirport(
 
   if (!html) {
     // No AirNav page — mark as scraped with no FBOs
-    await airportRepo.update(airport.identifier, {
+    await airportRepo.update({ identifier: airport.identifier }, {
       fbo_scraped_at: new Date(),
     });
     return { fbos: 0, prices: 0 };
@@ -34,7 +34,7 @@ export async function scrapeAndUpsertAirport(
   const scrapedFbos = parseAirportFbos(html, icao);
 
   if (scrapedFbos.length === 0) {
-    await airportRepo.update(airport.identifier, {
+    await airportRepo.update({ identifier: airport.identifier }, {
       fbo_scraped_at: new Date(),
     });
     return { fbos: 0, prices: 0 };
@@ -99,7 +99,7 @@ export async function scrapeAndUpsertAirport(
   }
 
   // Mark airport as scraped
-  await airportRepo.update(airport.identifier, {
+  await airportRepo.update({ identifier: airport.identifier }, {
     fbo_scraped_at: now,
   });
 

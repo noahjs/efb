@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/router/navigation_helpers.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/endorsement.dart';
@@ -41,7 +42,7 @@ class _EndorsementDetailScreenState
 
   void _goBackToList() {
     ref.invalidate(endorsementsListProvider(''));
-    context.go('/credentials');
+    context.goBack('/credentials');
   }
 
   Future<void> _saveField(Endorsement updated) async {

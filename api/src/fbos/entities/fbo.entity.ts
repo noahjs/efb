@@ -2,12 +2,10 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  ManyToOne,
   OneToMany,
-  JoinColumn,
+  Index,
   Unique,
 } from 'typeorm';
-import { Airport } from '../../airports/entities/airport.entity';
 import { FuelPrice } from './fuel-price.entity';
 
 @Entity('a_fbos')
@@ -17,11 +15,8 @@ export class Fbo {
   id: number;
 
   @Column({ type: 'varchar' })
+  @Index()
   airport_identifier: string;
-
-  @ManyToOne(() => Airport, (airport) => airport.fbos)
-  @JoinColumn({ name: 'airport_identifier' })
-  airport: Airport;
 
   @Column({ type: 'varchar' })
   airnav_id: string;

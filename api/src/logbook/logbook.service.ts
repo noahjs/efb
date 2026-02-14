@@ -28,7 +28,7 @@ export class LogbookService {
     if (query) {
       const q = `%${query}%`;
       qb.where(
-        '(entry.from_airport LIKE :q OR entry.to_airport LIKE :q OR entry.aircraft_identifier LIKE :q OR entry.route LIKE :q OR entry.date LIKE :q OR entry.comments LIKE :q)',
+        '(entry.from_airport ILIKE :q OR entry.to_airport ILIKE :q OR entry.aircraft_identifier ILIKE :q OR entry.route ILIKE :q OR entry.date ILIKE :q OR entry.comments ILIKE :q)',
         { q },
       );
     }
