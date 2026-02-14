@@ -13,7 +13,9 @@ export function escapeCloudLoggingFilterValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-export function buildCloudLoggingFilter(params: AdminLogsQuery & { sinceIso: string }): string {
+export function buildCloudLoggingFilter(
+  params: AdminLogsQuery & { sinceIso: string },
+): string {
   const parts: string[] = [];
 
   // Time window (RFC3339)
@@ -33,7 +35,9 @@ export function buildCloudLoggingFilter(params: AdminLogsQuery & { sinceIso: str
   if (params.minLevel === 'error') {
     parts.push('(jsonPayload.level="error" OR jsonPayload.level="fatal")');
   } else if (params.minLevel === 'warning') {
-    parts.push('(jsonPayload.level="warn" OR jsonPayload.level="error" OR jsonPayload.level="fatal")');
+    parts.push(
+      '(jsonPayload.level="warn" OR jsonPayload.level="error" OR jsonPayload.level="fatal")',
+    );
   }
 
   if (params.context) {

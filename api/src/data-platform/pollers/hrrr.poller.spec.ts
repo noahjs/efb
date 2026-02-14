@@ -128,7 +128,9 @@ describe('HrrrPoller', () => {
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
       createQueryBuilder: jest.fn().mockReturnValue(createMockQb()),
       manager: {
-        transaction: jest.fn().mockImplementation(async (cb) => cb(mockTxnManager)),
+        transaction: jest
+          .fn()
+          .mockImplementation(async (cb) => cb(mockTxnManager)),
       },
     };
 
@@ -136,7 +138,9 @@ describe('HrrrPoller', () => {
       delete: jest.fn().mockResolvedValue({ affected: 0 }),
       target: HrrrSurface,
       manager: {
-        transaction: jest.fn().mockImplementation(async (cb) => cb(mockTxnManager)),
+        transaction: jest
+          .fn()
+          .mockImplementation(async (cb) => cb(mockTxnManager)),
       },
     };
 
@@ -144,7 +148,9 @@ describe('HrrrPoller', () => {
       delete: jest.fn().mockResolvedValue({ affected: 0 }),
       target: HrrrPressure,
       manager: {
-        transaction: jest.fn().mockImplementation(async (cb) => cb(mockTxnManager)),
+        transaction: jest
+          .fn()
+          .mockImplementation(async (cb) => cb(mockTxnManager)),
       },
     };
 
@@ -154,7 +160,10 @@ describe('HrrrPoller', () => {
         { provide: HttpService, useValue: mockHttp },
         { provide: getRepositoryToken(HrrrCycle), useValue: mockCycleRepo },
         { provide: getRepositoryToken(HrrrSurface), useValue: mockSurfaceRepo },
-        { provide: getRepositoryToken(HrrrPressure), useValue: mockPressureRepo },
+        {
+          provide: getRepositoryToken(HrrrPressure),
+          useValue: mockPressureRepo,
+        },
       ],
     }).compile();
 
@@ -527,8 +536,8 @@ describe('HrrrPoller', () => {
       const mockTxnManager = {
         createQueryBuilder: jest.fn().mockReturnValue(mockInsertQb),
       };
-      mockSurfaceRepo.manager.transaction.mockImplementation(
-        async (cb: any) => cb(mockTxnManager),
+      mockSurfaceRepo.manager.transaction.mockImplementation(async (cb: any) =>
+        cb(mockTxnManager),
       );
 
       await bulkInsert(mockSurfaceRepo, entities);
@@ -547,8 +556,8 @@ describe('HrrrPoller', () => {
       const mockTxnManager = {
         createQueryBuilder: jest.fn().mockReturnValue(mockInsertQb),
       };
-      mockSurfaceRepo.manager.transaction.mockImplementation(
-        async (cb: any) => cb(mockTxnManager),
+      mockSurfaceRepo.manager.transaction.mockImplementation(async (cb: any) =>
+        cb(mockTxnManager),
       );
 
       await bulkInsert(mockSurfaceRepo, []);

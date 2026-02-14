@@ -252,7 +252,16 @@ describe('HrrrTileService', () => {
     it('caches rendered tiles', async () => {
       // Provide data so raster is cached (empty rows → null raster → no cache)
       mockSurfaceRepo.find.mockResolvedValue([
-        { lat: 39, lng: -105, cloud_total: 50, cloud_low: 10, cloud_mid: 20, cloud_high: 15, flight_category: 'VFR', visibility_sm: 10 },
+        {
+          lat: 39,
+          lng: -105,
+          cloud_total: 50,
+          cloud_low: 10,
+          cloud_mid: 20,
+          cloud_high: 15,
+          flight_category: 'VFR',
+          visibility_sm: 10,
+        },
       ]);
 
       const buf1 = await service.renderTile('flight-cat', 4, 3, 5, 1);
@@ -287,8 +296,14 @@ describe('HrrrTileService', () => {
         providers: [
           HrrrTileService,
           { provide: getRepositoryToken(HrrrCycle), useValue: mockCycleRepo },
-          { provide: getRepositoryToken(HrrrSurface), useValue: mockSurfaceRepo },
-          { provide: getRepositoryToken(HrrrPressure), useValue: mockPressureRepo },
+          {
+            provide: getRepositoryToken(HrrrSurface),
+            useValue: mockSurfaceRepo,
+          },
+          {
+            provide: getRepositoryToken(HrrrPressure),
+            useValue: mockPressureRepo,
+          },
         ],
       }).compile();
 
@@ -296,15 +311,22 @@ describe('HrrrTileService', () => {
     });
 
     // Helper: fill a full CONUS grid so every pixel can sample valid data
-    function makeFullGrid(overrides: Partial<{
-      cloud_total: number; cloud_low: number; cloud_mid: number; cloud_high: number;
-      flight_category: string; visibility_sm: number;
-    }> = {}) {
+    function makeFullGrid(
+      overrides: Partial<{
+        cloud_total: number;
+        cloud_low: number;
+        cloud_mid: number;
+        cloud_high: number;
+        flight_category: string;
+        visibility_sm: number;
+      }> = {},
+    ) {
       const rows: any[] = [];
       for (let lat = 24; lat <= 50; lat++) {
         for (let lng = -125; lng <= -66; lng++) {
           rows.push({
-            lat, lng,
+            lat,
+            lng,
             cloud_total: overrides.cloud_total ?? 50,
             cloud_low: overrides.cloud_low ?? 20,
             cloud_mid: overrides.cloud_mid ?? 30,
@@ -318,7 +340,9 @@ describe('HrrrTileService', () => {
     }
 
     it('flight-cat: VFR renders transparent', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ flight_category: 'VFR' }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ flight_category: 'VFR' }),
+      );
       // Use z=2 for a tile covering CONUS — at z=2, tile (0,1) covers north, (1,1) covers south
       // z=2, x=0, y=1 covers roughly lat 0-66, lng -180 to -90 — includes CONUS
       const buffer = await service.renderTile('flight-cat', 2, 0, 1, 1);
@@ -327,28 +351,36 @@ describe('HrrrTileService', () => {
     });
 
     it('flight-cat: MVFR renders blue', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ flight_category: 'MVFR' }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ flight_category: 'MVFR' }),
+      );
       const buffer = await service.renderTile('flight-cat', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(100);
     });
 
     it('flight-cat: IFR renders red', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ flight_category: 'IFR' }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ flight_category: 'IFR' }),
+      );
       const buffer = await service.renderTile('flight-cat', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(100);
     });
 
     it('flight-cat: LIFR renders magenta', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ flight_category: 'LIFR' }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ flight_category: 'LIFR' }),
+      );
       const buffer = await service.renderTile('flight-cat', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(100);
     });
 
     it('clouds: high coverage renders opaque white', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ cloud_total: 100 }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ cloud_total: 100 }),
+      );
       const buffer = await service.renderTile('clouds-total', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(200);
@@ -361,28 +393,36 @@ describe('HrrrTileService', () => {
     });
 
     it('visibility: <1sm renders red', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ visibility_sm: 0.5 }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ visibility_sm: 0.5 }),
+      );
       const buffer = await service.renderTile('visibility', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(200);
     });
 
     it('visibility: 1-3sm renders orange', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ visibility_sm: 2 }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ visibility_sm: 2 }),
+      );
       const buffer = await service.renderTile('visibility', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(200);
     });
 
     it('visibility: 3-5sm renders yellow', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ visibility_sm: 4 }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ visibility_sm: 4 }),
+      );
       const buffer = await service.renderTile('visibility', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
       expect(buffer.length).toBeGreaterThan(200);
     });
 
     it('visibility: >=5sm renders transparent', async () => {
-      mockSurfaceRepo.find.mockResolvedValue(makeFullGrid({ visibility_sm: 10 }));
+      mockSurfaceRepo.find.mockResolvedValue(
+        makeFullGrid({ visibility_sm: 10 }),
+      );
       const buffer = await service.renderTile('visibility', 2, 0, 1, 1);
       expect(buffer).toBeInstanceOf(Buffer);
     });
@@ -400,13 +440,49 @@ describe('HrrrTileService', () => {
     // Provide surface data at multiple grid points to exercise color maps
     const surfaceRows = [
       // VFR, good visibility
-      { lat: 39, lng: -105, cloud_total: 10, cloud_low: 5, cloud_mid: 5, cloud_high: 0, flight_category: 'VFR', visibility_sm: 10 },
+      {
+        lat: 39,
+        lng: -105,
+        cloud_total: 10,
+        cloud_low: 5,
+        cloud_mid: 5,
+        cloud_high: 0,
+        flight_category: 'VFR',
+        visibility_sm: 10,
+      },
       // MVFR, moderate visibility
-      { lat: 40, lng: -104, cloud_total: 60, cloud_low: 40, cloud_mid: 30, cloud_high: 20, flight_category: 'MVFR', visibility_sm: 4 },
+      {
+        lat: 40,
+        lng: -104,
+        cloud_total: 60,
+        cloud_low: 40,
+        cloud_mid: 30,
+        cloud_high: 20,
+        flight_category: 'MVFR',
+        visibility_sm: 4,
+      },
       // IFR, poor visibility
-      { lat: 38, lng: -106, cloud_total: 90, cloud_low: 70, cloud_mid: 60, cloud_high: 50, flight_category: 'IFR', visibility_sm: 2 },
+      {
+        lat: 38,
+        lng: -106,
+        cloud_total: 90,
+        cloud_low: 70,
+        cloud_mid: 60,
+        cloud_high: 50,
+        flight_category: 'IFR',
+        visibility_sm: 2,
+      },
       // LIFR, very poor visibility
-      { lat: 37, lng: -107, cloud_total: 100, cloud_low: 95, cloud_mid: 80, cloud_high: 70, flight_category: 'LIFR', visibility_sm: 0.5 },
+      {
+        lat: 37,
+        lng: -107,
+        cloud_total: 100,
+        cloud_low: 95,
+        cloud_mid: 80,
+        cloud_high: 70,
+        flight_category: 'LIFR',
+        visibility_sm: 0.5,
+      },
     ];
 
     beforeEach(async () => {
@@ -492,7 +568,16 @@ describe('HrrrTileService', () => {
       };
       const mockSurfaceRepo = {
         find: jest.fn().mockResolvedValue([
-          { lat: 39, lng: -105, cloud_total: 50, cloud_low: 10, cloud_mid: 20, cloud_high: 15, flight_category: 'VFR', visibility_sm: 10 },
+          {
+            lat: 39,
+            lng: -105,
+            cloud_total: 50,
+            cloud_low: 10,
+            cloud_mid: 20,
+            cloud_high: 15,
+            flight_category: 'VFR',
+            visibility_sm: 10,
+          },
         ]),
       };
       const mockPressureRepo = {
@@ -503,8 +588,14 @@ describe('HrrrTileService', () => {
         providers: [
           HrrrTileService,
           { provide: getRepositoryToken(HrrrCycle), useValue: mockCycleRepo },
-          { provide: getRepositoryToken(HrrrSurface), useValue: mockSurfaceRepo },
-          { provide: getRepositoryToken(HrrrPressure), useValue: mockPressureRepo },
+          {
+            provide: getRepositoryToken(HrrrSurface),
+            useValue: mockSurfaceRepo,
+          },
+          {
+            provide: getRepositoryToken(HrrrPressure),
+            useValue: mockPressureRepo,
+          },
         ],
       }).compile();
 
@@ -524,7 +615,9 @@ describe('HrrrTileService', () => {
 
       // Next render should reload from DB because cycle changed
       await service.renderTile('flight-cat', 4, 3, 5, 1);
-      expect(mockSurfaceRepo.find.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+      expect(mockSurfaceRepo.find.mock.calls.length).toBeGreaterThan(
+        callsAfterFirst,
+      );
     });
   });
 
@@ -583,8 +676,14 @@ describe('HrrrTileService', () => {
         providers: [
           HrrrTileService,
           { provide: getRepositoryToken(HrrrCycle), useValue: mockCycleRepo },
-          { provide: getRepositoryToken(HrrrSurface), useValue: mockSurfaceRepo },
-          { provide: getRepositoryToken(HrrrPressure), useValue: mockPressureRepo },
+          {
+            provide: getRepositoryToken(HrrrSurface),
+            useValue: mockSurfaceRepo,
+          },
+          {
+            provide: getRepositoryToken(HrrrPressure),
+            useValue: mockPressureRepo,
+          },
         ],
       }).compile();
 

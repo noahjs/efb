@@ -24,7 +24,11 @@ export class LightningThreatPoller extends BasePoller {
 
     if (!clientId || !clientSecret) {
       this.logger.warn('XWEATHER_CLIENT_ID or XWEATHER_CLIENT_SECRET not set');
-      return { recordsUpdated: 0, errors: 1, lastError: 'Missing Xweather credentials' };
+      return {
+        recordsUpdated: 0,
+        errors: 1,
+        lastError: 'Missing Xweather credentials',
+      };
     }
 
     const { data } = await firstValueFrom(

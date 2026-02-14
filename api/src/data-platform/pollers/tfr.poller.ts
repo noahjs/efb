@@ -134,13 +134,16 @@ export class TfrPoller extends BasePoller {
     // Count web text fetch failures
     const webTextErrors = ids.length - webTextMap.size;
 
-    this.logger.log(`TFRs: ${tfrs.length} active, ${webTextErrors} text fetch errors`);
+    this.logger.log(
+      `TFRs: ${tfrs.length} active, ${webTextErrors} text fetch errors`,
+    );
     return {
       recordsUpdated: tfrs.length,
       errors: webTextErrors,
-      lastError: webTextErrors > 0
-        ? `${webTextErrors} of ${ids.length} TFR text fetches failed`
-        : undefined,
+      lastError:
+        webTextErrors > 0
+          ? `${webTextErrors} of ${ids.length} TFR text fetches failed`
+          : undefined,
     };
   }
 }

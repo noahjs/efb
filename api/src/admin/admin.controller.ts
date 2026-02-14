@@ -237,6 +237,51 @@ export class AdminController {
   }
 
   /**
+   * Trigger airspaces & airways seed (FAA NASR shapefiles)
+   */
+  @Post('seed/airspaces')
+  @HttpCode(200)
+  async seedAirspaces() {
+    return this.adminService.runSeedAirspaces();
+  }
+
+  /**
+   * Trigger preferred routes seed (IFR, TEC, NARs from FAA NASR)
+   */
+  @Post('seed/routes')
+  @HttpCode(200)
+  async seedRoutes() {
+    return this.adminService.runSeedRoutes();
+  }
+
+  /**
+   * Trigger CIFP coded instrument flight procedures seed (ARINC 424)
+   */
+  @Post('seed/cifp')
+  @HttpCode(200)
+  async seedCifp() {
+    return this.adminService.runSeedCifp();
+  }
+
+  /**
+   * Trigger weather stations seed (AWC non-airport METAR sources)
+   */
+  @Post('seed/weather-stations')
+  @HttpCode(200)
+  async seedWeatherStations() {
+    return this.adminService.runSeedWeatherStations();
+  }
+
+  /**
+   * Trigger weather flags seed (D-ATIS capability flags on airports)
+   */
+  @Post('seed/weather-flags')
+  @HttpCode(200)
+  async seedWeatherFlags() {
+    return this.adminService.runSeedWeatherFlags();
+  }
+
+  /**
    * Clear cached procedure PDFs
    */
   @Delete('procedures/pdf-cache')

@@ -39,8 +39,14 @@ export class WindsAloftPoller extends BasePoller {
       }
     }
 
-    this.logger.log(`Winds aloft: ${totalUpdated} station-periods, ${errors} errors`);
-    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
+    this.logger.log(
+      `Winds aloft: ${totalUpdated} station-periods, ${errors} errors`,
+    );
+    return {
+      recordsUpdated: totalUpdated,
+      errors,
+      lastError: lastError || undefined,
+    };
   }
 
   private async fetchPeriod(fcst: string): Promise<number> {

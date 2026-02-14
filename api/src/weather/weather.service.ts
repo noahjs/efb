@@ -23,9 +23,10 @@ interface WindsAloftForecast {
   altitudes: any[];
 }
 
-function dataMeta(
-  updatedAt: Date | null,
-): { updatedAt: string | null; ageSeconds: number | null } {
+function dataMeta(updatedAt: Date | null): {
+  updatedAt: string | null;
+  ageSeconds: number | null;
+} {
   if (!updatedAt) return { updatedAt: null, ageSeconds: null };
   return {
     updatedAt: updatedAt.toISOString(),
@@ -92,9 +93,7 @@ export class WeatherService {
     }
   }
 
-  async getDatis(
-    icao: string,
-  ): Promise<{
+  async getDatis(icao: string): Promise<{
     status: 'processing' | 'current' | 'error';
     entries: any[] | null;
     _meta: { updatedAt: string | null; ageSeconds: number | null } | null;
@@ -247,11 +246,7 @@ export class WeatherService {
             entries: liveatcResult,
             _meta: dataMeta(now),
           };
-          this.setCache(
-            `datis:${icao}`,
-            result,
-            LIVEATC_ATIS.CACHE_TTL_MS,
-          );
+          this.setCache(`datis:${icao}`, result, LIVEATC_ATIS.CACHE_TTL_MS);
         } else {
           // Transcription failed — mark error, preserve old raw_data
           await this.atisRepo.update(icao, { status: 'error' });
@@ -361,8 +356,7 @@ export class WeatherService {
     });
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;
@@ -725,8 +719,7 @@ export class WeatherService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;

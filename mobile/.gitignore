@@ -46,5 +46,6 @@ app.*.map.json
 
 # Environment config with secrets
 .env
+.env.prod
 .env.*.local
 ios/Flutter/Secrets.xcconfig

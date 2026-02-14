@@ -106,8 +106,14 @@ export class MetarPoller extends BasePoller {
       }
     }
 
-    this.logger.log(`METARs: ${totalUpdated} stations updated, ${errors} errors`);
-    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
+    this.logger.log(
+      `METARs: ${totalUpdated} stations updated, ${errors} errors`,
+    );
+    return {
+      recordsUpdated: totalUpdated,
+      errors,
+      lastError: lastError || undefined,
+    };
   }
 
   private async fetchState(state: string): Promise<number> {

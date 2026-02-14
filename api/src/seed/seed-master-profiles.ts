@@ -111,8 +111,7 @@ const MASTER_PROFILES: Partial<MasterWBProfile>[] = [
         max_zero_fuel_weight: 6252,
         fuel_arm: 189.8,
         taxi_fuel_gallons: 5.0,
-        notes:
-          'TBM 960 6-seat configuration. BEW from sample weighing report.',
+        notes: 'TBM 960 6-seat configuration. BEW from sample weighing report.',
         stations: [
           {
             name: 'Pilot',
@@ -366,7 +365,9 @@ async function main() {
     }
   }
 
-  console.log(`\n=== Seed Complete: ${MASTER_PROFILES.length} master profiles ===`);
+  console.log(
+    `\n=== Seed Complete: ${MASTER_PROFILES.length} master profiles ===`,
+  );
   await ds.destroy();
 }
 

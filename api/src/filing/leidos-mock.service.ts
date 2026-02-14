@@ -208,9 +208,7 @@ export class LeidosMockService implements LeidosClient {
     };
   }
 
-  private validatePayload(
-    fp: LeidosFlightPlanPayload,
-  ): LeidosCodedMessage[] {
+  private validatePayload(fp: LeidosFlightPlanPayload): LeidosCodedMessage[] {
     const errors: LeidosCodedMessage[] = [];
     if (!fp.aircraftIdentifier) {
       errors.push({

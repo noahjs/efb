@@ -355,10 +355,8 @@ describe('HrrrService', () => {
 
       const surfaceQb = createMockQb(mockSurface);
       const pressureQb = createMockQb(mockPressure850);
-      mockSurfaceRepo.createQueryBuilder
-        .mockReturnValueOnce(surfaceQb);
-      mockPressureRepo.createQueryBuilder
-        .mockReturnValueOnce(pressureQb);
+      mockSurfaceRepo.createQueryBuilder.mockReturnValueOnce(surfaceQb);
+      mockPressureRepo.createQueryBuilder.mockReturnValueOnce(pressureQb);
 
       const result = await service.getRouteWeather(
         [{ lat: 39, lng: -105 }],
@@ -419,12 +417,8 @@ describe('HrrrService', () => {
     it('should handle null surface and pressure data gracefully', async () => {
       mockCycleRepo.findOne.mockResolvedValue(mockActiveCycle);
 
-      mockSurfaceRepo.createQueryBuilder.mockReturnValue(
-        createMockQb(null),
-      );
-      mockPressureRepo.createQueryBuilder.mockReturnValue(
-        createMockQb(null),
-      );
+      mockSurfaceRepo.createQueryBuilder.mockReturnValue(createMockQb(null));
+      mockPressureRepo.createQueryBuilder.mockReturnValue(createMockQb(null));
 
       const result = await service.getRouteWeather(
         [{ lat: 39, lng: -105 }],
@@ -460,10 +454,9 @@ describe('HrrrService', () => {
 
       // Verify the query builder was called with 800
       const qb = mockPressureRepo.createQueryBuilder.mock.results[0].value;
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        'p.pressure_level = :level',
-        { level: 800 },
-      );
+      expect(qb.andWhere).toHaveBeenCalledWith('p.pressure_level = :level', {
+        level: 800,
+      });
     });
 
     it('should map high altitude to correct pressure level', async () => {
@@ -489,9 +482,7 @@ describe('HrrrService', () => {
       mockSurfaceRepo.createQueryBuilder.mockReturnValue(
         createMockQb(mockSurface),
       );
-      mockPressureRepo.createQueryBuilder.mockReturnValue(
-        createMockQb(null),
-      );
+      mockPressureRepo.createQueryBuilder.mockReturnValue(createMockQb(null));
 
       const result = await service.getRouteWeather(
         [{ lat: 39, lng: -105 }],
@@ -523,7 +514,11 @@ describe('HrrrService', () => {
       const surfaceQb = createMockQb(mockSurface);
       mockSurfaceRepo.createQueryBuilder.mockReturnValue(surfaceQb);
 
-      const pressureLevels = [mockPressure850, mockPressure700, mockPressure500];
+      const pressureLevels = [
+        mockPressure850,
+        mockPressure700,
+        mockPressure500,
+      ];
       const pressureQb = createMockQb(pressureLevels, true);
       mockPressureRepo.createQueryBuilder.mockReturnValue(pressureQb);
 
@@ -770,9 +765,7 @@ describe('HrrrService', () => {
       mockSurfaceRepo.createQueryBuilder.mockReturnValue(
         createMockQb(mockSurface),
       );
-      mockPressureRepo.createQueryBuilder.mockReturnValue(
-        createMockQb(null),
-      );
+      mockPressureRepo.createQueryBuilder.mockReturnValue(createMockQb(null));
     });
 
     const testMapping = async (altFt: number) => {

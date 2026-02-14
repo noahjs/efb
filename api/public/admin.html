@@ -791,6 +791,38 @@
     </div>
   </div>
 
+  <!-- Airspaces & Airways -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Airspaces & Airways</h2>
+      <button class="btn btn-primary" onclick="seedAirspaces()">
+        Seed Airspaces (FAA NASR)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Downloads FAA NASR shapefiles and populates Class B/C/D/E airspaces, airway segments,
+        and ARTCC boundary data. Required for airspace map overlays and flight planning.
+      </p>
+    </div>
+  </div>
+
+  <!-- Preferred Routes -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Preferred Routes</h2>
+      <button class="btn btn-primary" onclick="seedRoutes()">
+        Seed Routes (FAA NASR)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Imports IFR preferred routes, TEC routes, and North American Routes (NARs) from
+        FAA NASR data. Used for IFR flight plan route suggestions.
+      </p>
+    </div>
+  </div>
+
   <!-- Terminal Procedures (d-TPP) -->
   <div class="section">
     <div class="section-header">
@@ -810,6 +842,22 @@
     </div>
   </div>
 
+  <!-- CIFP Procedures -->
+  <div class="section">
+    <div class="section-header">
+      <h2>CIFP Procedures (ARINC 424)</h2>
+      <button class="btn btn-primary" onclick="seedCifp()">
+        Seed CIFP (FAA)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Imports coded instrument flight procedures from the FAA CIFP dataset (ARINC 424 format).
+        Includes approach procedure legs, ILS/localizer data, and minimum safe altitudes (MSA).
+      </p>
+    </div>
+  </div>
+
   <!-- Aircraft Registry -->
   <div class="section">
     <div class="section-header">
@@ -823,6 +871,38 @@
         Downloads the FAA Releasable Aircraft database and imports ~300K+ aircraft registrations
         with manufacturer, model, and engine data. Used for N-number lookup and auto-fill
         when creating aircraft.
+      </p>
+    </div>
+  </div>
+
+  <!-- Weather Stations -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Weather Stations</h2>
+      <button class="btn btn-primary" onclick="seedWeatherStations()">
+        Seed Weather Stations (AWC)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Imports non-airport METAR/TAF weather observation stations from the Aviation Weather Center.
+        These are weather reporting stations that don't correspond to airports in the NASR database.
+      </p>
+    </div>
+  </div>
+
+  <!-- Weather Flags (D-ATIS) -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Weather Flags (D-ATIS)</h2>
+      <button class="btn btn-primary" onclick="seedWeatherFlags()">
+        Seed Weather Flags (D-ATIS)
+      </button>
+    </div>
+    <div class="section-body">
+      <p style="font-size: 13px; color: #8b949e;">
+        Updates D-ATIS capability flags on airport records. Marks which airports support
+        Digital ATIS for weather and airport information delivery.
       </p>
     </div>
   </div>
@@ -1550,6 +1630,41 @@ async function seedProcedures() {
 async function seedRegistry() {
   toast('Starting aircraft registry seed job...');
   await fetchJSON(`${API}/seed/registry`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedAirspaces() {
+  toast('Starting airspaces & airways seed job...');
+  await fetchJSON(`${API}/seed/airspaces`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedRoutes() {
+  toast('Starting preferred routes seed job...');
+  await fetchJSON(`${API}/seed/routes`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedCifp() {
+  toast('Starting CIFP procedures seed job...');
+  await fetchJSON(`${API}/seed/cifp`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedWeatherStations() {
+  toast('Starting weather stations seed job...');
+  await fetchJSON(`${API}/seed/weather-stations`, { method: 'POST' });
+  setTimeout(refreshData, 500);
+  if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
+}
+
+async function seedWeatherFlags() {
+  toast('Starting weather flags seed job...');
+  await fetchJSON(`${API}/seed/weather-flags`, { method: 'POST' });
   setTimeout(refreshData, 500);
   if (!pollingInterval) pollingInterval = setInterval(refreshData, 3000);
 }

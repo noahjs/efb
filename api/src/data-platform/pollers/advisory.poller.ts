@@ -65,7 +65,11 @@ export class AdvisoryPoller extends BasePoller {
     this.logger.log(
       `Advisories: ${gairmets.length} GAIRMETs, ${sigmets.length} SIGMETs, ${cwas.length} CWAs`,
     );
-    return { recordsUpdated: all.length, errors, lastError: lastError || undefined };
+    return {
+      recordsUpdated: all.length,
+      errors,
+      lastError: lastError || undefined,
+    };
   }
 
   private async fetchWithRetry(
@@ -87,7 +91,9 @@ export class AdvisoryPoller extends BasePoller {
         }
       }
     }
-    this.logger.error(`Failed to fetch ${endpoint} after ${MAX_RETRIES + 1} attempts: ${lastErr?.message}`);
+    this.logger.error(
+      `Failed to fetch ${endpoint} after ${MAX_RETRIES + 1} attempts: ${lastErr?.message}`,
+    );
     throw lastErr;
   }
 

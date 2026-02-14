@@ -480,10 +480,7 @@ export class AtisTranscriptionService {
    */
   private findLastPhoneticLetter(text: string): string | null {
     const phoneticWords = Object.keys(AtisTranscriptionService.PHONETIC_MAP);
-    const pattern = new RegExp(
-      `\\b(${phoneticWords.join('|')})\\b`,
-      'gi',
-    );
+    const pattern = new RegExp(`\\b(${phoneticWords.join('|')})\\b`, 'gi');
     const matches = [...text.matchAll(pattern)];
     if (matches.length === 0) return null;
 

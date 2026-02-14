@@ -201,7 +201,11 @@ export class AdminService {
       const pgVersion = versionResult?.[0]?.version || 'unknown';
 
       // Get pool stats from the underlying pg driver
-      let pool: { totalCount?: number; idleCount?: number; waitingCount?: number } = {};
+      let pool: {
+        totalCount?: number;
+        idleCount?: number;
+        waitingCount?: number;
+      } = {};
       try {
         const driver = this.orm.driver as any;
         const pgPool = driver.master;
@@ -459,7 +463,9 @@ export class AdminService {
         ? Math.min(Math.max(Math.floor(limitRaw), 1), 200)
         : 50;
 
-      const sinceIso = new Date(Date.now() - sinceMinutes * 60 * 1000).toISOString();
+      const sinceIso = new Date(
+        Date.now() - sinceMinutes * 60 * 1000,
+      ).toISOString();
       const filter = buildCloudLoggingFilter({
         q: query.q,
         context: query.context,
@@ -510,9 +516,12 @@ export class AdminService {
           serviceName: e.resource?.labels?.service_name,
           context: jsonPayload?.context,
           event: jsonPayload?.event,
-          message: jsonPayload?.message ?? (typeof e.textPayload === 'string' ? e.textPayload : undefined),
+          message:
+            jsonPayload?.message ??
+            (typeof e.textPayload === 'string' ? e.textPayload : undefined),
           jsonPayload,
-          textPayload: typeof e.textPayload === 'string' ? e.textPayload : undefined,
+          textPayload:
+            typeof e.textPayload === 'string' ? e.textPayload : undefined,
         };
       });
 
@@ -541,37 +550,53 @@ export class AdminService {
   // --- Seed airports ---
 
   async runSeedAirports(): Promise<JobStatus> {
-    return await this.enqueueDbJob('seed-airports', 'Seed Airport Database (FAA NASR)', {
-      script: 'seed.js',
-      args: [],
-    });
+    return await this.enqueueDbJob(
+      'seed-airports',
+      'Seed Airport Database (FAA NASR)',
+      {
+        script: 'seed.js',
+        args: [],
+      },
+    );
   }
 
   // --- Seed navaids ---
 
   async runSeedNavaids(): Promise<JobStatus> {
-    return await this.enqueueDbJob('seed-navaids', 'Seed Navigation Database (FAA NASR)', {
-      script: 'seed-navaids.js',
-      args: [],
-    });
+    return await this.enqueueDbJob(
+      'seed-navaids',
+      'Seed Navigation Database (FAA NASR)',
+      {
+        script: 'seed-navaids.js',
+        args: [],
+      },
+    );
   }
 
   // --- Seed procedures ---
 
   async runSeedProcedures(): Promise<JobStatus> {
-    return await this.enqueueDbJob('seed-procedures', 'Seed Procedures (FAA d-TPP)', {
-      script: 'seed-procedures.js',
-      args: [],
-    });
+    return await this.enqueueDbJob(
+      'seed-procedures',
+      'Seed Procedures (FAA d-TPP)',
+      {
+        script: 'seed-procedures.js',
+        args: [],
+      },
+    );
   }
 
   // --- Seed registry ---
 
   async runSeedRegistry(): Promise<JobStatus> {
-    return await this.enqueueDbJob('seed-registry', 'Seed Aircraft Registry (FAA)', {
-      script: 'seed-registry.js',
-      args: [],
-    });
+    return await this.enqueueDbJob(
+      'seed-registry',
+      'Seed Aircraft Registry (FAA)',
+      {
+        script: 'seed-registry.js',
+        args: [],
+      },
+    );
   }
 
   // --- Scrape FBOs ---
@@ -586,10 +611,79 @@ export class AdminService {
   // --- Update fuel prices ---
 
   async runUpdateFuelPrices(): Promise<JobStatus> {
-    return await this.enqueueDbJob('update-fuel-prices', 'Update Fuel Prices (AirNav)', {
-      script: 'seed-fbos.js',
-      args: ['--update-prices'],
-    });
+    return await this.enqueueDbJob(
+      'update-fuel-prices',
+      'Update Fuel Prices (AirNav)',
+      {
+        script: 'seed-fbos.js',
+        args: ['--update-prices'],
+      },
+    );
+  }
+
+  // --- Seed airspaces ---
+
+  async runSeedAirspaces(): Promise<JobStatus> {
+    return await this.enqueueDbJob(
+      'seed-airspaces',
+      'Seed Airspaces & Airways (FAA NASR)',
+      {
+        script: 'seed-airspaces.js',
+        args: [],
+      },
+    );
+  }
+
+  // --- Seed routes ---
+
+  async runSeedRoutes(): Promise<JobStatus> {
+    return await this.enqueueDbJob(
+      'seed-routes',
+      'Seed Preferred Routes (FAA NASR)',
+      {
+        script: 'seed-routes.js',
+        args: [],
+      },
+    );
+  }
+
+  // --- Seed CIFP ---
+
+  async runSeedCifp(): Promise<JobStatus> {
+    return await this.enqueueDbJob(
+      'seed-cifp',
+      'Seed CIFP Procedures (FAA ARINC 424)',
+      {
+        script: 'seed-cifp.js',
+        args: [],
+      },
+    );
+  }
+
+  // --- Seed weather stations ---
+
+  async runSeedWeatherStations(): Promise<JobStatus> {
+    return await this.enqueueDbJob(
+      'seed-weather-stations',
+      'Seed Weather Stations (AWC)',
+      {
+        script: 'seed-weather-stations.js',
+        args: [],
+      },
+    );
+  }
+
+  // --- Seed weather flags ---
+
+  async runSeedWeatherFlags(): Promise<JobStatus> {
+    return await this.enqueueDbJob(
+      'seed-weather-flags',
+      'Seed Weather Flags (D-ATIS)',
+      {
+        script: 'seed-weather-flags.js',
+        args: [],
+      },
+    );
   }
 
   // --- Clear PDF cache ---
@@ -610,21 +704,16 @@ export class AdminService {
     if (!VFR_SECTIONAL_CHARTS.includes(chartName)) {
       throw new NotFoundException(`Invalid chart name: ${chartName}`);
     }
-    const jobId = `chart-${chartName}-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'process-chart',
-      label: `Process VFR Sectional: ${chartName}`,
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: [`Starting chart processing for ${chartName}...`],
-    };
-    this.jobs.set(jobId, job);
-
-    const script = path.join(this.scriptsDir, 'process-vfr-charts.sh');
-    this.runScript('bash', [script, 'sectional', chartName], job);
-
-    return job;
+    return await this.enqueueDbJob(
+      `chart-${chartName}`,
+      `Process VFR Sectional: ${chartName}`,
+      {
+        script: 'process-vfr-charts.sh',
+        args: ['sectional', chartName],
+        command: 'bash',
+        scriptDir: 'scripts',
+      },
+    );
   }
 
   // --- Delete chart tiles ---
@@ -791,10 +880,10 @@ export class AdminService {
 
     const airportList = airports.map((a) => {
       const metarObsTime = a.icao_identifier
-        ? metarMap.get(a.icao_identifier) ?? null
+        ? (metarMap.get(a.icao_identifier) ?? null)
         : null;
       const tafUpdatedAt = a.icao_identifier
-        ? tafMap.get(a.icao_identifier) ?? null
+        ? (tafMap.get(a.icao_identifier) ?? null)
         : null;
       const hasMetarData = metarObsTime !== null;
       const hasTafData = tafUpdatedAt !== null;
@@ -1033,7 +1122,9 @@ export class AdminService {
       type: r.type,
       label: r.label,
       status: r.status,
-      startedAt: r.started_at ? new Date(r.started_at).toISOString() : undefined,
+      startedAt: r.started_at
+        ? new Date(r.started_at).toISOString()
+        : undefined,
       completedAt: r.completed_at
         ? new Date(r.completed_at).toISOString()
         : undefined,
@@ -1058,7 +1149,9 @@ export class AdminService {
       type: r.type,
       label: r.label,
       status: r.status,
-      startedAt: r.started_at ? new Date(r.started_at).toISOString() : undefined,
+      startedAt: r.started_at
+        ? new Date(r.started_at).toISOString()
+        : undefined,
       completedAt: r.completed_at
         ? new Date(r.completed_at).toISOString()
         : undefined,
@@ -1070,7 +1163,12 @@ export class AdminService {
   private async enqueueDbJob(
     type: string,
     label: string,
-    payload: { script: string; args: string[] },
+    payload: {
+      script: string;
+      args: string[];
+      command?: string;
+      scriptDir?: string;
+    },
   ): Promise<JobStatus> {
     await this.ensureAdminJobsTable();
     const id = `${type}-${Date.now()}`;
@@ -1104,7 +1202,9 @@ export class AdminService {
     // (so ts-node isn't available). In dev we run directly from TS sources.
     if (process.env.NODE_ENV === 'production') {
       const script = path.join(this.appRootDir, 'dist', 'seed', jsFilename);
-      job.log.push(`Running: node ${path.relative(this.appRootDir, script)} ${args.join(' ')}`.trim());
+      job.log.push(
+        `Running: node ${path.relative(this.appRootDir, script)} ${args.join(' ')}`.trim(),
+      );
       this.runScript('node', [script, ...args], job);
       return;
     }

@@ -11,9 +11,10 @@ import { StormCell } from '../data-platform/entities/storm-cell.entity';
 import { LightningThreat } from '../data-platform/entities/lightning-threat.entity';
 import { WeatherAlert } from '../data-platform/entities/weather-alert.entity';
 
-function dataMeta(
-  updatedAt: Date | null,
-): { updatedAt: string | null; ageSeconds: number | null } {
+function dataMeta(updatedAt: Date | null): {
+  updatedAt: string | null;
+  ageSeconds: number | null;
+} {
   if (!updatedAt) return { updatedAt: null, ageSeconds: null };
   return {
     updatedAt: updatedAt.toISOString(),
@@ -494,8 +495,7 @@ export class ImageryService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;
@@ -540,8 +540,7 @@ export class ImageryService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;
@@ -571,8 +570,7 @@ export class ImageryService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;
@@ -612,8 +610,7 @@ export class ImageryService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;
@@ -674,8 +671,7 @@ export class ImageryService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;
@@ -723,8 +719,7 @@ export class ImageryService {
 
     const oldestUpdatedAt = rows.length
       ? rows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           rows[0].updated_at,
         )
       : null;

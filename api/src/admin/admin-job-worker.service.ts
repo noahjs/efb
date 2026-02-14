@@ -5,7 +5,12 @@ import * as path from 'path';
 import { DataSchedulerService } from '../data-platform/data-scheduler.service';
 import { isWorkerRuntimeEnabled, serviceRole } from '../config/runtime-role';
 
-type AdminJobPayload = { script: string; args: string[] };
+type AdminJobPayload = {
+  script: string;
+  args: string[];
+  command?: string; // default 'node'; use 'bash' for shell scripts
+  scriptDir?: string; // default 'dist/seed'; use 'scripts' for shell scripts
+};
 type AdminJobData = { jobId: string; type: string; payload: AdminJobPayload };
 
 @Injectable()
@@ -102,13 +107,16 @@ export class AdminJobWorkerService implements OnModuleInit {
   private async processJob(data: AdminJobData) {
     const { jobId, type, payload } = data;
 
-    const scriptPath = path.join(process.cwd(), 'dist', 'seed', payload.script);
+    const command = payload.command || 'node';
+    const scriptDir = payload.scriptDir || path.join('dist', 'seed');
+    const scriptPath = path.join(process.cwd(), scriptDir, payload.script);
     const args = [scriptPath, ...(payload.args || [])];
 
     this.logger.log({
       event: 'admin_job_started',
       jobId,
       type,
+      command,
       script: payload.script,
       args: payload.args || [],
     });
@@ -116,13 +124,13 @@ export class AdminJobWorkerService implements OnModuleInit {
     await this.updateStatus(jobId, 'running', { progress: 'starting' });
     await this.appendLog(
       jobId,
-      `Worker starting job.\nRunning: node ${path.relative(
+      `Worker starting job.\nRunning: ${command} ${path.relative(
         process.cwd(),
         scriptPath,
       )} ${(payload.args || []).join(' ')}\n`,
     );
 
-    const proc = spawn('node', args, {
+    const proc = spawn(command, args, {
       cwd: process.cwd(),
       env: { ...process.env },
     });
@@ -144,7 +152,9 @@ export class AdminJobWorkerService implements OnModuleInit {
     const queueFlush = (force = false) => {
       flushing = flushing
         .then(() => flush(force))
-        .catch((err) => this.logger.error({ event: 'admin_job_flush_failed', jobId, err }));
+        .catch((err) =>
+          this.logger.error({ event: 'admin_job_flush_failed', jobId, err }),
+        );
     };
 
     const onData = (dataBuf: Buffer, prefix?: string) => {
@@ -175,7 +185,11 @@ export class AdminJobWorkerService implements OnModuleInit {
       .then(async () => {
         queueFlush(true);
         await flushing;
-        await this.appendLog(jobId, 'Job completed successfully.\n', lastProgress);
+        await this.appendLog(
+          jobId,
+          'Job completed successfully.\n',
+          lastProgress,
+        );
         await this.updateStatus(jobId, 'completed', {
           progress: lastProgress || 'completed',
           completedAt: new Date(),
@@ -191,9 +205,13 @@ export class AdminJobWorkerService implements OnModuleInit {
           progress: lastProgress || 'failed',
           completedAt: new Date(),
         });
-        this.logger.error({ event: 'admin_job_failed', jobId, type, error: msg });
+        this.logger.error({
+          event: 'admin_job_failed',
+          jobId,
+          type,
+          error: msg,
+        });
         throw err;
       });
   }
 }
-

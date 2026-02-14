@@ -458,8 +458,7 @@ export class CalculateService {
     }
 
     // Compute wind component (best-effort, don't block on failure)
-    const effectiveTas =
-      input.true_airspeed || (profile?.cruise_tas ?? 0);
+    const effectiveTas = input.true_airspeed || (profile?.cruise_tas ?? 0);
     const altitude = input.cruise_altitude ?? 0;
     if (effectiveTas > 0 && altitude > 0 && waypoints.length >= 2) {
       try {
@@ -712,7 +711,8 @@ export class CalculateService {
           : 'none';
       steps.push({
         label: 'Fuel Burn Rate',
-        value: burnRate > 0 ? `${burnRate} GPH (from ${burnSource})` : '(not set)',
+        value:
+          burnRate > 0 ? `${burnRate} GPH (from ${burnSource})` : '(not set)',
       });
       if (fuelGallons != null) {
         steps.push({

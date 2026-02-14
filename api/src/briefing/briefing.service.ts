@@ -730,8 +730,7 @@ export class BriefingService {
     const notamList = raw.notamList || raw.notams || [];
     if (!Array.isArray(notamList)) return [];
 
-    return notamList
-      .map((n: any) => parseNotam(n, icaoId));
+    return notamList.map((n: any) => parseNotam(n, icaoId));
   }
 
   /**

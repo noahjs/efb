@@ -104,7 +104,8 @@ export class NotificationsService implements OnModuleInit {
         response.responses.forEach((resp, idx) => {
           if (
             resp.error &&
-            (resp.error.code === 'messaging/registration-token-not-registered' ||
+            (resp.error.code ===
+              'messaging/registration-token-not-registered' ||
               resp.error.code === 'messaging/invalid-registration-token')
           ) {
             invalidTokens.push(batch[idx]);

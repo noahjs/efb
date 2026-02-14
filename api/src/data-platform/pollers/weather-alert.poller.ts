@@ -72,7 +72,9 @@ export class WeatherAlertPoller extends BasePoller {
       }
     });
 
-    this.logger.log(`Weather alerts: ${alerts.length} saved (${features.length - alerts.length} skipped — no geometry)`);
+    this.logger.log(
+      `Weather alerts: ${alerts.length} saved (${features.length - alerts.length} skipped — no geometry)`,
+    );
     return { recordsUpdated: alerts.length, errors: 0 };
   }
 }

@@ -7,16 +7,15 @@ type ContextualMessage = {
   [key: string]: unknown;
 };
 
-const isDev =
-  !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
+const isDev = !process.env.NODE_ENV || process.env.NODE_ENV === 'development';
 
 const levelColors: Record<string, string> = {
-  log: '\x1b[32m',     // green
-  error: '\x1b[31m',   // red
-  warn: '\x1b[33m',    // yellow
-  debug: '\x1b[35m',   // magenta
+  log: '\x1b[32m', // green
+  error: '\x1b[31m', // red
+  warn: '\x1b[33m', // yellow
+  debug: '\x1b[35m', // magenta
   verbose: '\x1b[36m', // cyan
-  fatal: '\x1b[41m',   // red background
+  fatal: '\x1b[41m', // red background
 };
 const reset = '\x1b[0m';
 const dim = '\x1b[2m';
@@ -85,7 +84,9 @@ export class JsonLogger implements LoggerService {
       entry.trace = trace;
     }
 
-    const line = isDev ? this.formatDev(entry, level) : `${this.safeStringify(entry)}\n`;
+    const line = isDev
+      ? this.formatDev(entry, level)
+      : `${this.safeStringify(entry)}\n`;
     if (level === 'error' || level === 'fatal') {
       process.stderr.write(line);
       return;
@@ -114,7 +115,10 @@ export class JsonLogger implements LoggerService {
     ]);
     const extras = Object.entries(entry)
       .filter(([k]) => !skip.has(k))
-      .map(([k, v]) => `${dim}${k}=${typeof v === 'object' ? JSON.stringify(v) : v}${reset}`)
+      .map(
+        ([k, v]) =>
+          `${dim}${k}=${typeof v === 'object' ? JSON.stringify(v) : v}${reset}`,
+      )
       .join(' ');
 
     let line = `${color}${tag}${reset} ${ctx}${msg}`;

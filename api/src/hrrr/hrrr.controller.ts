@@ -146,9 +146,7 @@ export class HrrrController {
 
   // --- Helpers ---
 
-  private parseWaypoints(
-    json: string,
-  ): Array<{ lat: number; lng: number }> {
+  private parseWaypoints(json: string): Array<{ lat: number; lng: number }> {
     if (!json) {
       throw new BadRequestException('waypoints query parameter is required');
     }
@@ -166,9 +164,7 @@ export class HrrrController {
         return { lat, lng };
       });
     } catch (e) {
-      throw new BadRequestException(
-        `Invalid waypoints JSON: ${e.message}`,
-      );
+      throw new BadRequestException(`Invalid waypoints JSON: ${e.message}`);
     }
   }
 }

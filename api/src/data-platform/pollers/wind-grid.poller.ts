@@ -110,7 +110,11 @@ export class WindGridPoller extends BasePoller {
     this.logger.log(
       `Wind grid: ${totalUpdated} points, ${errors} batch errors`,
     );
-    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
+    return {
+      recordsUpdated: totalUpdated,
+      errors,
+      lastError: lastError || undefined,
+    };
   }
 
   private async fetchBatchWithRetry(
@@ -230,9 +234,7 @@ export class WindGridPoller extends BasePoller {
       if (!hourly) continue;
 
       const times: string[] = hourly.time || [];
-      const timestamps = times.map((t: string) =>
-        new Date(t + 'Z').getTime(),
-      );
+      const timestamps = times.map((t: string) => new Date(t + 'Z').getTime());
 
       // Build levels data structure (same as PointForecastResult.levels)
       const levels: any[] = [];
@@ -242,8 +244,7 @@ export class WindGridPoller extends BasePoller {
         timestamp: ts,
         direction: Math.round(hourly.wind_direction_10m?.[ti] ?? 0),
         speed: Math.round(hourly.wind_speed_10m?.[ti] ?? 0),
-        temperature:
-          Math.round((hourly.temperature_2m?.[ti] ?? 15) * 10) / 10,
+        temperature: Math.round((hourly.temperature_2m?.[ti] ?? 15) * 10) / 10,
       }));
       levels.push({ level: 'surface', altitudeFt: 0, winds: surfWinds });
 
@@ -252,13 +253,10 @@ export class WindGridPoller extends BasePoller {
         const altFt = WINDS.LEVEL_ALTITUDES[hPa] || 0;
         const winds = timestamps.map((ts, ti) => ({
           timestamp: ts,
-          direction: Math.round(
-            hourly[`wind_direction_${hPa}hPa`]?.[ti] ?? 0,
-          ),
+          direction: Math.round(hourly[`wind_direction_${hPa}hPa`]?.[ti] ?? 0),
           speed: Math.round(hourly[`wind_speed_${hPa}hPa`]?.[ti] ?? 0),
           temperature:
-            Math.round((hourly[`temperature_${hPa}hPa`]?.[ti] ?? 0) * 10) /
-            10,
+            Math.round((hourly[`temperature_${hPa}hPa`]?.[ti] ?? 0) * 10) / 10,
         }));
         levels.push({ level: `${hPa}hPa`, altitudeFt: altFt, winds });
       }

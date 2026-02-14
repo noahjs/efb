@@ -87,9 +87,7 @@ export class NotificationDispatchService {
         tfr.geometry,
       );
       for (const [userId, userAirports] of userAirportMap) {
-        const matched = affectedAirports.filter((a) =>
-          userAirports.has(a),
-        );
+        const matched = affectedAirports.filter((a) => userAirports.has(a));
         if (matched.length === 0) continue;
         pendingAlerts.push({
           userId,
@@ -113,9 +111,7 @@ export class NotificationDispatchService {
         alert.geometry,
       );
       for (const [userId, userAirports] of userAirportMap) {
-        const matched = affectedAirports.filter((a) =>
-          userAirports.has(a),
-        );
+        const matched = affectedAirports.filter((a) => userAirports.has(a));
         if (matched.length === 0) continue;
         pendingAlerts.push({
           userId,
@@ -267,10 +263,12 @@ export class NotificationDispatchService {
         if (etdDate > cutoff || etdDate < new Date()) continue;
       }
 
-      if (flight.departure_identifier) airports.add(flight.departure_identifier);
+      if (flight.departure_identifier)
+        airports.add(flight.departure_identifier);
       if (flight.destination_identifier)
         airports.add(flight.destination_identifier);
-      if (flight.alternate_identifier) airports.add(flight.alternate_identifier);
+      if (flight.alternate_identifier)
+        airports.add(flight.alternate_identifier);
     }
 
     // Remove users with no airports
@@ -366,11 +364,7 @@ export class NotificationDispatchService {
     };
 
     const walk = (arr: any) => {
-      if (
-        Array.isArray(arr) &&
-        arr.length >= 2 &&
-        typeof arr[0] === 'number'
-      ) {
+      if (Array.isArray(arr) && arr.length >= 2 && typeof arr[0] === 'number') {
         processCoord(arr);
       } else if (Array.isArray(arr)) {
         for (const item of arr) walk(item);
@@ -424,9 +418,7 @@ export class NotificationDispatchService {
       .getMany();
 
     const sentSet = new Set(
-      existingLogs.map(
-        (l) => `${l.user_id}:${l.alert_type}:${l.alert_key}`,
-      ),
+      existingLogs.map((l) => `${l.user_id}:${l.alert_type}:${l.alert_key}`),
     );
 
     let sentCount = 0;

@@ -90,9 +90,10 @@ export interface WindStreamlineResult {
   }>;
 }
 
-function dataMeta(
-  updatedAt: Date | null,
-): { updatedAt: string | null; ageSeconds: number | null } {
+function dataMeta(updatedAt: Date | null): {
+  updatedAt: string | null;
+  ageSeconds: number | null;
+} {
   if (!updatedAt) return { updatedAt: null, ageSeconds: null };
   return {
     updatedAt: updatedAt.toISOString(),
@@ -419,8 +420,7 @@ export class WindyService {
 
     const oldestUpdatedAt = gridRows.length
       ? gridRows.reduce(
-          (oldest, r) =>
-            r.updated_at < oldest ? r.updated_at : oldest,
+          (oldest, r) => (r.updated_at < oldest ? r.updated_at : oldest),
           gridRows[0].updated_at,
         )
       : null;

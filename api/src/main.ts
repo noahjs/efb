@@ -33,7 +33,12 @@ async function bootstrap() {
           scriptSrc: ["'self'", "'unsafe-inline'"],
           scriptSrcAttr: ["'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
-          frameAncestors: ["'self'", 'http://localhost:*', 'https://localhost:*'],
+          frameAncestors: [
+            "'self'",
+            'http://localhost:*',
+            'https://localhost:*',
+            'https://api.tropiq.app',
+          ],
         },
       },
     }),

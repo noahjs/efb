@@ -33,7 +33,15 @@ async function initDataSource(): Promise<DataSource> {
   const ds = new DataSource({
     ...dbConfig,
     // Airport has OneToMany relations that require related entities
-    entities: [WeatherStation, Airport, Runway, RunwayEnd, Frequency, Fbo, FuelPrice],
+    entities: [
+      WeatherStation,
+      Airport,
+      Runway,
+      RunwayEnd,
+      Frequency,
+      Fbo,
+      FuelPrice,
+    ],
   });
   await ds.initialize();
   return ds;

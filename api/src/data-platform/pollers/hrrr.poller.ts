@@ -166,7 +166,9 @@ export class HrrrPoller extends BasePoller {
           await this.cycleRepo.save(cycle);
           totalErrors++;
           lastError = err.message;
-          this.logger.error(`Processing failed F${dl.forecastHour}: ${err.message}`);
+          this.logger.error(
+            `Processing failed F${dl.forecastHour}: ${err.message}`,
+          );
         }
       }
 
@@ -282,7 +284,11 @@ export class HrrrPoller extends BasePoller {
 
     // HRRR data is available ~1-2 hours after init time.
     // Try from (current hour - 2) backwards.
-    for (let hoursBack = 2; hoursBack <= HRRR.CYCLE_LOOKBACK_HOURS; hoursBack++) {
+    for (
+      let hoursBack = 2;
+      hoursBack <= HRRR.CYCLE_LOOKBACK_HOURS;
+      hoursBack++
+    ) {
       const initTime = new Date(now);
       initTime.setUTCMinutes(0, 0, 0);
       initTime.setUTCHours(initTime.getUTCHours() - hoursBack);
@@ -426,7 +432,9 @@ export class HrrrPoller extends BasePoller {
       if (varPatterns.some((p) => varLevel.includes(p))) {
         const start = entry.startByte;
         const end =
-          i + 1 < entries.length ? entries[i + 1].startByte - 1 : start + 5_000_000;
+          i + 1 < entries.length
+            ? entries[i + 1].startByte - 1
+            : start + 5_000_000;
         ranges.push({ start, end });
       }
     }
@@ -510,12 +518,18 @@ export class HrrrPoller extends BasePoller {
     }
 
     args.push(
-      '--grid-spacing', String(HRRR.GRID_SPACING_DEG),
-      '--lat-min', String(DATA_PLATFORM.CONUS_BOUNDS.minLat),
-      '--lat-max', String(DATA_PLATFORM.CONUS_BOUNDS.maxLat),
-      '--lng-min', String(DATA_PLATFORM.CONUS_BOUNDS.minLng),
-      '--lng-max', String(DATA_PLATFORM.CONUS_BOUNDS.maxLng),
-      '--pressure-levels', HRRR.PRESSURE_LEVELS.join(','),
+      '--grid-spacing',
+      String(HRRR.GRID_SPACING_DEG),
+      '--lat-min',
+      String(DATA_PLATFORM.CONUS_BOUNDS.minLat),
+      '--lat-max',
+      String(DATA_PLATFORM.CONUS_BOUNDS.maxLat),
+      '--lng-min',
+      String(DATA_PLATFORM.CONUS_BOUNDS.minLng),
+      '--lng-max',
+      String(DATA_PLATFORM.CONUS_BOUNDS.maxLng),
+      '--pressure-levels',
+      HRRR.PRESSURE_LEVELS.join(','),
     );
 
     const venvPython = path.join(processorDir, 'venv', 'bin', 'python3');
@@ -534,10 +548,14 @@ export class HrrrPoller extends BasePoller {
       );
     }
 
-    const { stdout, stderr } = await execFileAsync(pythonCmd, [scriptPath, ...args], {
-      timeout: HRRR.PROCESSOR_TIMEOUT_MS,
-      maxBuffer: 100 * 1024 * 1024, // 100MB for large JSON output
-    });
+    const { stdout, stderr } = await execFileAsync(
+      pythonCmd,
+      [scriptPath, ...args],
+      {
+        timeout: HRRR.PROCESSOR_TIMEOUT_MS,
+        maxBuffer: 100 * 1024 * 1024, // 100MB for large JSON output
+      },
+    );
 
     if (stderr) {
       // Python progress messages go to stderr; log them

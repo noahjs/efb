@@ -24,7 +24,11 @@ export class StormCellPoller extends BasePoller {
 
     if (!clientId || !clientSecret) {
       this.logger.warn('XWEATHER_CLIENT_ID or XWEATHER_CLIENT_SECRET not set');
-      return { recordsUpdated: 0, errors: 1, lastError: 'Missing Xweather credentials' };
+      return {
+        recordsUpdated: 0,
+        errors: 1,
+        lastError: 'Missing Xweather credentials',
+      };
     }
 
     const { data } = await firstValueFrom(
@@ -77,9 +81,9 @@ export class StormCellPoller extends BasePoller {
       if (item.forecast?.length > 0) {
         const trackCoords = [
           [loc.long, loc.lat],
-          ...item.forecast.map((f: any) => [f.loc?.long, f.loc?.lat]).filter(
-            (c: any) => c[0] != null && c[1] != null,
-          ),
+          ...item.forecast
+            .map((f: any) => [f.loc?.long, f.loc?.lat])
+            .filter((c: any) => c[0] != null && c[1] != null),
         ];
         if (trackCoords.length >= 2) {
           cell.forecast_track = {

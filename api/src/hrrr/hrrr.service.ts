@@ -105,8 +105,19 @@ export class HrrrService {
       products: {
         clouds: {
           levels: [
-            'low', 'mid', 'high', 'total',
-            '1000', '925', '850', '700', '500', '400', '300', '250', '200',
+            'low',
+            'mid',
+            'high',
+            'total',
+            '1000',
+            '925',
+            '850',
+            '700',
+            '500',
+            '400',
+            '300',
+            '250',
+            '200',
           ],
           forecast_hours: forecastHours,
         },

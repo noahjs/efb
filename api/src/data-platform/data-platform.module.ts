@@ -135,10 +135,16 @@ export class DataPlatformModule implements OnModuleInit {
     this.worker.registerPoller('fbo_poll', this.fboPoller);
     this.worker.registerPoller('fuel_price_poll', this.fuelPricePoller);
     this.worker.registerPoller('storm_cell_poll', this.stormCellPoller);
-    this.worker.registerPoller('lightning_threat_poll', this.lightningThreatPoller);
+    this.worker.registerPoller(
+      'lightning_threat_poll',
+      this.lightningThreatPoller,
+    );
     this.worker.registerPoller('weather_alert_poll', this.weatherAlertPoller);
     this.worker.registerPoller('hrrr_poll', this.hrrrPoller);
-    this.worker.registerPoller('notification_dispatch', this.notificationPoller);
+    this.worker.registerPoller(
+      'notification_dispatch',
+      this.notificationPoller,
+    );
 
     // Now start processing jobs (pollers are guaranteed registered)
     await this.worker.start();

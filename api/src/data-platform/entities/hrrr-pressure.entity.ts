@@ -1,10 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  Index,
-  Unique,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, Index, Unique } from 'typeorm';
 
 @Entity('a_hrrr_pressure')
 @Unique(['init_time', 'forecast_hour', 'lat', 'lng', 'pressure_level'])

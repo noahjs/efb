@@ -202,7 +202,9 @@ export const HRRR = {
   // Variables to extract from wrfprsf (3D pressure levels)
   // Note: HRRR has no TCDC at individual pressure levels; use RH as cloud proxy
   PRESSURE_VARS: ['RH', 'UGRD', 'VGRD', 'TMP'],
-  PRESSURE_LEVELS: [1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 250, 200, 150],
+  PRESSURE_LEVELS: [
+    1000, 950, 925, 900, 850, 800, 700, 600, 500, 400, 300, 250, 200, 150,
+  ],
 
   // Tile rendering
   TILE_ZOOM_MIN: 2,

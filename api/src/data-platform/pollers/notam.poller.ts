@@ -55,7 +55,11 @@ export class NotamPoller extends BasePoller {
     this.logger.log(
       `NOTAMs: ${totalUpdated} records from ${topAirports.length} airports, ${errors} errors`,
     );
-    return { recordsUpdated: totalUpdated, errors, lastError: lastError || undefined };
+    return {
+      recordsUpdated: totalUpdated,
+      errors,
+      lastError: lastError || undefined,
+    };
   }
 
   private async getTopAirports(): Promise<string[]> {

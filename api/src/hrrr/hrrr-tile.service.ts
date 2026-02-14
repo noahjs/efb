@@ -138,10 +138,7 @@ export class HrrrTileService {
     if (product === 'clouds') {
       // Pressure-level cloud rendering
       const level = pressureLevel ?? 850;
-      const pressureRaster = await this.loadPressureRaster(
-        forecastHour,
-        level,
-      );
+      const pressureRaster = await this.loadPressureRaster(forecastHour, level);
       if (!pressureRaster) return this.transparentTile;
       buffer = this.renderPressureTileFromRaster(pressureRaster, z, x, y);
     } else {
@@ -227,8 +224,7 @@ export class HrrrTileService {
       raster.cloudLow[idx] = row.cloud_low ?? 0;
       raster.cloudMid[idx] = row.cloud_mid ?? 0;
       raster.cloudHigh[idx] = row.cloud_high ?? 0;
-      raster.flightCategory[idx] =
-        FCAT_MAP[row.flight_category] ?? 255;
+      raster.flightCategory[idx] = FCAT_MAP[row.flight_category] ?? 255;
       raster.visibilitySm[idx] = row.visibility_sm ?? -1;
     }
 

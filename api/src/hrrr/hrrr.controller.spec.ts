@@ -102,33 +102,33 @@ describe('HrrrController', () => {
     });
 
     it('should throw BadRequestException for missing waypoints', () => {
-      expect(() =>
-        controller.getRouteWeather(undefined as any, 8000),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteWeather(undefined as any, 8000)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException for empty string waypoints', () => {
-      expect(() =>
-        controller.getRouteWeather('', 8000),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteWeather('', 8000)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException for invalid JSON', () => {
-      expect(() =>
-        controller.getRouteWeather('not-json', 8000),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteWeather('not-json', 8000)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException for non-array JSON', () => {
-      expect(() =>
-        controller.getRouteWeather('{"lat":39}', 8000),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteWeather('{"lat":39}', 8000)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException for empty array', () => {
-      expect(() =>
-        controller.getRouteWeather('[]', 8000),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteWeather('[]', 8000)).toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException for waypoints without lat/lng', () => {
@@ -181,15 +181,15 @@ describe('HrrrController', () => {
     });
 
     it('should throw BadRequestException for invalid waypoints', () => {
-      expect(() =>
-        controller.getRouteProfile('invalid'),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteProfile('invalid')).toThrow(
+        BadRequestException,
+      );
     });
 
     it('should throw BadRequestException for missing waypoints', () => {
-      expect(() =>
-        controller.getRouteProfile(undefined as any),
-      ).toThrow(BadRequestException);
+      expect(() => controller.getRouteProfile(undefined as any)).toThrow(
+        BadRequestException,
+      );
     });
   });
 

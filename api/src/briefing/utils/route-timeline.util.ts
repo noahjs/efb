@@ -25,7 +25,10 @@ const DEG_TO_RAD = Math.PI / 180;
 export function estimatePhaseAndAltitude(
   distNm: number,
   profile: FlightPhaseProfile | null,
-): { phase: 'climb' | 'cruise' | 'descent'; estimatedAltitudeFt: number } | null {
+): {
+  phase: 'climb' | 'cruise' | 'descent';
+  estimatedAltitudeFt: number;
+} | null {
   if (!profile) return null;
 
   // Round boundaries to match rounded waypoint distances, so TOC → cruise, TOD → descent
@@ -46,9 +49,7 @@ export function estimatePhaseAndAltitude(
     // Descent phase: linear interpolation from cruise to destination elevation
     const descentDist = profile.totalDistanceNm - profile.todDistanceNm;
     const fraction =
-      descentDist > 0
-        ? (distNm - profile.todDistanceNm) / descentDist
-        : 1;
+      descentDist > 0 ? (distNm - profile.todDistanceNm) / descentDist : 1;
     const alt =
       profile.cruiseAltitudeFt +
       fraction * (profile.destinationElevationFt - profile.cruiseAltitudeFt);
@@ -96,7 +97,10 @@ export function buildRouteTimeline(
     const etaZulu = computeEtaZulu(etdIso, wp.etaMinutes);
 
     // Estimate flight phase and altitude at this waypoint
-    const phaseInfo = estimatePhaseAndAltitude(wp.distanceFromDep, phaseProfile);
+    const phaseInfo = estimatePhaseAndAltitude(
+      wp.distanceFromDep,
+      phaseProfile,
+    );
 
     // Find nearest METAR station
     const nearestMetar = findNearestMetar(wp, metars);
@@ -114,7 +118,12 @@ export function buildRouteTimeline(
     );
 
     // Find active hazards at this point using precise geometry overlaps
-    const activeHazards = findActiveHazards(wp, advisoryOverlaps, phaseInfo, phaseProfile);
+    const activeHazards = findActiveHazards(
+      wp,
+      advisoryOverlaps,
+      phaseInfo,
+      phaseProfile,
+    );
 
     return {
       waypoint: wp.identifier,
@@ -176,7 +185,8 @@ function injectPhaseWaypoints(
     profile.tocDistanceNm < totalDist - minSeparationNm
   ) {
     const tooClose = result.some(
-      (wp) => Math.abs(wp.distanceFromDep - profile.tocDistanceNm) < minSeparationNm,
+      (wp) =>
+        Math.abs(wp.distanceFromDep - profile.tocDistanceNm) < minSeparationNm,
     );
     if (!tooClose) {
       const tocWp = interpolateWaypoint(
@@ -194,7 +204,8 @@ function injectPhaseWaypoints(
     profile.todDistanceNm < totalDist - minSeparationNm
   ) {
     const tooClose = result.some(
-      (wp) => Math.abs(wp.distanceFromDep - profile.todDistanceNm) < minSeparationNm,
+      (wp) =>
+        Math.abs(wp.distanceFromDep - profile.todDistanceNm) < minSeparationNm,
     );
     if (!tooClose) {
       const todWp = interpolateWaypoint(
@@ -238,7 +249,8 @@ function interpolateWaypoint(
   }
 
   const segDist = after.distanceFromDep - before.distanceFromDep;
-  const fraction = segDist > 0 ? (distNm - before.distanceFromDep) / segDist : 0;
+  const fraction =
+    segDist > 0 ? (distNm - before.distanceFromDep) / segDist : 0;
 
   return {
     identifier,
@@ -599,7 +611,10 @@ function interpolatePosition(
 function findActiveHazards(
   wp: BriefingWaypoint,
   overlaps: AdvisoryOverlap[],
-  phaseInfo: { phase: 'climb' | 'cruise' | 'descent'; estimatedAltitudeFt: number } | null,
+  phaseInfo: {
+    phase: 'climb' | 'cruise' | 'descent';
+    estimatedAltitudeFt: number;
+  } | null,
   phaseProfile: FlightPhaseProfile | null,
 ): TimelineHazard[] {
   const hazards: TimelineHazard[] = [];
@@ -671,7 +686,9 @@ function computeAlertLevel(
 
   // No phase info — fall back to simple logic
   if (!phase) {
-    return altRelation === 'above' || altRelation === 'below' ? 'yellow' : 'yellow';
+    return altRelation === 'above' || altRelation === 'below'
+      ? 'yellow'
+      : 'yellow';
   }
 
   // Cruise: above or below you → green
