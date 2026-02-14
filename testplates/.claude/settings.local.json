@@ -23,7 +23,9 @@
       "Bash(python3:*)",
       "Bash(pip3 install pymupdf)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
