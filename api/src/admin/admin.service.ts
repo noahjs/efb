@@ -100,6 +100,7 @@ export class AdminService {
   private readonly logger = new Logger(AdminService.name);
   private readonly dataDir = path.join(__dirname, '..', '..', 'data');
   private readonly scriptsDir = path.join(__dirname, '..', '..', 'scripts');
+  private readonly appRootDir = path.join(__dirname, '..', '..');
   private jobs: Map<string, JobStatus> = new Map();
 
   constructor(
@@ -249,18 +250,7 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(
-      this.scriptsDir,
-      '..',
-      'src',
-      'seed',
-      'seed.ts',
-    );
-    this.runScript(
-      'npx',
-      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
-      job,
-    );
+    this.runSeedScript(job, 'seed.ts', 'seed.js');
 
     return job;
   }
@@ -279,18 +269,7 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(
-      this.scriptsDir,
-      '..',
-      'src',
-      'seed',
-      'seed-navaids.ts',
-    );
-    this.runScript(
-      'npx',
-      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
-      job,
-    );
+    this.runSeedScript(job, 'seed-navaids.ts', 'seed-navaids.js');
 
     return job;
   }
@@ -309,18 +288,7 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(
-      this.scriptsDir,
-      '..',
-      'src',
-      'seed',
-      'seed-procedures.ts',
-    );
-    this.runScript(
-      'npx',
-      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
-      job,
-    );
+    this.runSeedScript(job, 'seed-procedures.ts', 'seed-procedures.js');
 
     return job;
   }
@@ -339,18 +307,7 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(
-      this.scriptsDir,
-      '..',
-      'src',
-      'seed',
-      'seed-registry.ts',
-    );
-    this.runScript(
-      'npx',
-      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
-      job,
-    );
+    this.runSeedScript(job, 'seed-registry.ts', 'seed-registry.js');
 
     return job;
   }
@@ -369,18 +326,7 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(
-      this.scriptsDir,
-      '..',
-      'src',
-      'seed',
-      'seed-fbos.ts',
-    );
-    this.runScript(
-      'npx',
-      ['ts-node', '-r', 'tsconfig-paths/register', seedScript],
-      job,
-    );
+    this.runSeedScript(job, 'seed-fbos.ts', 'seed-fbos.js');
 
     return job;
   }
@@ -399,24 +345,7 @@ export class AdminService {
     };
     this.jobs.set(jobId, job);
 
-    const seedScript = path.join(
-      this.scriptsDir,
-      '..',
-      'src',
-      'seed',
-      'seed-fbos.ts',
-    );
-    this.runScript(
-      'npx',
-      [
-        'ts-node',
-        '-r',
-        'tsconfig-paths/register',
-        seedScript,
-        '--update-prices',
-      ],
-      job,
-    );
+    this.runSeedScript(job, 'seed-fbos.ts', 'seed-fbos.js', ['--update-prices']);
 
     return job;
   }
@@ -716,8 +645,37 @@ export class AdminService {
 
   // --- Helpers ---
 
+  private runSeedScript(
+    job: JobStatus,
+    tsFilename: string,
+    jsFilename: string,
+    args: string[] = [],
+  ) {
+    // In production Cloud Run we ship compiled JS in /app/dist and omit dev deps
+    // (so ts-node isn't available). In dev we run directly from TS sources.
+    if (process.env.NODE_ENV === 'production') {
+      const script = path.join(this.appRootDir, 'dist', 'seed', jsFilename);
+      job.log.push(`Running: node ${path.relative(this.appRootDir, script)} ${args.join(' ')}`.trim());
+      this.runScript('node', [script, ...args], job);
+      return;
+    }
+
+    const script = path.join(this.appRootDir, 'src', 'seed', tsFilename);
+    job.log.push(
+      `Running: npx ts-node -r tsconfig-paths/register ${path.relative(
+        this.appRootDir,
+        script,
+      )} ${args.join(' ')}`.trim(),
+    );
+    this.runScript(
+      'npx',
+      ['ts-node', '-r', 'tsconfig-paths/register', script, ...args],
+      job,
+    );
+  }
+
   private runScript(command: string, args: string[], job: JobStatus) {
-    const cwd = path.join(__dirname, '..', '..');
+    const cwd = this.appRootDir;
     const proc = spawn(command, args, {
       cwd,
       env: { ...process.env },
