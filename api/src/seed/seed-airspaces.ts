@@ -18,7 +18,10 @@ import * as shapefile from 'shapefile';
 import { parsePipeDelimited, findFile, ensureNasrData } from './seed-utils';
 import { dbConfig } from '../db.config';
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR =
+  process.env.EFB_DATA_DIR ||
+  (process.env.NODE_ENV === 'production' ? '/tmp/efb-data' : undefined) ||
+  path.join(__dirname, '..', '..', 'data');
 const NASR_DIR = path.join(DATA_DIR, 'nasr');
 
 async function initDataSource(): Promise<DataSource> {

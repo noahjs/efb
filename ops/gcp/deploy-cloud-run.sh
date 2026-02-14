@@ -84,7 +84,7 @@ build_secret_flags() {
 
 SECRETS="$(build_secret_flags)"
 
-COMMON_ENV="NODE_ENV=production,DB_HOST=/cloudsql/${CLOUDSQL_INSTANCE},DB_PORT=5432,CORS_ORIGINS=${CORS_ORIGINS:-},FILING_USE_MOCK=${FILING_USE_MOCK:-false},LEIDOS_BASE_URL=${LEIDOS_BASE_URL:-https://lmfsweb.afss.com/Website/rest},GCS_BUCKET=${GCS_BUCKET:-mobile-efb-prod},GCS_ATIS_BUCKET=${GCS_ATIS_BUCKET:-efb-atis-prod}"
+COMMON_ENV="NODE_ENV=production,EFB_DATA_DIR=/tmp/efb-data,DB_HOST=/cloudsql/${CLOUDSQL_INSTANCE},DB_PORT=5432,CORS_ORIGINS=${CORS_ORIGINS:-},FILING_USE_MOCK=${FILING_USE_MOCK:-false},LEIDOS_BASE_URL=${LEIDOS_BASE_URL:-https://lmfsweb.afss.com/Website/rest},GCS_BUCKET=${GCS_BUCKET:-mobile-efb-prod},GCS_ATIS_BUCKET=${GCS_ATIS_BUCKET:-efb-atis-prod}"
 
 echo "Deploying API service: ${API_SERVICE_NAME}"
 gcloud run deploy "${API_SERVICE_NAME}" \

@@ -18,7 +18,10 @@ import { createReadStream } from 'fs';
 import { parse } from 'csv-parse';
 import { dbConfig } from '../db.config';
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR =
+  process.env.EFB_DATA_DIR ||
+  (process.env.NODE_ENV === 'production' ? '/tmp/efb-data' : undefined) ||
+  path.join(__dirname, '..', '..', 'data');
 const REGISTRY_DIR = path.join(DATA_DIR, 'registry');
 const REGISTRY_URL = 'https://registry.faa.gov/database/ReleasableAircraft.zip';
 

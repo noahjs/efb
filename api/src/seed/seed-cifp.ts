@@ -51,7 +51,10 @@ function n<T>(val: T | null): T | undefined {
   return val === null ? undefined : val;
 }
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR =
+  process.env.EFB_DATA_DIR ||
+  (process.env.NODE_ENV === 'production' ? '/tmp/efb-data' : undefined) ||
+  path.join(__dirname, '..', '..', 'data');
 const CIFP_DIR = path.join(DATA_DIR, 'cifp');
 
 async function initDataSource(): Promise<DataSource> {

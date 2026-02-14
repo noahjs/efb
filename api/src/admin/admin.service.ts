@@ -684,6 +684,7 @@ export class AdminService {
     proc.stdout.on('data', (data: Buffer) => {
       const lines = data.toString().split('\n').filter(Boolean);
       job.log.push(...lines);
+      for (const line of lines) this.logger.log(`[job ${job.id}] ${line}`);
       // Keep last line as progress
       if (lines.length > 0) {
         job.progress = lines[lines.length - 1];
@@ -697,6 +698,7 @@ export class AdminService {
         .filter(Boolean)
         .map((l) => `[stderr] ${l}`);
       job.log.push(...lines);
+      for (const line of lines) this.logger.error(`[job ${job.id}] ${line}`);
     });
 
     proc.on('close', (code: number | null) => {

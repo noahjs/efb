@@ -21,7 +21,10 @@ import * as https from 'https';
 import { downloadFile } from './seed-utils';
 import { dbConfig } from '../db.config';
 
-const DATA_DIR = path.join(__dirname, '..', '..', 'data');
+const DATA_DIR =
+  process.env.EFB_DATA_DIR ||
+  (process.env.NODE_ENV === 'production' ? '/tmp/efb-data' : undefined) ||
+  path.join(__dirname, '..', '..', 'data');
 const DTPP_DIR = path.join(DATA_DIR, 'dtpp');
 const XML_PATH = path.join(DTPP_DIR, 'current.xml');
 
