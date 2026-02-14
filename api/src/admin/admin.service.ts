@@ -703,7 +703,8 @@ export class AdminService {
     await boss.send(
       'admin-jobs',
       { jobId: id, type, payload },
-      { singletonKey: id, expireInSeconds: 86400 },
+      // pg-boss asserts expiration must be < 24h (not <=).
+      { singletonKey: id, expireInSeconds: 86399 },
     );
 
     return (await this.getDbJob(id))!;
