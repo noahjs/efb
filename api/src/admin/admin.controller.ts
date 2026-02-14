@@ -114,16 +114,16 @@ export class AdminController {
    * List all running and completed jobs
    */
   @Get('jobs')
-  getJobs() {
-    return this.adminService.getJobs();
+  async getJobs() {
+    return await this.adminService.getJobs();
   }
 
   /**
    * Get a specific job by ID
    */
   @Get('jobs/:id')
-  getJob(@Param('id') id: string) {
-    const job = this.adminService.getJob(id);
+  async getJob(@Param('id') id: string) {
+    const job = await this.adminService.getJob(id);
     if (!job) return { error: 'Job not found' };
     return job;
   }

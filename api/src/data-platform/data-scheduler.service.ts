@@ -132,6 +132,8 @@ export class DataSchedulerService implements OnModuleInit, OnModuleDestroy {
 
     await this.boss.start();
     await this.boss.createQueue('data-poll');
+    // Additional queue(s) used by background workers.
+    await this.boss.createQueue('admin-jobs');
     this.resolveReady();
     this.logger.log({ event: 'pgboss_started', queue: 'data-poll' });
     await this.seedDataSources();

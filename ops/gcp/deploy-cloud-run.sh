@@ -95,6 +95,7 @@ gcloud run deploy "${API_SERVICE_NAME}" \
   --allow-unauthenticated \
   --ingress all \
   --port 3001 \
+  --memory "${API_MEMORY:-1Gi}" \
   --min-instances "${API_MIN_INSTANCES:-0}" \
   --max-instances "${API_MAX_INSTANCES:-10}" \
   --set-env-vars "${COMMON_ENV},SERVICE_ROLE=api" \
@@ -118,6 +119,7 @@ gcloud run deploy "${WORKER_SERVICE_NAME}" \
   --no-allow-unauthenticated \
   --ingress internal \
   --port 3001 \
+  --memory "${WORKER_MEMORY:-2Gi}" \
   --min-instances "${WORKER_MIN_INSTANCES:-1}" \
   --max-instances "${WORKER_MAX_INSTANCES:-1}" \
   --no-cpu-throttling \

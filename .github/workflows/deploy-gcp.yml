@@ -44,8 +44,10 @@ jobs:
           CLOUDSQL_INSTANCE=${{ vars.GCP_CLOUDSQL_INSTANCE }}
           API_MIN_INSTANCES=0
           API_MAX_INSTANCES=10
+          API_MEMORY=1Gi
           WORKER_MIN_INSTANCES=1
           WORKER_MAX_INSTANCES=1
+          WORKER_MEMORY=2Gi
           RUN_SERVICE_ACCOUNT=efb-runner@${{ vars.GCP_PROJECT_ID }}.iam.gserviceaccount.com
           SECRET_DB_USER=EFB_DB_USER
           SECRET_DB_PASS=EFB_DB_PASS

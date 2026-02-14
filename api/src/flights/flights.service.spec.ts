@@ -62,6 +62,7 @@ describe('FlightsService', () => {
 
   beforeEach(async () => {
     const mockQb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
@@ -69,6 +70,7 @@ describe('FlightsService', () => {
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       getManyAndCount: jest.fn().mockResolvedValue([[{ ...mockFlight }], 1]),
+      getOne: jest.fn().mockResolvedValue({ ...mockFlight }),
     };
 
     mockFlightRepo = {
@@ -137,7 +139,8 @@ describe('FlightsService', () => {
     });
 
     it('should throw NotFoundException when not found', async () => {
-      mockFlightRepo.findOne.mockResolvedValue(null);
+      const qb = mockFlightRepo.createQueryBuilder();
+      qb.getOne.mockResolvedValue(null);
       await expect(service.findById(999)).rejects.toThrow(NotFoundException);
     });
   });
@@ -210,13 +213,14 @@ describe('FlightsService', () => {
       const dto = { true_airspeed: 150 };
       await service.update(1, dto as any);
 
-      expect(mockFlightRepo.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(mockFlightRepo.createQueryBuilder).toHaveBeenCalled();
       expect(mockCalculateService.calculate).toHaveBeenCalledTimes(1);
       expect(mockFlightRepo.save).toHaveBeenCalledTimes(1);
     });
 
     it('should throw NotFoundException when updating non-existent flight', async () => {
-      mockFlightRepo.findOne.mockResolvedValue(null);
+      const qb = mockFlightRepo.createQueryBuilder();
+      qb.getOne.mockResolvedValue(null);
       await expect(
         service.update(999, { true_airspeed: 150 } as any),
       ).rejects.toThrow(NotFoundException);
@@ -243,7 +247,8 @@ describe('FlightsService', () => {
     });
 
     it('should throw NotFoundException when removing non-existent flight', async () => {
-      mockFlightRepo.findOne.mockResolvedValue(null);
+      const qb = mockFlightRepo.createQueryBuilder();
+      qb.getOne.mockResolvedValue(null);
       await expect(service.remove(999)).rejects.toThrow(NotFoundException);
     });
   });
@@ -253,7 +258,8 @@ describe('FlightsService', () => {
   describe('copy', () => {
     it('should create a copy with filing_status reset to not_filed', async () => {
       // Source flight is "filed"
-      mockFlightRepo.findOne.mockResolvedValue({
+      const qb = mockFlightRepo.createQueryBuilder();
+      qb.getOne.mockResolvedValue({
         ...mockFlight,
         filing_status: 'filed',
         filing_reference: 'FP1001',
@@ -300,7 +306,8 @@ describe('FlightsService', () => {
     });
 
     it('should throw NotFoundException when copying non-existent flight', async () => {
-      mockFlightRepo.findOne.mockResolvedValue(null);
+      const qb = mockFlightRepo.createQueryBuilder();
+      qb.getOne.mockResolvedValue(null);
       await expect(service.copy(999)).rejects.toThrow(NotFoundException);
     });
   });
@@ -315,7 +322,8 @@ describe('FlightsService', () => {
     });
 
     it('should throw NotFoundException for non-existent flight', async () => {
-      mockFlightRepo.findOne.mockResolvedValue(null);
+      const qb = mockFlightRepo.createQueryBuilder();
+      qb.getOne.mockResolvedValue(null);
       await expect(service.calculateDebug(999)).rejects.toThrow(
         NotFoundException,
       );

@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource as TypeOrmDataSource, Repository } from 'typeorm';
 import { MasterWBProfile } from '../aircraft/entities/master-wb-profile.entity';
 import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
@@ -23,9 +23,11 @@ import { ElevationService } from '../windy/elevation.service';
 import { TrafficService } from '../traffic/traffic.service';
 import { LeidosService } from '../filing/leidos.service';
 import { DataSchedulerService } from '../data-platform/data-scheduler.service';
+import { PgBoss } from 'pg-boss';
 import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
+import { dbConfig } from '../db.config';
 
 // All FAA VFR Sectional chart names
 export const VFR_SECTIONAL_CHARTS = [
@@ -102,6 +104,8 @@ export class AdminService {
   private readonly scriptsDir = path.join(__dirname, '..', '..', 'scripts');
   private readonly appRootDir = path.join(__dirname, '..', '..');
   private jobs: Map<string, JobStatus> = new Map();
+  private boss?: PgBoss;
+  private bossStarted = false;
 
   constructor(
     @InjectRepository(Airport) private airportRepo: Repository<Airport>,
@@ -130,6 +134,7 @@ export class AdminService {
     private readonly trafficService: TrafficService,
     private readonly leidosService: LeidosService,
     private readonly dataScheduler: DataSchedulerService,
+    private readonly orm: TypeOrmDataSource,
   ) {}
 
   // --- API Status ---
@@ -228,126 +233,69 @@ export class AdminService {
 
   // --- Job management ---
 
-  getJobs(): JobStatus[] {
-    return Array.from(this.jobs.values());
+  async getJobs(): Promise<JobStatus[]> {
+    const dbJobs = await this.listDbJobs();
+    return [...dbJobs, ...Array.from(this.jobs.values())];
   }
 
-  getJob(id: string): JobStatus | undefined {
-    return this.jobs.get(id);
+  async getJob(id: string): Promise<JobStatus | undefined> {
+    const mem = this.jobs.get(id);
+    if (mem) return mem;
+    return await this.getDbJob(id);
   }
 
   // --- Seed airports ---
 
   async runSeedAirports(): Promise<JobStatus> {
-    const jobId = `seed-airports-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'seed-airports',
-      label: 'Seed Airport Database (FAA NASR)',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: ['Starting airport data seed...'],
-    };
-    this.jobs.set(jobId, job);
-
-    this.runSeedScript(job, 'seed.ts', 'seed.js');
-
-    return job;
+    return await this.enqueueDbJob('seed-airports', 'Seed Airport Database (FAA NASR)', {
+      script: 'seed.js',
+      args: [],
+    });
   }
 
   // --- Seed navaids ---
 
   async runSeedNavaids(): Promise<JobStatus> {
-    const jobId = `seed-navaids-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'seed-navaids',
-      label: 'Seed Navigation Database (FAA NASR)',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: ['Starting navigation data seed...'],
-    };
-    this.jobs.set(jobId, job);
-
-    this.runSeedScript(job, 'seed-navaids.ts', 'seed-navaids.js');
-
-    return job;
+    return await this.enqueueDbJob('seed-navaids', 'Seed Navigation Database (FAA NASR)', {
+      script: 'seed-navaids.js',
+      args: [],
+    });
   }
 
   // --- Seed procedures ---
 
   async runSeedProcedures(): Promise<JobStatus> {
-    const jobId = `seed-procedures-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'seed-procedures',
-      label: 'Seed Procedures (FAA d-TPP)',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: ['Starting d-TPP procedure data seed...'],
-    };
-    this.jobs.set(jobId, job);
-
-    this.runSeedScript(job, 'seed-procedures.ts', 'seed-procedures.js');
-
-    return job;
+    return await this.enqueueDbJob('seed-procedures', 'Seed Procedures (FAA d-TPP)', {
+      script: 'seed-procedures.js',
+      args: [],
+    });
   }
 
   // --- Seed registry ---
 
   async runSeedRegistry(): Promise<JobStatus> {
-    const jobId = `seed-registry-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'seed-registry',
-      label: 'Seed Aircraft Registry (FAA)',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: ['Starting aircraft registry seed...'],
-    };
-    this.jobs.set(jobId, job);
-
-    this.runSeedScript(job, 'seed-registry.ts', 'seed-registry.js');
-
-    return job;
+    return await this.enqueueDbJob('seed-registry', 'Seed Aircraft Registry (FAA)', {
+      script: 'seed-registry.js',
+      args: [],
+    });
   }
 
   // --- Scrape FBOs ---
 
   async runScrapeFbos(): Promise<JobStatus> {
-    const jobId = `scrape-fbos-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'scrape-fbos',
-      label: 'Scrape FBOs (AirNav)',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: ['Starting FBO scrape from AirNav...'],
-    };
-    this.jobs.set(jobId, job);
-
-    this.runSeedScript(job, 'seed-fbos.ts', 'seed-fbos.js');
-
-    return job;
+    return await this.enqueueDbJob('scrape-fbos', 'Scrape FBOs (AirNav)', {
+      script: 'seed-fbos.js',
+      args: [],
+    });
   }
 
   // --- Update fuel prices ---
 
   async runUpdateFuelPrices(): Promise<JobStatus> {
-    const jobId = `update-fuel-prices-${Date.now()}`;
-    const job: JobStatus = {
-      id: jobId,
-      type: 'update-fuel-prices',
-      label: 'Update Fuel Prices (AirNav)',
-      status: 'running',
-      startedAt: new Date().toISOString(),
-      log: ['Starting fuel price update from AirNav...'],
-    };
-    this.jobs.set(jobId, job);
-
-    this.runSeedScript(job, 'seed-fbos.ts', 'seed-fbos.js', ['--update-prices']);
-
-    return job;
+    return await this.enqueueDbJob('update-fuel-prices', 'Update Fuel Prices (AirNav)', {
+      script: 'seed-fbos.js',
+      args: ['--update-prices'],
+    });
   }
 
   // --- Clear PDF cache ---
@@ -644,6 +592,122 @@ export class AdminService {
   }
 
   // --- Helpers ---
+
+  private async ensureBoss(): Promise<PgBoss> {
+    if (!this.boss) {
+      this.boss = new PgBoss({
+        host: dbConfig.host,
+        port: dbConfig.port,
+        user: dbConfig.username,
+        password: dbConfig.password,
+        database: dbConfig.database,
+        max: 2,
+      });
+    }
+    if (!this.bossStarted) {
+      await this.boss.start();
+      await this.boss.createQueue('admin-jobs');
+      this.bossStarted = true;
+    }
+    return this.boss;
+  }
+
+  private async ensureAdminJobsTable() {
+    await this.orm.query(`
+      CREATE TABLE IF NOT EXISTS s_admin_jobs (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        label TEXT NOT NULL,
+        status TEXT NOT NULL,
+        started_at TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        log_text TEXT NOT NULL DEFAULT '',
+        progress TEXT
+      );
+    `);
+    await this.orm.query(
+      `CREATE INDEX IF NOT EXISTS idx_s_admin_jobs_started_at ON s_admin_jobs (started_at DESC);`,
+    );
+  }
+
+  private parseLogText(logText: string): string[] {
+    if (!logText) return [];
+    const lines = logText.split('\n').filter(Boolean);
+    return lines.length > 500 ? lines.slice(-500) : lines;
+  }
+
+  private async listDbJobs(): Promise<JobStatus[]> {
+    await this.ensureAdminJobsTable();
+    const rows = await this.orm.query(
+      `SELECT id, type, label, status, started_at, completed_at, log_text, progress
+       FROM s_admin_jobs
+       ORDER BY started_at DESC NULLS LAST
+       LIMIT 50`,
+    );
+    return rows.map((r: any) => ({
+      id: r.id,
+      type: r.type,
+      label: r.label,
+      status: r.status,
+      startedAt: r.started_at ? new Date(r.started_at).toISOString() : undefined,
+      completedAt: r.completed_at
+        ? new Date(r.completed_at).toISOString()
+        : undefined,
+      log: this.parseLogText(r.log_text || ''),
+      progress: r.progress || undefined,
+    }));
+  }
+
+  private async getDbJob(id: string): Promise<JobStatus | undefined> {
+    await this.ensureAdminJobsTable();
+    const rows = await this.orm.query(
+      `SELECT id, type, label, status, started_at, completed_at, log_text, progress
+       FROM s_admin_jobs
+       WHERE id = $1
+       LIMIT 1`,
+      [id],
+    );
+    const r = rows[0];
+    if (!r) return undefined;
+    return {
+      id: r.id,
+      type: r.type,
+      label: r.label,
+      status: r.status,
+      startedAt: r.started_at ? new Date(r.started_at).toISOString() : undefined,
+      completedAt: r.completed_at
+        ? new Date(r.completed_at).toISOString()
+        : undefined,
+      log: this.parseLogText(r.log_text || ''),
+      progress: r.progress || undefined,
+    };
+  }
+
+  private async enqueueDbJob(
+    type: string,
+    label: string,
+    payload: { script: string; args: string[] },
+  ): Promise<JobStatus> {
+    await this.ensureAdminJobsTable();
+    const id = `${type}-${Date.now()}`;
+    const startedAt = new Date().toISOString();
+    const initialLog = `Starting job...\nEnqueued for worker.\n`;
+
+    await this.orm.query(
+      `INSERT INTO s_admin_jobs (id, type, label, status, started_at, log_text)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, type, label, 'queued', startedAt, initialLog],
+    );
+
+    const boss = await this.ensureBoss();
+    await boss.send(
+      'admin-jobs',
+      { jobId: id, type, payload },
+      { singletonKey: id, expireInSeconds: 86400 },
+    );
+
+    return (await this.getDbJob(id))!;
+  }
 
   private runSeedScript(
     job: JobStatus,

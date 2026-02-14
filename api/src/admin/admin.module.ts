@@ -23,6 +23,7 @@ import { WindyModule } from '../windy/windy.module';
 import { TrafficModule } from '../traffic/traffic.module';
 import { FilingModule } from '../filing/filing.module';
 import { DataPlatformModule } from '../data-platform/data-platform.module';
+import { AdminJobWorkerService } from './admin-job-worker.service';
 
 @Module({
   imports: [
@@ -51,6 +52,6 @@ import { DataPlatformModule } from '../data-platform/data-platform.module';
     DataPlatformModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, AdminJobWorkerService],
 })
 export class AdminModule {}
