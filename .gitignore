@@ -28,3 +28,4 @@ __pycache__/
 
 # GCP credentials
 gcs-key.json
+ops/gcp/gcp.env

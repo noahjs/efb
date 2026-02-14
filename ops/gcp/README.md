@@ -103,3 +103,30 @@ This script:
    - p95 latency
    - worker poller consecutive failures
    - health/readiness failures
+
+## GitHub Actions Deploy (OIDC, no key file)
+
+Workflow file: `.github/workflows/deploy-gcp.yml`
+
+This branch is set up to deploy from `main` (and manual dispatch) using
+Workload Identity Federation.
+
+Add GitHub repository secrets:
+
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_SERVICE_ACCOUNT`
+
+Add GitHub repository variables:
+
+- `GCP_PROJECT_ID` (example: `mobile-efb`)
+- `GCP_REGION` (example: `us-central1`)
+- `GCP_CLOUDSQL_INSTANCE` (example: `mobile-efb:us-central1:efb-pg`)
+- `CORS_ORIGINS`
+- `GCS_BUCKET`
+- `GCS_ATIS_BUCKET`
+
+The workflow writes `ops/gcp/gcp.env` during CI and runs:
+
+```bash
+bash ops/gcp/deploy-cloud-run.sh
+```
