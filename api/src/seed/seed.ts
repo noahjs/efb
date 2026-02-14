@@ -786,6 +786,8 @@ async function seedDatisCapability(ds: DataSource): Promise<number> {
 
 async function main() {
   console.log('=== EFB NASR Data Seed ===\n');
+  const args = process.argv.slice(2);
+  const fast = args.includes('--fast');
 
   // Download + extract NASR data if not already present
   await ensureNasrData(NASR_DIR);
@@ -805,16 +807,6 @@ async function main() {
   const airportCount = await seedAirports(ds);
   console.log(`  Imported ${airportCount} airports.\n`);
 
-  // Seed contacts (must be after airports)
-  console.log('Seeding contacts...');
-  const contactCount = await seedContacts(ds);
-  console.log(`  Updated ${contactCount} airports with contacts.\n`);
-
-  // Seed tower hours (must be after airports)
-  console.log('Seeding tower hours...');
-  const towerCount = await seedTowerHours(ds);
-  console.log(`  Updated ${towerCount} airports with tower hours.\n`);
-
   // Seed runways + runway ends
   console.log('Seeding runways...');
   const { runways: rwyCount, ends: endCount } = await seedRunways(ds);
@@ -824,6 +816,26 @@ async function main() {
   console.log('Seeding frequencies...');
   const freqCount = await seedFrequencies(ds);
   console.log(`  Imported ${freqCount} frequencies.\n`);
+
+  if (fast) {
+    console.log('=== Seed Complete (fast) ===');
+    console.log(`  Airports:     ${airportCount}`);
+    console.log(`  Runways:      ${rwyCount}`);
+    console.log(`  Runway Ends:  ${endCount}`);
+    console.log(`  Frequencies:  ${freqCount}`);
+    await ds.destroy();
+    return;
+  }
+
+  // Seed contacts (must be after airports)
+  console.log('Seeding contacts...');
+  const contactCount = await seedContacts(ds);
+  console.log(`  Updated ${contactCount} airports with contacts.\n`);
+
+  // Seed tower hours (must be after airports)
+  console.log('Seeding tower hours...');
+  const towerCount = await seedTowerHours(ds);
+  console.log(`  Updated ${towerCount} airports with tower hours.\n`);
 
   // Flag airports with AWOS/ASOS (must be after frequencies)
   console.log('Flagging airports with AWOS/ASOS...');
