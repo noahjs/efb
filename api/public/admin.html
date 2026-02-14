@@ -399,6 +399,70 @@
       z-index: 1;
     }
 
+    /* Queue status */
+    .queue-summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .queue-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .queue-chip .qname { font-weight: 600; color: #c9d1d9; }
+    .queue-chip .qcounts { font-size: 11px; color: #8b949e; font-family: monospace; }
+    .queue-chip .qcount-active { color: #58a6ff; font-weight: 700; }
+    .queue-chip .qcount-failed { color: #f85149; font-weight: 700; }
+    .queue-chip .qcount-created { color: #d29922; }
+
+    .queue-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+    }
+    .queue-table th {
+      text-align: left;
+      padding: 6px 8px;
+      color: #8b949e;
+      font-weight: 500;
+      border-bottom: 1px solid #21262d;
+    }
+    .queue-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #161b22;
+      color: #c9d1d9;
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .queue-table tr:last-child td { border-bottom: none; }
+    .qstate-active { color: #58a6ff; font-weight: 700; }
+    .qstate-created { color: #d29922; }
+    .qstate-retry { color: #d29922; }
+    .qstate-failed { color: #f85149; font-weight: 700; }
+    .qstate-completed { color: #3fb950; }
+    .qstate-expired { color: #f85149; }
+
+    .stuck-banner {
+      padding: 10px 14px;
+      background: rgba(248, 81, 73, 0.1);
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #f85149;
+    }
+    .stuck-banner strong { color: #f85149; }
+
     /* Empty state */
     .empty { text-align: center; padding: 32px; color: #484f58; font-size: 14px; }
 
@@ -425,6 +489,92 @@
       z-index: 100;
     }
     .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 0 24px;
+    }
+    .tab-btn {
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #8b949e;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { color: #c9d1d9; }
+    .tab-btn.active { color: #e1e4e8; border-bottom-color: #58a6ff; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Infrastructure / Environment */
+    .env-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 24px;
+      font-size: 13px;
+    }
+    .env-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .env-item:last-child { border-bottom: none; }
+    .env-label { color: #8b949e; }
+    .env-value { font-weight: 500; font-family: 'SFMono-Regular', Consolas, monospace; color: #c9d1d9; text-align: right; }
+    .env-value a { color: #58a6ff; text-decoration: none; }
+    .env-value a:hover { text-decoration: underline; }
+    .memory-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .memory-card {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+    .memory-card .mc-label { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; }
+    .memory-card .mc-value { font-size: 20px; font-weight: 600; margin-top: 4px; color: #c9d1d9; }
+    .env-service-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .env-service-card {
+      background: #0d1117;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .env-service-card .esc-name {
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .env-service-card .esc-current {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      background: rgba(63, 185, 80, 0.2);
+      color: #3fb950;
+      border: 1px solid rgba(63, 185, 80, 0.3);
+      font-weight: 600;
+    }
 
     /* Logs */
     .logs-controls {
@@ -502,7 +652,17 @@
   <div class="status" id="refreshStatus">Loading...</div>
 </div>
 
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('operations')">Operations</button>
+  <button class="tab-btn" onclick="switchTab('infrastructure')">Infrastructure</button>
+  <button class="tab-btn" onclick="switchTab('logs')">Logs</button>
+</div>
+
 <div class="container">
+
+  <!-- ===== Operations tab ===== -->
+  <div class="tab-content active" id="tab-operations">
+
   <!-- Stats bar -->
   <div class="stats-bar" id="statsBar">
     <div class="stat-card">
@@ -564,6 +724,24 @@
     </div>
   </div>
 
+  <!-- Queue Status -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Queue Status</h2>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 12px; color: #8b949e;" id="queueStatusAge"></span>
+        <button class="btn btn-sm" onclick="refreshQueueStatus()">Refresh</button>
+      </div>
+    </div>
+    <div class="section-body">
+      <div id="queueStuckBanner"></div>
+      <div id="queueSummary" class="queue-summary"></div>
+      <div id="queueRecentJobs">
+        <div class="empty">Loading...</div>
+      </div>
+    </div>
+  </div>
+
   <!-- API Services -->
   <div class="section">
     <div class="section-header">
@@ -573,36 +751,6 @@
     <div class="section-body">
       <div class="api-grid" id="apiServicesGrid">
         <div class="empty">Loading...</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Logs -->
-  <div class="section">
-    <div class="section-header">
-      <h2>Logs</h2>
-      <button class="btn btn-sm" onclick="refreshLogs(true)">Refresh</button>
-    </div>
-    <div class="section-body">
-      <div class="logs-controls">
-        <input id="logsQuery" type="text" placeholder="Search (message/event/context)" style="min-width: 260px; flex: 1;">
-        <input id="logsContext" type="text" placeholder="Part of app (context), e.g. BriefingService" style="min-width: 280px; flex: 1;">
-        <label><input id="logsErrorsOnly" type="checkbox"> Errors only</label>
-        <select id="logsSince">
-          <option value="15">Last 15m</option>
-          <option value="60" selected>Last 1h</option>
-          <option value="240">Last 4h</option>
-          <option value="1440">Last 24h</option>
-        </select>
-        <button class="btn btn-sm" onclick="refreshLogs(true)">Search</button>
-      </div>
-      <div class="logs-meta" id="logsMeta"></div>
-      <div class="logs-list" id="logsList">
-        <div class="empty">Loading...</div>
-      </div>
-      <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
-        <button class="btn btn-sm" id="logsMoreBtn" onclick="loadMoreLogs()" disabled>Load More</button>
-        <span style="font-size: 11px; color: #484f58;" id="logsMoreHint"></span>
       </div>
     </div>
   </div>
@@ -799,6 +947,84 @@
       <div class="empty">No jobs yet</div>
     </div>
   </div>
+
+  </div><!-- /tab-operations -->
+
+  <!-- ===== Infrastructure tab ===== -->
+  <div class="tab-content" id="tab-infrastructure">
+
+    <!-- Runtime -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Runtime</h2>
+        <button class="btn btn-sm" onclick="refreshEnvironment()">Refresh</button>
+      </div>
+      <div class="section-body">
+        <div class="env-grid" id="envRuntime">
+          <div class="empty">Loading...</div>
+        </div>
+        <div class="memory-cards" id="envMemory"></div>
+      </div>
+    </div>
+
+    <!-- Database -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Database</h2>
+      </div>
+      <div class="section-body">
+        <div class="env-grid" id="envDatabase">
+          <div class="empty">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GCP -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Google Cloud Platform</h2>
+      </div>
+      <div class="section-body">
+        <div id="envGcp">
+          <div class="empty">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-infrastructure -->
+
+  <!-- ===== Logs tab ===== -->
+  <div class="tab-content" id="tab-logs">
+    <div class="section">
+      <div class="section-header">
+        <h2>Cloud Logs</h2>
+        <button class="btn btn-sm" onclick="refreshLogs(true)">Refresh</button>
+      </div>
+      <div class="section-body">
+        <div class="logs-controls">
+          <input id="logsQuery" type="text" placeholder="Search (message/event/context)" style="min-width: 260px; flex: 1;">
+          <input id="logsContext" type="text" placeholder="Part of app (context), e.g. BriefingService" style="min-width: 280px; flex: 1;">
+          <label><input id="logsErrorsOnly" type="checkbox"> Errors only</label>
+          <select id="logsSince">
+            <option value="15">Last 15m</option>
+            <option value="60" selected>Last 1h</option>
+            <option value="240">Last 4h</option>
+            <option value="1440">Last 24h</option>
+          </select>
+          <button class="btn btn-sm" onclick="refreshLogs(true)">Search</button>
+        </div>
+        <div class="logs-meta" id="logsMeta"></div>
+        <div class="logs-list" id="logsList" style="max-height: calc(100vh - 320px);">
+          <div class="empty">Loading...</div>
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
+          <button class="btn btn-sm" id="logsMoreBtn" onclick="loadMoreLogs()" disabled>Load More</button>
+          <span style="font-size: 11px; color: #484f58;" id="logsMoreHint"></span>
+        </div>
+      </div>
+    </div>
+  </div><!-- /tab-logs -->
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1363,6 +1589,97 @@ async function deleteChart(name) {
   setTimeout(refreshData, 500);
 }
 
+// --- Queue Status ---
+
+function renderQueueSummary(queues) {
+  const el = document.getElementById('queueSummary');
+  if (!queues || queues.length === 0) {
+    el.innerHTML = '<span style="font-size: 13px; color: #484f58;">No queues found</span>';
+    return;
+  }
+  el.innerHTML = queues.map(q => {
+    const parts = Object.entries(q.counts).map(([state, count]) => {
+      let cls = '';
+      if (state === 'active') cls = 'qcount-active';
+      else if (state === 'failed' || state === 'expired') cls = 'qcount-failed';
+      else if (state === 'created') cls = 'qcount-created';
+      return `<span class="${cls}">${count} ${state}</span>`;
+    }).join(', ');
+    return `<div class="queue-chip"><span class="qname">${escapeHtml(q.name)}</span><span class="qcounts">${parts}</span></div>`;
+  }).join('');
+}
+
+function renderStuckJobs(stuckJobs) {
+  const el = document.getElementById('queueStuckBanner');
+  if (!stuckJobs || stuckJobs.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+  const items = stuckJobs.map(j => {
+    const key = j.singletonKey || j.queue;
+    const overdue = formatDuration(j.secondsOverdue * 1000);
+    return `<strong>${escapeHtml(key)}</strong> overdue by ${overdue}`;
+  }).join(', ');
+  el.innerHTML = `<div class="stuck-banner">Stuck jobs: ${items}</div>`;
+}
+
+function renderRecentQueueJobs(jobs) {
+  const el = document.getElementById('queueRecentJobs');
+  if (!jobs || jobs.length === 0) {
+    el.innerHTML = '<div class="empty">No recent queue jobs</div>';
+    return;
+  }
+  el.innerHTML = `
+    <table class="queue-table">
+      <thead>
+        <tr>
+          <th>Queue</th>
+          <th>Singleton Key</th>
+          <th>State</th>
+          <th>Created</th>
+          <th>Started</th>
+          <th>Completed</th>
+          <th>Retries</th>
+          <th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${jobs.map(j => {
+          const stateCls = 'qstate-' + (j.state || '');
+          const created = j.createdOn ? new Date(j.createdOn).toLocaleString() : '--';
+          const started = j.startedOn ? new Date(j.startedOn).toLocaleString() : '--';
+          const completed = j.completedOn ? new Date(j.completedOn).toLocaleString() : '--';
+          const retries = j.retryLimit > 0 ? `${j.retryCount}/${j.retryLimit}` : `${j.retryCount || 0}`;
+          const dataStr = j.data ? JSON.stringify(j.data).slice(0, 80) : '--';
+          return `<tr>
+            <td>${escapeHtml(j.queue || '')}</td>
+            <td>${escapeHtml(j.singletonKey || '--')}</td>
+            <td class="${stateCls}">${escapeHtml((j.state || '').toUpperCase())}</td>
+            <td>${escapeHtml(created)}</td>
+            <td>${escapeHtml(started)}</td>
+            <td>${escapeHtml(completed)}</td>
+            <td>${escapeHtml(retries)}</td>
+            <td title="${escapeHtml(j.data ? JSON.stringify(j.data) : '')}">${escapeHtml(dataStr)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function refreshQueueStatus() {
+  try {
+    const data = await fetchJSON(`${API}/queue-status`);
+    renderQueueSummary(data.queues);
+    renderStuckJobs(data.stuckJobs);
+    renderRecentQueueJobs(data.recentJobs);
+    document.getElementById('queueStatusAge').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    document.getElementById('queueRecentJobs').innerHTML =
+      '<div class="empty" style="color:#f85149;">Failed to load queue status</div>';
+  }
+}
+
 // --- Logs ---
 
 function readLogsParams() {
@@ -1623,13 +1940,178 @@ async function deleteMasterProfile(id, code) {
   }
 }
 
+// --- Infrastructure / Environment ---
+let envLoaded = false;
+
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
+}
+
+function renderEnvRuntime(rt) {
+  const el = document.getElementById('envRuntime');
+  if (!rt) { el.innerHTML = '<div class="empty">Unavailable</div>'; return; }
+
+  const shaDisplay = rt.gitSha && rt.gitSha !== 'unknown' ? rt.gitSha.substring(0, 7) : rt.gitSha;
+  const buildTime = rt.buildTimestamp && rt.buildTimestamp !== 'unknown'
+    ? new Date(rt.buildTimestamp).toLocaleString()
+    : rt.buildTimestamp;
+
+  const items = [
+    ['Git SHA', shaDisplay],
+    ['Build Time', buildTime],
+    ['Node.js', rt.nodeVersion],
+    ['Environment', rt.nodeEnv],
+    ['Service Role', rt.serviceRole],
+    ['Cloud Run Service', rt.cloudRunService || '--'],
+    ['Cloud Run Revision', rt.cloudRunRevision || '--'],
+    ['Uptime', formatUptime(rt.uptimeSeconds)],
+  ];
+
+  el.innerHTML = items.map(([label, value]) =>
+    `<div class="env-item"><span class="env-label">${escapeHtml(label)}</span><span class="env-value">${escapeHtml(String(value))}</span></div>`
+  ).join('');
+
+  // Memory cards
+  const memEl = document.getElementById('envMemory');
+  if (rt.memory) {
+    const cards = [
+      ['RSS', rt.memory.rss],
+      ['Heap Used', rt.memory.heapUsed],
+      ['Heap Total', rt.memory.heapTotal],
+      ['External', rt.memory.external],
+    ];
+    memEl.innerHTML = cards.map(([label, bytes]) =>
+      `<div class="memory-card"><div class="mc-label">${label}</div><div class="mc-value">${formatBytes(bytes)}</div></div>`
+    ).join('');
+  } else {
+    memEl.innerHTML = '';
+  }
+}
+
+function renderEnvDatabase(db) {
+  const el = document.getElementById('envDatabase');
+  if (!db || !db.available) {
+    el.innerHTML = `<div class="empty">${db && db.error ? escapeHtml(db.error) : 'Database unavailable'}</div>`;
+    return;
+  }
+
+  const items = [
+    ['PostgreSQL', db.version],
+    ['Host', db.host],
+    ['Port', String(db.port)],
+    ['Database', db.database],
+  ];
+  if (db.pool) {
+    items.push(['Pool Total', String(db.pool.totalCount ?? '--')]);
+    items.push(['Pool Idle', String(db.pool.idleCount ?? '--')]);
+    items.push(['Pool Waiting', String(db.pool.waitingCount ?? '--')]);
+  }
+
+  el.innerHTML = items.map(([label, value]) =>
+    `<div class="env-item"><span class="env-label">${escapeHtml(label)}</span><span class="env-value">${escapeHtml(String(value))}</span></div>`
+  ).join('');
+}
+
+function renderEnvGcp(gcp) {
+  const el = document.getElementById('envGcp');
+  if (!gcp || !gcp.available) {
+    el.innerHTML = `<div class="empty">${gcp && gcp.reason ? escapeHtml(gcp.reason) : 'GCP info unavailable'}</div>`;
+    return;
+  }
+
+  let html = `<div class="env-grid">
+    <div class="env-item"><span class="env-label">Project ID</span><span class="env-value">${escapeHtml(gcp.projectId)}</span></div>
+    <div class="env-item"><span class="env-label">Region</span><span class="env-value">${escapeHtml(gcp.region || '--')}</span></div>
+  </div>`;
+
+  if (gcp.services && gcp.services.length > 0) {
+    html += '<div class="env-service-cards">';
+    for (const svc of gcp.services) {
+      const currentBadge = svc.isCurrent ? '<span class="esc-current">CURRENT</span>' : '';
+      if (svc.error) {
+        html += `
+          <div class="env-service-card">
+            <div class="esc-name">${escapeHtml(svc.name)} ${currentBadge}</div>
+            <div style="color: #f85149; font-size: 12px; margin-top: 6px;">${escapeHtml(svc.error)}</div>
+          </div>`;
+      } else {
+        const lastMod = svc.lastModified ? new Date(svc.lastModified).toLocaleString() : '--';
+        const trafficHtml = (svc.traffic || []).map(t =>
+          `<span style="font-size: 11px; color: #8b949e;">${escapeHtml(t.revision || t.type || '')} ${t.percent}%</span>`
+        ).join(', ');
+        html += `
+          <div class="env-service-card">
+            <div class="esc-name">${escapeHtml(svc.name)} ${currentBadge}</div>
+            <div class="ds-card-meta" style="margin-top: 8px;">
+              <div>URI: <span class="val" style="font-size: 11px;">${svc.uri ? `<a href="${escapeHtml(svc.uri)}" target="_blank">${escapeHtml(svc.uri)}</a>` : '--'}</span></div>
+              <div>Latest Revision: <span class="val">${escapeHtml(svc.latestRevision || '--')}</span></div>
+              <div>Last Updated: <span class="val">${escapeHtml(lastMod)}</span></div>
+              <div>Traffic: <span class="val">${trafficHtml || '--'}</span></div>
+            </div>
+          </div>`;
+      }
+    }
+    html += '</div>';
+  }
+
+  el.innerHTML = html;
+}
+
+async function refreshEnvironment() {
+  try {
+    const data = await fetchJSON(`${API}/environment`);
+    renderEnvRuntime(data.runtime);
+    renderEnvDatabase(data.database);
+    renderEnvGcp(data.gcp);
+  } catch (e) {
+    document.getElementById('envRuntime').innerHTML = '<div class="empty" style="color:#f85149;">Failed to load environment info</div>';
+  }
+}
+
+// --- Tabs ---
+let logsLoaded = false;
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById('tab-' + tabId).classList.add('active');
+  document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`).classList.add('active');
+
+  if (tabId === 'infrastructure' && !envLoaded) {
+    envLoaded = true;
+    refreshEnvironment();
+  }
+  if (tabId === 'logs' && !logsLoaded) {
+    logsLoaded = true;
+    refreshLogs(true);
+  }
+}
+
 // Initial load
 refreshData();
+refreshQueueStatus();
 loadMasterProfiles();
-refreshLogs(true);
 
-// Auto-refresh data sources every 30s
+// Auto-refresh data sources and queue status every 30s
 dsAutoRefresh = setInterval(refreshDataSources, 30000);
+setInterval(refreshQueueStatus, 30000);
 </script>
 </body>
 </html>

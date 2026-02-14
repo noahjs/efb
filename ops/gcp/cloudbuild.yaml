@@ -1,12 +1,13 @@
 steps:
   - name: "gcr.io/cloud-builders/docker"
+    entrypoint: bash
     args:
-      - "build"
-      - "-f"
-      - "api/Dockerfile"
-      - "-t"
-      - "${_IMAGE_URI}"
-      - "."
+      - -c
+      - |
+        docker build -f api/Dockerfile \
+          --build-arg GIT_SHA=${SHORT_SHA:-unknown} \
+          --build-arg BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+          -t ${_IMAGE_URI} .
 
 images:
-  - "${_IMAGE_URI}"
+  - ${_IMAGE_URI}

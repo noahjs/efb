@@ -96,11 +96,27 @@ export class AdminController {
   }
 
   /**
+   * pg-boss queue status: per-queue counts, recent jobs, stuck jobs
+   */
+  @Get('queue-status')
+  async getQueueStatus() {
+    return this.adminService.getQueueStatus();
+  }
+
+  /**
    * Get API service health and stats
    */
   @Get('api-status')
   getApiStatus() {
     return this.adminService.getApiStatus();
+  }
+
+  /**
+   * Infrastructure environment info: runtime, database, GCP
+   */
+  @Get('environment')
+  async getEnvironment() {
+    return this.adminService.getEnvironment();
   }
 
   /**

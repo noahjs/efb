@@ -147,7 +147,12 @@
       "Bash(flutter pub:*)",
       "WebFetch(domain:catalog.data.faa.gov)",
       "WebFetch(domain:www.boldmethod.com)",
-      "Bash(gcloud projects add-iam-policy-binding:*)"
+      "Bash(gcloud projects add-iam-policy-binding:*)",
+      "Bash(npm view:*)",
+      "Bash(gcloud run services list:*)",
+      "Bash(CLAUDECODE= claude mcp serve --help)",
+      "Bash(psql:*)",
+      "Bash(cat:*)"
     ]
   }
 }

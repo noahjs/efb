@@ -8,6 +8,12 @@ RUN npm run build
 
 # --- Production stage ---
 FROM node:22-bookworm-slim
+
+ARG GIT_SHA=unknown
+ARG BUILD_TIMESTAMP=unknown
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_TIMESTAMP=${BUILD_TIMESTAMP}
+
 WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \

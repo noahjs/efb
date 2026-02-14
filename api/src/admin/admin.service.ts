@@ -163,6 +163,150 @@ export class AdminService {
     private readonly orm: TypeOrmDataSource,
   ) {}
 
+  // --- Environment / Infrastructure ---
+
+  async getEnvironment() {
+    const runtime = this.getRuntimeInfo();
+    const database = await this.getDatabaseInfo();
+    const gcp = await this.getGcpInfo();
+    return { runtime, database, gcp };
+  }
+
+  private getRuntimeInfo() {
+    const mem = process.memoryUsage();
+    return {
+      gitSha: process.env.GIT_SHA || 'unknown',
+      buildTimestamp: process.env.BUILD_TIMESTAMP || 'unknown',
+      nodeVersion: process.version,
+      nodeEnv: process.env.NODE_ENV || 'development',
+      serviceRole: process.env.SERVICE_ROLE || 'unknown',
+      cloudRunService: process.env.K_SERVICE || null,
+      cloudRunRevision: process.env.K_REVISION || null,
+      cloudRunConfiguration: process.env.K_CONFIGURATION || null,
+      uptimeSeconds: Math.floor(process.uptime()),
+      memory: {
+        rss: mem.rss,
+        heapUsed: mem.heapUsed,
+        heapTotal: mem.heapTotal,
+        external: mem.external,
+      },
+    };
+  }
+
+  private async getDatabaseInfo() {
+    try {
+      const versionResult = await this.orm.query('SELECT version()');
+      const pgVersion = versionResult?.[0]?.version || 'unknown';
+
+      // Get pool stats from the underlying pg driver
+      let pool: { totalCount?: number; idleCount?: number; waitingCount?: number } = {};
+      try {
+        const driver = this.orm.driver as any;
+        const pgPool = driver.master;
+        if (pgPool) {
+          pool = {
+            totalCount: pgPool.totalCount,
+            idleCount: pgPool.idleCount,
+            waitingCount: pgPool.waitingCount,
+          };
+        }
+      } catch {
+        // pool stats unavailable
+      }
+
+      return {
+        available: true,
+        version: pgVersion,
+        host: dbConfig.host,
+        port: dbConfig.port,
+        database: dbConfig.database,
+        pool,
+      };
+    } catch (err: any) {
+      return {
+        available: false,
+        error: err?.message || 'Database unreachable',
+      };
+    }
+  }
+
+  private async getGcpInfo() {
+    try {
+      const auth = new GoogleAuth();
+      const projectId = await auth.getProjectId();
+      if (!projectId) {
+        return { available: false, reason: 'Not running in GCP' };
+      }
+
+      // Get region from metadata server
+      let region: string | null = null;
+      try {
+        const regionResp = await axios.get(
+          'http://metadata.google.internal/computeMetadata/v1/instance/region',
+          { headers: { 'Metadata-Flavor': 'Google' }, timeout: 2000 },
+        );
+        // Response is "projects/NUMBER/regions/REGION"
+        region = String(regionResp.data).split('/').pop() || null;
+      } catch {
+        // not on GCP or metadata server unavailable
+      }
+
+      // Fetch Cloud Run service details
+      const services: any[] = [];
+      const currentService = process.env.K_SERVICE;
+      // Determine both services (api + worker) from naming convention
+      const serviceNames = ['efb-api', 'efb-worker'];
+
+      if (region) {
+        const client = await auth.getClient();
+        const { token } = await client.getAccessToken();
+        if (token) {
+          for (const svcName of serviceNames) {
+            try {
+              const url = `https://run.googleapis.com/v2/projects/${projectId}/locations/${region}/services/${svcName}`;
+              const resp = await axios.get(url, {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 5000,
+              });
+              const d = resp.data;
+              const trafficSplits = (d.traffic || []).map((t: any) => ({
+                revision: t.revision,
+                percent: t.percent,
+                type: t.type,
+              }));
+              services.push({
+                name: svcName,
+                isCurrent: svcName === currentService,
+                uri: d.uri,
+                latestRevision: d.latestReadyRevision?.split('/').pop() || null,
+                lastModified: d.updateTime,
+                traffic: trafficSplits,
+              });
+            } catch {
+              services.push({
+                name: svcName,
+                isCurrent: svcName === currentService,
+                error: 'Failed to fetch service details',
+              });
+            }
+          }
+        }
+      }
+
+      return {
+        available: true,
+        projectId,
+        region,
+        services,
+      };
+    } catch (err: any) {
+      return {
+        available: false,
+        reason: err?.message || 'GCP info unavailable',
+      };
+    }
+  }
+
   // --- API Status ---
 
   getApiStatus() {
@@ -282,49 +426,46 @@ export class AdminService {
     nextPageToken?: string;
     error?: string;
   }> {
-    const projectId =
-      process.env.ADMIN_LOGS_GCP_PROJECT ||
-      process.env.GOOGLE_CLOUD_PROJECT ||
-      process.env.GCLOUD_PROJECT;
-
     // Cloud Run exposes the service name as K_SERVICE.
-    const serviceName =
-      process.env.ADMIN_LOGS_CLOUD_RUN_SERVICE || process.env.K_SERVICE;
-
-    if (!projectId) {
-      return {
-        enabled: false,
-        reason:
-          'Cloud Logging not configured (missing ADMIN_LOGS_GCP_PROJECT / GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT)',
-        entries: [],
-      };
-    }
-
-    // Clamp inputs to keep queries cheap.
-    const sinceMinutesRaw = Number(query.sinceMinutes ?? 60);
-    const sinceMinutes = Number.isFinite(sinceMinutesRaw)
-      ? Math.min(Math.max(Math.floor(sinceMinutesRaw), 1), 7 * 24 * 60)
-      : 60;
-    const limitRaw = Number(query.limit ?? 50);
-    const limit = Number.isFinite(limitRaw)
-      ? Math.min(Math.max(Math.floor(limitRaw), 1), 200)
-      : 50;
-
-    const sinceIso = new Date(Date.now() - sinceMinutes * 60 * 1000).toISOString();
-    const filter = buildCloudLoggingFilter({
-      q: query.q,
-      context: query.context,
-      errorsOnly: !!query.errorsOnly,
-      sinceMinutes,
-      serviceName,
-      sinceIso,
-    });
+    const serviceName = process.env.K_SERVICE;
 
     try {
       const auth = new GoogleAuth({
         scopes: ['https://www.googleapis.com/auth/logging.read'],
       });
+
+      // GoogleAuth resolves project ID from env vars, metadata server, or
+      // service-account key — no custom env var needed.
+      const projectId = await auth.getProjectId();
+      if (!projectId) {
+        return {
+          enabled: false,
+          reason: 'Could not detect GCP project ID (not running in GCP?)',
+          entries: [],
+        };
+      }
+
       const client = await auth.getClient();
+
+      // Clamp inputs to keep queries cheap.
+      const sinceMinutesRaw = Number(query.sinceMinutes ?? 60);
+      const sinceMinutes = Number.isFinite(sinceMinutesRaw)
+        ? Math.min(Math.max(Math.floor(sinceMinutesRaw), 1), 7 * 24 * 60)
+        : 60;
+      const limitRaw = Number(query.limit ?? 50);
+      const limit = Number.isFinite(limitRaw)
+        ? Math.min(Math.max(Math.floor(limitRaw), 1), 200)
+        : 50;
+
+      const sinceIso = new Date(Date.now() - sinceMinutes * 60 * 1000).toISOString();
+      const filter = buildCloudLoggingFilter({
+        q: query.q,
+        context: query.context,
+        errorsOnly: !!query.errorsOnly,
+        sinceMinutes,
+        serviceName,
+        sinceIso,
+      });
 
       // Use the google-auth client for auth; axios for predictable response parsing.
       const { token } = await client.getAccessToken();
@@ -387,12 +528,9 @@ export class AdminService {
         'Unknown Cloud Logging error';
       this.logger.warn({ event: 'admin_logs_error', message: msg });
       return {
-        enabled: true,
-        projectId,
-        serviceName,
-        filter,
+        enabled: false,
+        reason: msg,
         entries: [],
-        error: msg,
       };
     }
   }
@@ -742,6 +880,97 @@ export class AdminService {
   async deleteMasterProfile(id: number): Promise<void> {
     const profile = await this.getMasterProfile(id);
     await this.masterProfileRepo.remove(profile);
+  }
+
+  // --- Queue Status (pg-boss internals) ---
+
+  async getQueueStatus() {
+    // 1. Per-queue counts by state
+    const queueRows: { name: string; state: string; count: string }[] =
+      await this.orm.query(`
+        SELECT name, state, COUNT(*)::text AS count
+        FROM pgboss.job
+        GROUP BY name, state
+        ORDER BY name, state
+      `);
+
+    const queueMap = new Map<string, Record<string, number>>();
+    for (const r of queueRows) {
+      if (!queueMap.has(r.name)) queueMap.set(r.name, {});
+      queueMap.get(r.name)![r.state] = Number(r.count);
+    }
+    const queues = Array.from(queueMap.entries()).map(([name, counts]) => ({
+      name,
+      counts,
+    }));
+
+    // 2. Recent jobs: non-completed + recently completed (last hour), limit 50
+    const recentJobs: any[] = await this.orm.query(`
+      SELECT
+        id, name AS queue, singleton_key, state,
+        data, output,
+        created_on, started_on, completed_on,
+        retry_count, retry_limit,
+        expire_in,
+        EXTRACT(EPOCH FROM expire_in)::int AS expire_seconds
+      FROM pgboss.job
+      WHERE state != 'completed'
+         OR completed_on > NOW() - INTERVAL '1 hour'
+      ORDER BY
+        CASE state
+          WHEN 'active' THEN 1
+          WHEN 'created' THEN 2
+          WHEN 'retry' THEN 3
+          WHEN 'failed' THEN 4
+          WHEN 'completed' THEN 5
+          ELSE 6
+        END,
+        created_on DESC
+      LIMIT 50
+    `);
+
+    // 3. Stuck jobs: active longer than their expire_in
+    const stuckJobs: any[] = await this.orm.query(`
+      SELECT
+        id, name AS queue, singleton_key, state,
+        data, started_on,
+        EXTRACT(EPOCH FROM expire_in)::int AS expire_seconds,
+        EXTRACT(EPOCH FROM (NOW() - started_on))::int AS seconds_running
+      FROM pgboss.job
+      WHERE state = 'active'
+        AND started_on IS NOT NULL
+        AND EXTRACT(EPOCH FROM (NOW() - started_on)) > EXTRACT(EPOCH FROM expire_in)
+      ORDER BY started_on ASC
+    `);
+
+    return {
+      queues,
+      recentJobs: recentJobs.map((r) => ({
+        id: r.id,
+        queue: r.queue,
+        singletonKey: r.singleton_key,
+        state: r.state,
+        data: r.data,
+        output: r.output,
+        createdOn: r.created_on,
+        startedOn: r.started_on,
+        completedOn: r.completed_on,
+        retryCount: r.retry_count,
+        retryLimit: r.retry_limit,
+        expireSeconds: r.expire_seconds,
+      })),
+      stuckJobs: stuckJobs.map((r) => ({
+        id: r.id,
+        queue: r.queue,
+        singletonKey: r.singleton_key,
+        state: r.state,
+        data: r.data,
+        startedOn: r.started_on,
+        expireSeconds: r.expire_seconds,
+        secondsRunning: r.seconds_running,
+        secondsOverdue: r.seconds_running - r.expire_seconds,
+      })),
+    };
   }
 
   // --- Helpers ---
