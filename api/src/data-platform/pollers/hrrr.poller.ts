@@ -487,7 +487,19 @@ export class HrrrPoller extends BasePoller {
     surfacePath: string | null,
     pressurePath: string | null,
   ): Promise<{ surface: any[]; pressure: any[] }> {
-    const scriptPath = path.join(__dirname, '..', '..', '..', '..', 'hrrr-processor', 'process.py');
+    // IMPORTANT: don't derive the processor path from `__dirname`.
+    // In production we run compiled JS from `dist/…`, and `__dirname` depth changes,
+    // which previously caused paths like `/hrrr-processor/process.py`.
+    //
+    // Defaults assume the API is started with CWD = `.../api` (local) or `/app/api` (container),
+    // and the processor lives next to it at `../hrrr-processor`.
+    const processorDir = process.env.HRRR_PROCESSOR_DIR
+      ? path.resolve(process.env.HRRR_PROCESSOR_DIR)
+      : path.resolve(process.cwd(), '..', 'hrrr-processor');
+
+    const scriptPath = process.env.HRRR_PROCESSOR_SCRIPT
+      ? path.resolve(process.env.HRRR_PROCESSOR_SCRIPT)
+      : path.join(processorDir, 'process.py');
 
     const args: string[] = [];
     if (surfacePath) {
@@ -506,8 +518,21 @@ export class HrrrPoller extends BasePoller {
       '--pressure-levels', HRRR.PRESSURE_LEVELS.join(','),
     );
 
-    const venvPython = path.join(__dirname, '..', '..', '..', '..', 'hrrr-processor', 'venv', 'bin', 'python3');
+    const venvPython = path.join(processorDir, 'venv', 'bin', 'python3');
     const pythonCmd = process.env.HRRR_PYTHON_PATH || venvPython;
+
+    if (!fs.existsSync(scriptPath)) {
+      throw new Error(
+        `HRRR processor script not found at "${scriptPath}". ` +
+          `This usually means the "hrrr-processor" folder was not deployed alongside the API.`,
+      );
+    }
+    if (path.isAbsolute(pythonCmd) && !fs.existsSync(pythonCmd)) {
+      throw new Error(
+        `HRRR python binary not found at "${pythonCmd}". ` +
+          `Set HRRR_PYTHON_PATH to a valid python3 path, or ensure the hrrr-processor venv is built in the runtime image.`,
+      );
+    }
 
     const { stdout, stderr } = await execFileAsync(pythonCmd, [scriptPath, ...args], {
       timeout: HRRR.PROCESSOR_TIMEOUT_MS,

@@ -6,7 +6,9 @@ on:
     branches: [main]
     paths:
       - "api/**"
+      - "hrrr-processor/**"
       - "ops/gcp/**"
+      - ".dockerignore"
       - ".github/workflows/deploy-gcp.yml"
 
 permissions:
@@ -53,6 +55,7 @@ jobs:
           SECRET_DB_PASS=EFB_DB_PASS
           SECRET_DB_NAME=EFB_DB_NAME
           SECRET_JWT_SECRET=EFB_JWT_SECRET
+          SECRET_SCRAPINGBEE_API_KEY=EFB_SCRAPINGBEE_API_KEY
           SECRET_GOOGLE_CLIENT_ID=
           SECRET_APPLE_BUNDLE_ID=EFB_APPLE_BUNDLE_ID
           SECRET_LEIDOS_VENDOR_USER=

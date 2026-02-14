@@ -60,6 +60,7 @@ This script:
 - creates Artifact Registry repo
 - creates Cloud Run runtime service account (if missing)
 - grants IAM roles for Cloud Run runtime
+- grants Artifact Registry push permissions to the Cloud Build service account
 - creates secret shells in Secret Manager (no values yet)
 
 ## 4. Add secret versions
@@ -83,7 +84,7 @@ bash ops/gcp/deploy-cloud-run.sh
 
 This script:
 
-- builds container image via Cloud Build
+- builds container image via Cloud Build (repo root context, Dockerfile at `api/Dockerfile` so `hrrr-processor` is included)
 - deploys API service (`SERVICE_ROLE=api`)
 - deploys worker service (`SERVICE_ROLE=worker`, singleton, no CPU throttling)
 - wires Cloud SQL connector and Secret Manager env injection

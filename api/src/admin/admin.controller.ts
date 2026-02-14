@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   Res,
   HttpCode,
   BadRequestException,
@@ -116,6 +117,36 @@ export class AdminController {
   @Get('jobs')
   async getJobs() {
     return await this.adminService.getJobs();
+  }
+
+  /**
+   * Query Cloud Logging for recent API logs (primarily for Cloud Run deployments).
+   *
+   * Query params:
+   * - q: free-text search (message/event/context/text payload)
+   * - context: JsonLogger context (service/class name)
+   * - errorsOnly: "true" to filter jsonPayload.level in (error,fatal)
+   * - sinceMinutes: default 60
+   * - limit: default 50 (max 200)
+   * - pageToken: Cloud Logging page token for pagination
+   */
+  @Get('logs')
+  async getLogs(
+    @Query('q') q?: string,
+    @Query('context') context?: string,
+    @Query('errorsOnly') errorsOnly?: string,
+    @Query('sinceMinutes') sinceMinutes?: string,
+    @Query('limit') limit?: string,
+    @Query('pageToken') pageToken?: string,
+  ) {
+    return await this.adminService.getLogs({
+      q,
+      context,
+      errorsOnly: errorsOnly === 'true' || errorsOnly === '1',
+      sinceMinutes: sinceMinutes ? Number(sinceMinutes) : undefined,
+      limit: limit ? Number(limit) : undefined,
+      pageToken,
+    });
   }
 
   /**

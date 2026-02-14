@@ -1,18 +1,43 @@
 # --- Build stage ---
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
+FROM node:22-bookworm-slim AS build
+WORKDIR /app/api
+COPY api/package.json api/package-lock.json ./
 RUN npm ci
-COPY . .
+COPY api/ ./
 RUN npm run build
 
 # --- Production stage ---
-FROM node:22-alpine
+FROM node:22-bookworm-slim
 WORKDIR /app
-RUN apk add --no-cache unzip
-COPY package.json package-lock.json ./
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    python3 \
+    python3-venv \
+    python3-pip \
+    libeccodes0 \
+    unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install API dependencies (prod only)
+WORKDIR /app/api
+COPY api/package.json api/package-lock.json ./
 RUN npm ci --omit=dev
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/public ./public
+
+# Copy built API artifacts
+COPY --from=build /app/api/dist ./dist
+COPY --from=build /app/api/public ./public
+
+# HRRR processor (Python)
+WORKDIR /app/hrrr-processor
+COPY hrrr-processor/requirements.txt ./requirements.txt
+RUN python3 -m venv /app/hrrr-processor/venv \
+  && /app/hrrr-processor/venv/bin/pip install --no-cache-dir -r /app/hrrr-processor/requirements.txt
+COPY hrrr-processor/process.py ./process.py
+
+# Prefer the known-good venv python in container environments.
+ENV HRRR_PYTHON_PATH=/app/hrrr-processor/venv/bin/python3
+
+WORKDIR /app/api
 EXPOSE 3001
 CMD ["node", "dist/main.js"]

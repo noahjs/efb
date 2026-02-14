@@ -342,6 +342,63 @@
     .run-status-partial { color: #d29922; }
     .run-status-failed { color: #f85149; }
 
+    /* Run history modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 220;
+      overflow: auto;
+      padding: 28px 16px;
+    }
+    .modal-backdrop.open { display: block; }
+    .modal {
+      max-width: 1080px;
+      margin: 0 auto;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 12px 44px rgba(0,0,0,0.55);
+    }
+    .modal-header {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid #30363d;
+    }
+    .modal-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #c9d1d9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .modal-body {
+      padding: 14px 18px;
+    }
+    .modal-scroller {
+      max-height: 70vh;
+      overflow: auto;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      background: #0d1117;
+    }
+    .modal-scroller table { width: 100%; border-collapse: collapse; }
+    .modal-scroller th {
+      position: sticky;
+      top: 0;
+      background: #0d1117;
+      z-index: 1;
+    }
+
     /* Empty state */
     .empty { text-align: center; padding: 32px; color: #484f58; font-size: 14px; }
 
@@ -368,6 +425,74 @@
       z-index: 100;
     }
     .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* Logs */
+    .logs-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .logs-controls input[type="text"], .logs-controls select {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #c9d1d9;
+      padding: 8px 10px;
+      font-size: 13px;
+      outline: none;
+    }
+    .logs-controls input[type="text"]::placeholder { color: #484f58; }
+    .logs-controls label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #8b949e;
+      user-select: none;
+    }
+    .logs-meta {
+      font-size: 11px;
+      color: #8b949e;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .logs-list {
+      background: #010409;
+      border: 1px solid #21262d;
+      border-radius: 6px;
+      padding: 10px;
+      max-height: 340px;
+      overflow: auto;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      color: #8b949e;
+    }
+    .log-line {
+      display: grid;
+      grid-template-columns: 160px 86px 180px 1fr;
+      gap: 10px;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(33, 38, 45, 0.7);
+      align-items: baseline;
+    }
+    .log-line:last-child { border-bottom: none; }
+    .log-ts { color: #484f58; white-space: nowrap; }
+    .log-sev { font-weight: 700; letter-spacing: 0.3px; }
+    .log-sev.ERROR, .log-sev.CRITICAL, .log-sev.ALERT, .log-sev.EMERGENCY { color: #f85149; }
+    .log-sev.WARNING { color: #d29922; }
+    .log-sev.INFO, .log-sev.DEFAULT { color: #58a6ff; }
+    .log-sev.DEBUG { color: #8b949e; }
+    .log-ctx { color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .log-msg { color: #c9d1d9; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 820px) {
+      .log-line { grid-template-columns: 120px 74px 1fr; }
+      .log-msg { grid-column: 1 / -1; }
+    }
   </style>
 </head>
 <body>
@@ -448,6 +573,36 @@
     <div class="section-body">
       <div class="api-grid" id="apiServicesGrid">
         <div class="empty">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Logs</h2>
+      <button class="btn btn-sm" onclick="refreshLogs(true)">Refresh</button>
+    </div>
+    <div class="section-body">
+      <div class="logs-controls">
+        <input id="logsQuery" type="text" placeholder="Search (message/event/context)" style="min-width: 260px; flex: 1;">
+        <input id="logsContext" type="text" placeholder="Part of app (context), e.g. BriefingService" style="min-width: 280px; flex: 1;">
+        <label><input id="logsErrorsOnly" type="checkbox"> Errors only</label>
+        <select id="logsSince">
+          <option value="15">Last 15m</option>
+          <option value="60" selected>Last 1h</option>
+          <option value="240">Last 4h</option>
+          <option value="1440">Last 24h</option>
+        </select>
+        <button class="btn btn-sm" onclick="refreshLogs(true)">Search</button>
+      </div>
+      <div class="logs-meta" id="logsMeta"></div>
+      <div class="logs-list" id="logsList">
+        <div class="empty">Loading...</div>
+      </div>
+      <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
+        <button class="btn btn-sm" id="logsMoreBtn" onclick="loadMoreLogs()" disabled>Load More</button>
+        <span style="font-size: 11px; color: #484f58;" id="logsMoreHint"></span>
       </div>
     </div>
   </div>
@@ -588,6 +743,25 @@
     </div>
   </div>
 
+  <!-- Data Source Run History Modal -->
+  <div id="runHistoryModalBackdrop" class="modal-backdrop" onclick="maybeCloseRunHistoryModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title" id="runHistoryModalTitle">Run History</div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-sm" id="runHistoryRefreshBtn" onclick="refreshRunHistory()">Refresh</button>
+          <button class="btn btn-sm" onclick="closeRunHistoryModal()">Close</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: #8b949e; margin-bottom: 10px;" id="runHistoryModalMeta"></div>
+        <div class="modal-scroller" id="runHistoryModalBody">
+          <div class="empty">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Disk Usage -->
   <div class="section">
     <div class="section-header">
@@ -636,6 +810,8 @@ let allCharts = [];
 let installedCharts = [];
 let pollingInterval = null;
 let dsAutoRefresh = null;
+let logsNextPageToken = null;
+let logsBusy = false;
 
 async function fetchJSON(url, opts = {}) {
   const res = await fetch(url, opts);
@@ -814,7 +990,7 @@ function renderDataSources(sources) {
         ${rateHtml}
         ${errorHtml}
         <div style="margin-top: 8px;">
-          <button class="job-toggle" onclick="toggleHistory('${ds.key}')">Run History</button>
+          <button class="job-toggle" onclick="openRunHistoryModal('${ds.key}', '${escapeHtml(ds.name)}')">Run History</button>
         </div>
         <div class="run-history" id="history-${ds.key}"></div>
       </div>
@@ -831,29 +1007,51 @@ async function loadSummary() {
   }
 }
 
-async function toggleHistory(key) {
-  const el = document.getElementById(`history-${key}`);
-  if (!el) return;
-  if (el.classList.contains('open')) {
-    el.classList.remove('open');
-    return;
-  }
-  el.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #8b949e;">Loading...</div>';
-  el.classList.add('open');
+let activeRunHistoryKey = null;
+let activeRunHistoryName = null;
+
+function openRunHistoryModal(key, name) {
+  activeRunHistoryKey = key;
+  activeRunHistoryName = name || key;
+  document.getElementById('runHistoryModalTitle').textContent = `Run History: ${activeRunHistoryName}`;
+  document.getElementById('runHistoryModalMeta').textContent = '';
+  document.getElementById('runHistoryModalBody').innerHTML = '<div class="empty">Loading...</div>';
+  document.getElementById('runHistoryModalBackdrop').classList.add('open');
+  refreshRunHistory();
+}
+
+function closeRunHistoryModal() {
+  document.getElementById('runHistoryModalBackdrop').classList.remove('open');
+  activeRunHistoryKey = null;
+  activeRunHistoryName = null;
+}
+
+function maybeCloseRunHistoryModal(ev) {
+  // Click on backdrop closes modal
+  if (ev && ev.target && ev.target.id === 'runHistoryModalBackdrop') closeRunHistoryModal();
+}
+
+async function refreshRunHistory() {
+  if (!activeRunHistoryKey) return;
+  const key = activeRunHistoryKey;
+  const body = document.getElementById('runHistoryModalBody');
+  body.innerHTML = '<div class="empty">Loading...</div>';
   try {
     const runs = await fetchJSON(`${API}/data-sources/${key}/history`);
+    const meta = document.getElementById('runHistoryModalMeta');
+    meta.textContent = `Source key: ${key} | Updated ${new Date().toLocaleTimeString()}`;
+
     if (!runs || runs.length === 0) {
-      el.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #484f58;">No run history yet</div>';
+      body.innerHTML = '<div class="empty">No run history yet</div>';
       return;
     }
-    // Show last 20
-    const display = runs.slice(0, 20);
-    el.innerHTML = `
+
+    body.innerHTML = `
       <table>
         <thead>
           <tr>
             <th>Status</th>
-            <th>Time</th>
+            <th>Completed</th>
             <th>Duration</th>
             <th>Records</th>
             <th>Errors</th>
@@ -861,25 +1059,27 @@ async function toggleHistory(key) {
           </tr>
         </thead>
         <tbody>
-          ${display.map(r => {
+          ${runs.map(r => {
             const statusCls = `run-status-${r.status}`;
-            const time = new Date(r.completed_at).toLocaleString();
-            const dur = `${(r.duration_ms / 1000).toFixed(1)}s`;
-            const errMsg = r.error_message ? escapeHtml(r.error_message).substring(0, 60) : '--';
+            const time = r.completed_at ? new Date(r.completed_at).toLocaleString() : '--';
+            const dur = r.duration_ms != null ? `${(r.duration_ms / 1000).toFixed(1)}s` : '--';
+            const records = r.records_updated != null ? r.records_updated : '--';
+            const errs = r.error_count != null ? r.error_count : '--';
+            const errMsg = r.error_message ? escapeHtml(String(r.error_message)).substring(0, 140) : '--';
             return `<tr>
-              <td class="${statusCls}">${r.status}</td>
-              <td>${time}</td>
-              <td>${dur}</td>
-              <td>${r.records_updated}</td>
-              <td>${r.error_count}</td>
-              <td title="${r.error_message ? escapeHtml(r.error_message) : ''}">${errMsg}</td>
+              <td class="${statusCls}">${escapeHtml(String(r.status))}</td>
+              <td>${escapeHtml(time)}</td>
+              <td>${escapeHtml(dur)}</td>
+              <td>${escapeHtml(String(records))}</td>
+              <td>${escapeHtml(String(errs))}</td>
+              <td title="${r.error_message ? escapeHtml(String(r.error_message)) : ''}">${errMsg}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
     `;
   } catch (e) {
-    el.innerHTML = '<div style="padding: 8px; font-size: 12px; color: #f85149;">Failed to load history</div>';
+    body.innerHTML = '<div class="empty" style="color:#f85149;">Failed to load history</div>';
   }
 }
 
@@ -1163,6 +1363,109 @@ async function deleteChart(name) {
   setTimeout(refreshData, 500);
 }
 
+// --- Logs ---
+
+function readLogsParams() {
+  const q = document.getElementById('logsQuery').value.trim();
+  const context = document.getElementById('logsContext').value.trim();
+  const errorsOnly = document.getElementById('logsErrorsOnly').checked;
+  const sinceMinutes = Number(document.getElementById('logsSince').value || '60');
+  return { q: q || '', context: context || '', errorsOnly, sinceMinutes };
+}
+
+function setLogsMeta(text) {
+  document.getElementById('logsMeta').textContent = text || '';
+}
+
+function setLogsMore(enabled, hint) {
+  const btn = document.getElementById('logsMoreBtn');
+  btn.disabled = !enabled;
+  document.getElementById('logsMoreHint').textContent = hint || '';
+}
+
+function renderLogs(entries, append = false) {
+  const el = document.getElementById('logsList');
+  if (!append) el.innerHTML = '';
+
+  if (!entries || entries.length === 0) {
+    if (!append) el.innerHTML = '<div class="empty">No logs found</div>';
+    return;
+  }
+
+  const html = entries.map(e => {
+    const ts = e.timestamp ? new Date(e.timestamp).toLocaleString() : '';
+    const sev = (e.severity || 'DEFAULT').toUpperCase();
+    const ctx = e.context || (e.jsonPayload && e.jsonPayload.context) || '--';
+    const msg = e.message || e.textPayload || (e.jsonPayload && e.jsonPayload.message) || JSON.stringify(e.jsonPayload || {}).slice(0, 200);
+    return `
+      <div class="log-line" title="${escapeHtml(JSON.stringify(e.jsonPayload || e, null, 0))}">
+        <div class="log-ts">${escapeHtml(ts)}</div>
+        <div class="log-sev ${escapeHtml(sev)}">${escapeHtml(sev)}</div>
+        <div class="log-ctx">${escapeHtml(String(ctx))}</div>
+        <div class="log-msg">${escapeHtml(String(msg))}</div>
+      </div>
+    `;
+  }).join('');
+
+  if (append) {
+    el.insertAdjacentHTML('beforeend', html);
+  } else {
+    el.innerHTML = html;
+  }
+}
+
+async function refreshLogs(reset = true) {
+  if (logsBusy) return;
+  logsBusy = true;
+  try {
+    if (reset) {
+      logsNextPageToken = null;
+      document.getElementById('logsList').innerHTML = '<div class="empty">Loading...</div>';
+      setLogsMore(false, '');
+    }
+
+    const p = readLogsParams();
+    const qs = new URLSearchParams();
+    if (p.q) qs.set('q', p.q);
+    if (p.context) qs.set('context', p.context);
+    if (p.errorsOnly) qs.set('errorsOnly', 'true');
+    if (p.sinceMinutes) qs.set('sinceMinutes', String(p.sinceMinutes));
+    qs.set('limit', '50');
+    if (!reset && logsNextPageToken) qs.set('pageToken', logsNextPageToken);
+
+    const data = await fetchJSON(`${API}/logs?${qs.toString()}`);
+    if (!data || data.enabled === false) {
+      setLogsMeta(data && data.reason ? data.reason : 'Logs unavailable');
+      document.getElementById('logsList').innerHTML =
+        '<div class="empty">Cloud Logging is not configured for this environment</div>';
+      setLogsMore(false, '');
+      return;
+    }
+
+    const metaBits = [];
+    if (data.projectId) metaBits.push(`project: ${data.projectId}`);
+    if (data.serviceName) metaBits.push(`service: ${data.serviceName}`);
+    metaBits.push(`updated: ${new Date().toLocaleTimeString()}`);
+    if (data.error) metaBits.push(`error: ${data.error}`);
+    setLogsMeta(metaBits.join(' | '));
+
+    renderLogs(data.entries, !reset);
+    logsNextPageToken = data.nextPageToken || null;
+    setLogsMore(!!logsNextPageToken, logsNextPageToken ? 'More results available' : 'No more results');
+  } catch (e) {
+    setLogsMeta('Failed to load logs');
+    document.getElementById('logsList').innerHTML = '<div class="empty">Failed to load logs</div>';
+    setLogsMore(false, '');
+  } finally {
+    logsBusy = false;
+  }
+}
+
+async function loadMoreLogs() {
+  if (!logsNextPageToken) return;
+  await refreshLogs(false);
+}
+
 // --- Master W&B Profiles ---
 let editingMasterProfileId = null;
 
@@ -1323,6 +1626,7 @@ async function deleteMasterProfile(id, code) {
 // Initial load
 refreshData();
 loadMasterProfiles();
+refreshLogs(true);
 
 // Auto-refresh data sources every 30s
 dsAutoRefresh = setInterval(refreshDataSources, 30000);

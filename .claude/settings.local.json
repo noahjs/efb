@@ -146,7 +146,8 @@
       "Bash(flutter pub add:*)",
       "Bash(flutter pub:*)",
       "WebFetch(domain:catalog.data.faa.gov)",
-      "WebFetch(domain:www.boldmethod.com)"
+      "WebFetch(domain:www.boldmethod.com)",
+      "Bash(gcloud projects add-iam-policy-binding:*)"
     ]
   }
 }

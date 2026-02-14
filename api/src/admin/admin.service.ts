@@ -2,6 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource as TypeOrmDataSource, Repository } from 'typeorm';
 import { MasterWBProfile } from '../aircraft/entities/master-wb-profile.entity';
+import { GoogleAuth } from 'google-auth-library';
+import axios from 'axios';
 import { Airport } from '../airports/entities/airport.entity';
 import { Runway } from '../airports/entities/runway.entity';
 import { Frequency } from '../airports/entities/frequency.entity';
@@ -28,6 +30,7 @@ import { spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { dbConfig } from '../db.config';
+import { buildCloudLoggingFilter } from './cloud-logging.util';
 
 // All FAA VFR Sectional chart names
 export const VFR_SECTIONAL_CHARTS = [
@@ -96,6 +99,29 @@ export interface JobStatus {
   log: string[];
   progress?: string;
 }
+
+export type AdminLogsQuery = {
+  q?: string;
+  context?: string;
+  errorsOnly?: boolean;
+  sinceMinutes?: number;
+  limit?: number;
+  pageToken?: string;
+};
+
+type AdminLogEntry = {
+  timestamp?: string;
+  severity?: string;
+  insertId?: string;
+  logName?: string;
+  // Common fields from our JsonLogger payload (when running on Cloud Run/Cloud Logging).
+  context?: string;
+  event?: string;
+  message?: string;
+  // Raw payload, useful for drilling in.
+  jsonPayload?: any;
+  textPayload?: string;
+};
 
 @Injectable()
 export class AdminService {
@@ -242,6 +268,133 @@ export class AdminService {
     const mem = this.jobs.get(id);
     if (mem) return mem;
     return await this.getDbJob(id);
+  }
+
+  // --- Logs (Cloud Logging) ---
+
+  async getLogs(query: AdminLogsQuery): Promise<{
+    enabled: boolean;
+    reason?: string;
+    projectId?: string;
+    serviceName?: string;
+    filter?: string;
+    entries: AdminLogEntry[];
+    nextPageToken?: string;
+    error?: string;
+  }> {
+    const projectId =
+      process.env.ADMIN_LOGS_GCP_PROJECT ||
+      process.env.GOOGLE_CLOUD_PROJECT ||
+      process.env.GCLOUD_PROJECT;
+
+    // Cloud Run exposes the service name as K_SERVICE.
+    const serviceName =
+      process.env.ADMIN_LOGS_CLOUD_RUN_SERVICE || process.env.K_SERVICE;
+
+    if (!projectId) {
+      return {
+        enabled: false,
+        reason:
+          'Cloud Logging not configured (missing ADMIN_LOGS_GCP_PROJECT / GOOGLE_CLOUD_PROJECT / GCLOUD_PROJECT)',
+        entries: [],
+      };
+    }
+
+    // Clamp inputs to keep queries cheap.
+    const sinceMinutesRaw = Number(query.sinceMinutes ?? 60);
+    const sinceMinutes = Number.isFinite(sinceMinutesRaw)
+      ? Math.min(Math.max(Math.floor(sinceMinutesRaw), 1), 7 * 24 * 60)
+      : 60;
+    const limitRaw = Number(query.limit ?? 50);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.floor(limitRaw), 1), 200)
+      : 50;
+
+    const sinceIso = new Date(Date.now() - sinceMinutes * 60 * 1000).toISOString();
+    const filter = buildCloudLoggingFilter({
+      q: query.q,
+      context: query.context,
+      errorsOnly: !!query.errorsOnly,
+      sinceMinutes,
+      serviceName,
+      sinceIso,
+    });
+
+    try {
+      const auth = new GoogleAuth({
+        scopes: ['https://www.googleapis.com/auth/logging.read'],
+      });
+      const client = await auth.getClient();
+
+      // Use the google-auth client for auth; axios for predictable response parsing.
+      const { token } = await client.getAccessToken();
+      if (!token) {
+        return {
+          enabled: true,
+          reason: 'Failed to acquire GCP access token for Cloud Logging',
+          projectId,
+          serviceName,
+          filter,
+          entries: [],
+        };
+      }
+
+      const url = 'https://logging.googleapis.com/v2/entries:list';
+      const body = {
+        resourceNames: [`projects/${projectId}`],
+        filter,
+        orderBy: 'timestamp desc',
+        pageSize: limit,
+        pageToken: query.pageToken || undefined,
+      };
+
+      const resp = await axios.post(url, body, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15_000,
+      });
+
+      const rawEntries: any[] = resp.data?.entries || [];
+      const entries: AdminLogEntry[] = rawEntries.map((e: any) => {
+        const jsonPayload = e.jsonPayload ?? undefined;
+        return {
+          timestamp: e.timestamp,
+          severity: e.severity,
+          insertId: e.insertId,
+          logName: e.logName,
+          context: jsonPayload?.context,
+          event: jsonPayload?.event,
+          message: jsonPayload?.message ?? (typeof e.textPayload === 'string' ? e.textPayload : undefined),
+          jsonPayload,
+          textPayload: typeof e.textPayload === 'string' ? e.textPayload : undefined,
+        };
+      });
+
+      return {
+        enabled: true,
+        projectId,
+        serviceName,
+        filter,
+        entries,
+        nextPageToken: resp.data?.nextPageToken,
+      };
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        'Unknown Cloud Logging error';
+      this.logger.warn({ event: 'admin_logs_error', message: msg });
+      return {
+        enabled: true,
+        projectId,
+        serviceName,
+        filter,
+        entries: [],
+        error: msg,
+      };
+    }
   }
 
   // --- Seed airports ---

@@ -3,7 +3,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-API_DIR="${REPO_ROOT}/api"
 ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/gcp.env}"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
@@ -48,7 +47,11 @@ gcloud config set project "${PROJECT_ID}" >/dev/null
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "Building image: ${IMAGE_URI}"
-BUILD_ID="$(gcloud builds submit "${API_DIR}" --tag "${IMAGE_URI}" --async --format='value(id)')"
+BUILD_ID="$(gcloud builds submit "${REPO_ROOT}" \
+  --config "${SCRIPT_DIR}/cloudbuild.yaml" \
+  --substitutions "_IMAGE_URI=${IMAGE_URI}" \
+  --async \
+  --format='value(id)')"
 echo "Build started: ${BUILD_ID}"
 
 while true; do
@@ -72,6 +75,8 @@ build_secret_flags() {
   secret_flags+=",DB_PASS=${SECRET_DB_PASS}:latest"
   secret_flags+=",DB_NAME=${SECRET_DB_NAME}:latest"
   secret_flags+=",JWT_SECRET=${SECRET_JWT_SECRET}:latest"
+  # Optional third-party proxy key (used by WindGridPoller to avoid Open-Meteo 429s).
+  [[ -n "${SECRET_SCRAPINGBEE_API_KEY:-}" ]] && secret_flags+=",SCRAPINGBEE_API_KEY=${SECRET_SCRAPINGBEE_API_KEY}:latest"
   [[ -n "${SECRET_GOOGLE_CLIENT_ID:-}" ]] && secret_flags+=",GOOGLE_CLIENT_ID=${SECRET_GOOGLE_CLIENT_ID}:latest"
   [[ -n "${SECRET_APPLE_BUNDLE_ID:-}" ]] && secret_flags+=",APPLE_BUNDLE_ID=${SECRET_APPLE_BUNDLE_ID}:latest"
   [[ -n "${SECRET_LEIDOS_VENDOR_USER:-}" ]] && secret_flags+=",LEIDOS_VENDOR_USER=${SECRET_LEIDOS_VENDOR_USER}:latest"

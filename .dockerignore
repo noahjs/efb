@@ -1,0 +1,12 @@
+.git
+.github
+
+**/node_modules
+**/dist
+**/coverage
+**/__pycache__
+
+**/.DS_Store
+
+# Never ship local venvs; build a clean one in the image.
+hrrr-processor/venv

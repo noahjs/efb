@@ -68,6 +68,7 @@ for role in \
   roles/secretmanager.secretAccessor \
   roles/cloudsql.client \
   roles/logging.logWriter \
+  roles/logging.viewer \
   roles/monitoring.metricWriter \
   roles/cloudtrace.agent
 do
@@ -76,6 +77,17 @@ do
     --role="${role}" \
     --quiet >/dev/null
 done
+
+# Cloud Build runs as a separate service account and needs to be able to push to Artifact Registry.
+# Without this, `gcloud builds submit ...` can succeed but the image push will fail with permissions.
+PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+CLOUDBUILD_SA="${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+
+echo "Granting IAM roles to Cloud Build service account (${CLOUDBUILD_SA})..."
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${CLOUDBUILD_SA}" \
+  --role="roles/artifactregistry.writer" \
+  --quiet >/dev/null || true
 
 echo "Ensuring required secrets exist..."
 secrets=(
