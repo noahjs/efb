@@ -911,8 +911,7 @@ export class AdminService {
         data, output,
         created_on, started_on, completed_on,
         retry_count, retry_limit,
-        expire_in,
-        EXTRACT(EPOCH FROM expire_in)::int AS expire_seconds
+        expire_seconds
       FROM pgboss.job
       WHERE state != 'completed'
          OR completed_on > NOW() - INTERVAL '1 hour'
@@ -929,17 +928,17 @@ export class AdminService {
       LIMIT 50
     `);
 
-    // 3. Stuck jobs: active longer than their expire_in
+    // 3. Stuck jobs: active longer than their expire_seconds
     const stuckJobs: any[] = await this.orm.query(`
       SELECT
         id, name AS queue, singleton_key, state,
         data, started_on,
-        EXTRACT(EPOCH FROM expire_in)::int AS expire_seconds,
+        expire_seconds,
         EXTRACT(EPOCH FROM (NOW() - started_on))::int AS seconds_running
       FROM pgboss.job
       WHERE state = 'active'
         AND started_on IS NOT NULL
-        AND EXTRACT(EPOCH FROM (NOW() - started_on)) > EXTRACT(EPOCH FROM expire_in)
+        AND EXTRACT(EPOCH FROM (NOW() - started_on)) > expire_seconds
       ORDER BY started_on ASC
     `);
 
