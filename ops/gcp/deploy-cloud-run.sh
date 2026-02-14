@@ -48,7 +48,7 @@ gcloud config set project "${PROJECT_ID}" >/dev/null
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
 
 echo "Building image: ${IMAGE_URI}"
-BUILD_ID="$(gcloud builds submit "${API_DIR}" --tag "${IMAGE_URI}" --async --format='value(metadata.build.id)')"
+BUILD_ID="$(gcloud builds submit "${API_DIR}" --tag "${IMAGE_URI}" --async --format='value(id)')"
 echo "Build started: ${BUILD_ID}"
 
 while true; do
